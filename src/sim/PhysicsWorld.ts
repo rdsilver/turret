@@ -423,8 +423,9 @@ export class PhysicsWorld {
 
   private maybeCreak(j: BreakableJoint): void {
     if (this.simTime - j.lastCreak < 0.22) return;
+    // Only report real progress toward failure (a creak should foreshadow a snap).
     const progressed = j.damage - j.lastCreakDamage;
-    if (progressed < 0.04 && this.simTime - j.lastCreak < 1.0) return;
+    if (progressed < 0.03 || j.damage < 0.05) return;
     j.lastCreak = this.simTime;
     j.lastCreakDamage = j.damage;
     this.events.emit('jointStressed', {
