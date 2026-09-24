@@ -64,7 +64,12 @@ export class CollapseDetector {
             sum += 1;
             continue;
           }
-          const start = Math.max(h + 0.01, c.h0);
+          const start = c.h0;
+          if (start <= h + 0.3) {
+            // Core spawned low: it must drop/tumble at least half a metre.
+            sum += clamp01((start - c.height) / 0.5);
+            continue;
+          }
           sum += clamp01((start - c.height) / (start - h));
         }
         return sum / s.cores.length;

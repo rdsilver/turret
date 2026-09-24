@@ -244,9 +244,11 @@ export class PhysicsWorld {
     this.passActiveCount = 0;
     this.passGdt = this.gravity * PHYSICS_DT;
 
+    this.fallenBuf.length = 0;
     this.world.forEachActiveRigidBody(this.activeVisitor);
 
     this.stats.active = this.passActiveCount;
+    for (let i = 0; i < this.fallenBuf.length; i++) this.events.emit('partFallen', { part: this.fallenBuf[i]! });
     // Remove escaped entities (outside of the Rapier iteration).
     for (let i = active.length - 1; i >= 0; i--) {
       const e = active[i]!;
@@ -261,6 +263,7 @@ export class PhysicsWorld {
 
 
   private passActiveCount = 0;
+  private readonly fallenBuf: StructurePart[] = [];
   private passGdt = 0;
   private readonly activeVisitor = (body: RapierNS.RigidBody): void => {
     this.passActiveCount++;
@@ -289,7 +292,7 @@ export class PhysicsWorld {
     const dv2 = dvx * dvx + dvy * dvy;
     if (dv2 > IMPACT_MIN_DV * IMPACT_MIN_DV) {
       const dv = Math.sqrt(dv2);
-      this.noteHardImpact(e, dv);
+      if (e instanceof StructurePart && (e.material.shatter || e.material.explosive)) this.noteHardImpact(e, dv);
       if (this.stepIndex - e.lastImpactStep > IMPACT_COOLDOWN_STEPS) {
         const energy = 0.5 * e.mass * dv2;
         if (energy > IMPACT_MIN_ENERGY) this.considerImpact(e, dv, energy);
@@ -301,9 +304,8 @@ export class PhysicsWorld {
       if (e.y > ARENA.killY || e.x < ARENA.left - 20 || e.x > ARENA.right + 20 || e.y < ARENA.ceilingY) {
         e.fading = -1; // flag for removal after the pass
       }
-      if (e.structure && !e.isFragment && e.structure.onPartMoved(e, prevH)) {
-        this.events.emit('partFallen', { part: e });
-      }
+      // Emitted after the Rapier iteration (listeners may mutate the world).
+      if (e.structure && !e.isFragment && e.structure.onPartMoved(e, prevH)) this.fallenBuf.push(e);
       // Aggressive sleeping for loose rubble.
       if (e.joints.length === 0) this.quietCheck(e, body);
     } else {
@@ -328,7 +330,7 @@ export class PhysicsWorld {
   }
 
   private noteHardImpact(e: Entity, dv: number): void {
-    if (this.hardImpactCount >= this.hardImpacts.length) return;
+    if (this.hardImpactCount >= this.hardImpacts.length) this.hardImpacts.push({ entity: e, dv: 0 });
     const slot = this.hardImpacts[this.hardImpactCount++]!;
     slot.entity = e;
     slot.dv = dv;
@@ -450,7 +452,7 @@ export class PhysicsWorld {
     e.body = body;
     e.collider = collider;
     e.handle = body.handle;
-    e.mass = body.mass();
+    e.mass = body.mass() || collider.mass();
     this.entities.set(body.handle, e);
     this.colliderOwner.set(collider.handle, e);
     e.syncFromBody();
@@ -489,7 +491,8 @@ export class PhysicsWorld {
     e.body.setEnabled(true);
     e.body.wakeUp();
     e.removed = false;
-    e.mass = e.body.mass();
+    // body.mass() is stale (0) until the next world.step for re-enabled bodies.
+    e.mass = e.collider.mass();
     this.entities.set(e.handle, e);
     this.colliderOwner.set(e.collider.handle, e);
     e.syncFromBody();

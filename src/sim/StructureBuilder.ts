@@ -145,8 +145,12 @@ function createJointFromDef(physics: PhysicsWorld, def: StructureDef, jd: JointD
   const tags = jd.tags ?? [];
 
   if (jd.kind === 'cable') {
-    const pa = jd.anchorA ? toSim(def, jd.anchorA) : { x: a.x, y: a.y };
-    const pb = jd.anchorB ? toSim(def, jd.anchorB) : b ? { x: b.x, y: b.y } : { x: a.x, y: a.y - 5 };
+    // If A/B were swapped (fixed body moved to B) the anchors swap with them.
+    const swapped = a !== a0;
+    const ancA = swapped ? jd.anchorB : jd.anchorA;
+    const ancB = swapped ? jd.anchorA : jd.anchorB;
+    const pa = ancA ? toSim(def, ancA) : { x: a.x, y: a.y };
+    const pb = ancB ? toSim(def, ancB) : b ? { x: b.x, y: b.y } : { x: a.x, y: a.y - 5 };
     worldToLocal(a.x, a.y, a.angle, pa.x, pa.y, tmp);
     const lax = tmp.x;
     const lay = tmp.y;

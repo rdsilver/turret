@@ -49,7 +49,7 @@ const log = (s: string) => lines.push(s);
 {
   const sim = makeSim(def, level.objective, stats);
   const s = sim.structure!;
-  const settleBreaks = s.jointsBroken;
+  const settleBreaks = s.settleJointsBroken;
   const activeAfterSettle = sim.physics.stats.active;
   let idleBreaks = 0;
   sim.events.on('jointBroken', () => idleBreaks++);
@@ -71,7 +71,8 @@ const log = (s: string) => lines.push(s);
   out.stable = settleBreaks === 0 && idleBreaks === 0 && drift < 0.08 && sim.progress < 0.05;
   log(`${level.name} [${id}] parts=${s.parts.length} joints=${s.joints.length} mass=${out.mass}kg height=${out.height}m line=${out.line === null ? '-' : (out.line as number).toFixed(2)}`);
   log(`  objective: ${sim.detector?.describe()}  par=${level.par}`);
-  log(`  settle: breaks=${settleBreaks} activeAfter=${activeAfterSettle} | idle 10s: breaks=${idleBreaks} drift=${out.drift}m maxStress=${out.maxIdleStress} progress=${out.idleProgress} => ${out.stable ? 'STABLE' : 'UNSTABLE!'}`);
+  out.settleDrift = +s.settleDrift.toFixed(3);
+  log(`  settle: breaks=${settleBreaks} sag=${out.settleDrift}m activeAfter=${activeAfterSettle} | idle 10s: breaks=${idleBreaks} drift=${out.drift}m maxStress=${out.maxIdleStress} progress=${out.idleProgress} => ${out.stable ? 'STABLE' : 'UNSTABLE!'}`);
   sim.destroy();
 }
 

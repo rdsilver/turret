@@ -82,6 +82,7 @@ export class ExplosionSystem {
       if (p && !p.removed) {
         b.x = p.x;
         b.y = p.y;
+        for (let k = p.joints.length - 1; k >= 0; k--) physics.breakJoint(p.joints[k]!, 'explosion');
         if (p.structure && !p.isFragment) p.structure.onPartDestroyed(p);
         p.destroyed = true;
         physics.removeEntity(p);
@@ -106,24 +107,35 @@ export class ExplosionSystem {
     const jointBreakRadius = radius * 0.55;
     for (const e of this.hits) {
       if (e.removed) continue;
-      const dx = e.x - x;
-      const dy = e.y - y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      const falloff = Math.max(0, 1 - d / radius);
-      if (falloff <= 0) continue;
-      const isPart = e instanceof StructurePart;
-      if (isPart && e.material.explosive && !e.armed) {
-        this.detonate(e, 0.05 + (1 - falloff) * 0.15);
-        continue;
+      // Distance from the blast to the nearest point of the body (long beams
+      // overlapping the blast must be affected even if their centre is far).
+      const pr = e.collider.projectPoint({ x, y }, true);
+      const px = pr ? pr.point.x : e.x;
+      const py = pr ? pr.point.y : e.y;
+      let dx = px - x;
+      let dy = py - y;
+      let d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 1e-4) {
+        dx = e.x - x;
+        dy = e.y - y;
+        d = Math.sqrt(dx * dx + dy * dy);
       }
-      if (isPart && !e.fixed) {
+      const isPart = e instanceof StructurePart;
+      if (isPart && !e.fixed && !(e.material.explosive && !e.armed)) {
         // Break nearby joints outright; farther joints only if weak relative to the blast.
         for (let k = e.joints.length - 1; k >= 0; k--) {
           const j = e.joints[k]!;
           const jd = Math.hypot(j.wx - x, j.wy - y);
-          const blastForce = power * 900_000 * Math.max(0, 1 - jd / radius);
+          if (jd >= radius) continue;
+          const blastForce = power * 900_000 * (1 - jd / radius);
           if (jd < jointBreakRadius * power || blastForce > j.yieldForce * 1.5) physics.breakJoint(j, 'explosion');
         }
+      }
+      const falloff = Math.max(0, 1 - d / radius);
+      if (falloff <= 0) continue;
+      if (isPart && e.material.explosive && !e.armed) {
+        this.detonate(e, 0.05 + (1 - falloff) * 0.15);
+        continue;
       }
       if (!e.body.isDynamic()) continue;
       const area = isPart ? e.area : 0.3;

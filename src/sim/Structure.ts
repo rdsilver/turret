@@ -35,6 +35,10 @@ export class Structure {
 
   jointsBroken = 0;
   partsFallen = 0;
+  /** Joints that broke while pre-settling (a valid level has 0). */
+  settleJointsBroken = 0;
+  /** Largest displacement of any part while pre-settling (m). */
+  settleDrift = 0;
 
   constructor(def: StructureDef) {
     this.def = def;
@@ -42,26 +46,54 @@ export class Structure {
 
   /** Called by the builder after all parts exist and have their spawn transforms. */
   finalize(): void {
+    for (const p of this.parts) {
+      if (p.name) this.byName.set(p.name, p);
+      if (p.isCore) this.cores.push(p);
+    }
+    this.finalizeMetrics();
+  }
+
+  private finalizeMetrics(): void {
     let top = 0;
     let minX = Infinity;
     let maxX = -Infinity;
     this.trackedMass = 0;
     this.comSum = 0;
     for (const p of this.parts) {
+      if (p.removed || p.destroyed) continue;
       top = Math.max(top, p.h0 + p.extent);
       minX = Math.min(minX, p.x0 - p.extent);
       maxX = Math.max(maxX, p.x0 + p.extent);
-      if (p.name) this.byName.set(p.name, p);
-      if (p.isCore) this.cores.push(p);
       if (!p.isFoundation) {
         this.trackedMass += p.mass;
         this.comSum += p.mass * p.h0;
       }
     }
     this.height0 = top;
-    this.minX0 = minX;
-    this.maxX0 = maxX;
+    this.minX0 = isFinite(minX) ? minX : 0;
+    this.maxX0 = isFinite(maxX) ? maxX : 0;
     this.comHeight0 = this.trackedMass > 0 ? this.comSum / this.trackedMass : 0;
+  }
+
+  /** Reset spawn heights and failure counters to the current (settled) pose. */
+  rebaseline(): void {
+    this.settleJointsBroken += this.jointsBroken;
+    for (const p of this.parts) {
+      if (!p.removed) this.settleDrift = Math.max(this.settleDrift, Math.hypot(p.x - p.x0, p.y - p.y0));
+    }
+    this.fallenMass = 0;
+    this.partsFallen = 0;
+    this.jointsBroken = 0;
+    for (const p of this.parts) {
+      if (p.removed) continue;
+      p.h0 = -p.y;
+      p.x0 = p.x;
+      p.y0 = p.y;
+      p.angle0 = p.angle;
+      p.fallen = false;
+      p.belowLine = false;
+    }
+    this.finalizeMetrics();
   }
 
   setDestructionLine(height: number | null): void {
@@ -143,7 +175,7 @@ export class Structure {
 
   /** Parts tagged `tag` that are still connected (through joints) to the ground or a fixed part. */
   connectedToGround(tag: string): { total: number; connected: number } {
-    const targets = this.parts.filter((p) => p.hasTag(tag) && !p.destroyed);
+    const targets = this.parts.filter((p) => p.hasTag(tag));
     if (targets.length === 0) return { total: 0, connected: 0 };
     const seen = new Set<StructurePart>();
     const stack: StructurePart[] = [];
@@ -166,7 +198,7 @@ export class Structure {
       }
     }
     let connected = 0;
-    for (const t of targets) if (seen.has(t)) connected++;
+    for (const t of targets) if (!t.destroyed && seen.has(t)) connected++;
     return { total: targets.length, connected };
   }
 }

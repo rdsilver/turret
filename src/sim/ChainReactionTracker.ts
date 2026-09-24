@@ -13,6 +13,8 @@ export interface ChainStats {
   mass: number;
   startedAt: number;
   lastEventAt: number;
+  /** Player shot that started the chain (0 = not attributed to a shot). */
+  shot: number;
 }
 
 /** A chain ends when nothing new has failed for this long (sim seconds). */
@@ -28,8 +30,12 @@ export class ChainReactionTracker {
   chains = 0;
   /** Total joints broken by chains (not debug/removal). */
   totalJoints = 0;
+  /** Ignore everything (set while a level pre-settles). */
+  muted = false;
 
   private nextId = 1;
+  /** Throwaway stats object returned while muted. */
+  private readonly scratch: ChainStats = { id: 0, joints: 0, parts: 0, mass: 0, startedAt: 0, lastEventAt: 0, shot: 0 };
   private recentBreaks: number[] = [];
   private recentMass: { t: number; m: number }[] = [];
   private lastBig = -100;
@@ -38,12 +44,12 @@ export class ChainReactionTracker {
   constructor(private readonly ctx: SimContext) {
     const ev = ctx.events;
     ev.on('projectileImpact', (e) => {
-      if (e.first) this.touch(true);
+      if (e.first) this.touch(e.projectile.shot);
     });
-    ev.on('explosion', () => this.touch(false));
+    ev.on('explosion', () => this.touch(0));
     ev.on('jointBroken', (e) => {
       if (e.cause === 'removed' || e.cause === 'debug') return;
-      const c = this.touch(false);
+      const c = this.touch(0);
       c.joints++;
       this.totalJoints++;
       this.recentBreaks.push(ctx.physics.simTime);
@@ -51,7 +57,7 @@ export class ChainReactionTracker {
       this.checkBig(e.x, e.y);
     });
     ev.on('partFallen', ({ part }) => {
-      const c = this.touch(false);
+      const c = this.touch(0);
       c.parts++;
       c.mass += part.mass;
       this.recentMass.push({ t: ctx.physics.simTime, m: part.mass });
@@ -76,13 +82,21 @@ export class ChainReactionTracker {
   }
 
   /** Get or start the current chain. A new shot always starts a new chain. */
-  private touch(newShot: boolean): ChainStats {
+  /**
+   * Get or start the current chain. `shot` > 0 marks a projectile's first impact:
+   * a DIFFERENT shot starts a new chain (sub-munitions share their shot id, and a
+   * chain that has no shot yet — e.g. failures in the impact step itself — adopts it).
+   */
+  private touch(shot: number): ChainStats {
+    if (this.muted) return this.scratch;
     const now = this.ctx.physics.simTime;
-    // A new shot starts a new chain, unless the current one only just began this
-    // very step (joint evaluation runs before collision events are dispatched).
-    if (newShot && this.current && this.current.startedAt < now - 1e-6 && this.current.joints + this.current.parts > 0) this.end();
+    const c0 = this.current;
+    if (shot > 0 && c0) {
+      if (c0.shot === 0) c0.shot = shot;
+      else if (c0.shot !== shot && c0.joints + c0.parts > 0) this.end();
+    }
     if (!this.current) {
-      this.current = { id: this.nextId++, joints: 0, parts: 0, mass: 0, startedAt: now, lastEventAt: now };
+      this.current = { id: this.nextId++, joints: 0, parts: 0, mass: 0, startedAt: now, lastEventAt: now, shot };
       this.chains++;
       this.ctx.events.emit('chainStarted', { chainId: this.current.id });
     }
@@ -91,6 +105,7 @@ export class ChainReactionTracker {
   }
 
   private emitUpdate(): void {
+    if (this.muted) return;
     const c = this.current;
     if (!c) return;
     this.ctx.events.emit('chainUpdated', { chainId: c.id, joints: c.joints, parts: c.parts, mass: c.mass });
@@ -111,6 +126,7 @@ export class ChainReactionTracker {
   }
 
   private checkBig(x: number, y: number): void {
+    if (this.muted) return;
     const now = this.ctx.physics.simTime;
     if (now - this.lastBig < BIG_COOLDOWN) return;
     while (this.recentBreaks.length && now - this.recentBreaks[0]! > WINDOW) this.recentBreaks.shift();

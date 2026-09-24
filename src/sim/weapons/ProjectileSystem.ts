@@ -61,7 +61,6 @@ export class ProjectileSystem {
       p.collider.setMass(mass);
       p.collider.setRestitution(o.ammo.restitution);
       p.collider.setFriction(o.ammo.friction);
-      p.body.recomputeMassPropertiesFromColliders();
       p.ammo = o.ammo;
       p.radius = radius;
       physics.revive(p);
@@ -133,7 +132,7 @@ export class ProjectileSystem {
   }
 
   private onContact(p: Projectile, other: Entity | null, otherCollider: number): void {
-    if (p.state === 'spent' || p.removed) return;
+    if (p.state === 'spent' || p.removed || p.fading > 0) return;
     const physics = this.ctx.physics;
     const hitGround = other === null && otherCollider === physics.groundCollider.handle;
     const speed = Math.sqrt(p.preVx * p.preVx + p.preVy * p.preVy);

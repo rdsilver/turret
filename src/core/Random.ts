@@ -97,7 +97,7 @@ export function seedToString(seed: number): string {
 
 export function parseSeed(text: string): number {
   const clean = text.trim().toUpperCase();
-  if (/^[0-9A-Z]{1,7}$/.test(clean)) {
+  if (/^[0-9A-Z]{1,6}$/.test(clean)) {
     const n = parseInt(clean, 36);
     if (Number.isFinite(n)) return n >>> 0;
   }

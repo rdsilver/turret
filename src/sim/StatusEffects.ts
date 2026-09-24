@@ -46,9 +46,16 @@ export class StatusEffects {
   /** Temporarily change gravity for one body (e.g. reverse-gravity rounds). */
   setGravityScale(entity: Entity, scale: number, seconds: number): void {
     if (entity.removed) return;
-    const previous = entity.body.gravityScale();
+    const until = this.ctx.physics.simTime + seconds;
+    // One effect per body, so overlapping effects restore the ORIGINAL gravity.
+    const ex = this.effects.find((e): e is GravityEffect => e.kind === 'gravityScale' && e.entity === entity);
+    const previous = ex ? ex.previous : entity.body.gravityScale();
     entity.body.setGravityScale(scale, true);
-    this.effects.push({ kind: 'gravityScale', entity, until: this.ctx.physics.simTime + seconds, previous });
+    if (ex) {
+      ex.until = Math.max(ex.until, until);
+      return;
+    }
+    this.effects.push({ kind: 'gravityScale', entity, until, previous });
   }
 
   clear(): void {

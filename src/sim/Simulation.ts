@@ -95,12 +95,10 @@ export class Simulation implements SimContext {
     this.clearStructure();
     const s = buildStructure(this.physics, def);
     this.structure = s;
-    this.detector = new CollapseDetector(s, objective);
-    this.chains.reset();
-    this.chains.setTrackedMass(s.trackedMass);
     this.debris.reset();
 
     this.settling = true;
+    this.chains.muted = true;
     const maxSteps = Math.round(settleSeconds / PHYSICS_DT);
     const minSteps = Math.round(0.5 / PHYSICS_DT);
     for (let i = 0; i < maxSteps; i++) {
@@ -108,6 +106,12 @@ export class Simulation implements SimContext {
       if (i > minSteps && this.physics.stats.active === 0) break;
     }
     this.settling = false;
+    this.chains.muted = false;
+    // Whatever happened while settling is not gameplay: re-baseline metrics at the rest pose.
+    s.rebaseline();
+    this.detector = new CollapseDetector(s, objective);
+    this.chains.reset();
+    this.chains.setTrackedMass(s.trackedMass);
     // Put anything still barely moving to sleep; seed stress values for the heat map.
     for (const p of s.parts) {
       if (!p.fixed && !p.removed && Math.hypot(p.vx, p.vy) < 0.05 && Math.abs(p.av) < 0.05) p.body.sleep();

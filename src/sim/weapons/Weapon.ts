@@ -197,9 +197,10 @@ export class Weapon {
         ray.origin.y = py;
         ray.dir.x = dx / len;
         ray.dir.y = dy / len;
-        const hit = world.castRay(ray, len + this.stats.projectileRadius, true, undefined, groups);
+        const rad = this.stats.projectileRadius * this.ammo.radiusScale;
+        const hit = world.castRay(ray, len + rad, true, undefined, groups);
         if (hit) {
-          const toi = Math.max(0, hit.timeOfImpact - this.stats.projectileRadius * 0.5);
+          const toi = Math.max(0, hit.timeOfImpact - rad * 0.5);
           out.hitX = px + ray.dir.x * toi;
           out.hitY = py + ray.dir.y * toi;
           out.hit = true;
