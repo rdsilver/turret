@@ -114,6 +114,11 @@ export interface CreatureSpec {
   /** Where a gunner should aim, best first (parts that are gone are skipped). The top turret uses it. */
   weakPoints?: string[];
   /**
+   * Parts a gun firing from above (the top turret on its mast) should try
+   * before weakPoints: ones shielded from the side but open from above.
+   */
+  weakPointsFromAbove?: string[];
+  /**
    * Floating creatures don't walk: every part is moved kinematically. The core
    * drifts toward the turret (gait.speed) with a gentle bob, spinning; each ring
    * of parts rotates rigidly around it. A destroyed ring part drops away; the

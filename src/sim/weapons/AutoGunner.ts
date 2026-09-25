@@ -1,7 +1,8 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
- * closest to the line, aims at its first remaining weak point (leading it by
- * the flight time) and holds the trigger for as long as it has a target.
+ * closest to the line, aims at its first remaining weak point (those open from
+ * above first), leading it by the flight time, and holds the trigger for as
+ * long as it has a target.
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
@@ -74,7 +75,7 @@ export class AutoGunner {
     this.part = null;
     if (!best) return;
     let part: StructurePart = best.core;
-    for (const n of best.spec.weakPoints ?? []) {
+    for (const n of [...(best.spec.weakPointsFromAbove ?? []), ...(best.spec.weakPoints ?? [])]) {
       const q = best.structure.part(n);
       if (q && !q.removed && !q.wrecked && best.owns(q)) {
         part = q;

@@ -148,6 +148,21 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     ],
   },
   {
+    id: 'a09b',
+    name: 'Horns',
+    subtitle: 'A triceratops: a steel skull, three horns and an armour frill, all facing you.',
+    lesson: "Don't trade blows with the armour. Go under it (the legs) or over it: the hump behind the frill is open from above.",
+    hint: 'Shoot the front shins, low under the beak. The top turret goes for the hump on its own.',
+    seed: 119,
+    reward: 420,
+    waves: [
+      { creature: 'triceratops', at: 1, params: { speed: 0.68 } },
+      { creature: 'hound', at: 16, params: { speed: 1.6 } },
+      { creature: 'bird', at: 26, params: { speed: 1.6, height: 3 } },
+      { creature: 'hound', at: 40, params: { speed: 1.7 } },
+    ],
+  },
+  {
     id: 'a10',
     name: 'The Strider',
     subtitle: 'A walking fortress: steel legs, an armour shell, two slings and an engine.',

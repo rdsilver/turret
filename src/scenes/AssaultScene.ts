@@ -59,7 +59,7 @@ const ENDLESS_ROSTER: Array<[string, number]> = [
   ['bird', 1.6],
 ];
 
-/** Endless waves after the campaign: more, faster, mixed creatures (the strider every fifth wave). */
+/** Endless waves after the campaign: more, faster, mixed creatures (the strider every fifth wave, the triceratops every fifth from the eighth). */
 export function endlessAssault(k: number): AssaultLevelDef {
   const n = 3 + Math.floor(k * 0.8);
   const faster = 1 + Math.min(0.5, k * 0.05);
@@ -69,6 +69,7 @@ export function endlessAssault(k: number): AssaultLevelDef {
     waves.push({ creature, at: 1 + i * Math.max(4, 9 - k * 0.3), params: { speed: speed * faster } });
   }
   if (k % 5 === 4) waves.push({ creature: 'strider', at: 2, params: { speed: 0.45 * faster } });
+  if (k >= 7 && k % 5 === 2) waves.push({ creature: 'triceratops', at: 2, params: { speed: 0.6 * faster } });
   return {
     id: `assault-endless-${k}`,
     name: `Endless Wave ${pad2(k + 1)}`,
