@@ -173,4 +173,20 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 450,
     waves: [{ creature: 'orrery', at: 1 }],
   },
+  {
+    id: 'a12',
+    name: 'Tyrant',
+    subtitle: 'The last one. A steel tyrannosaur, and its stubby little arms throw rubber.',
+    lesson: 'Two legs means no spare: cripple either one and the whole thing comes down.',
+    hint: 'Cut the little arms so your rounds stop bouncing, then hold fire on one shin.',
+    seed: 112,
+    reward: 600,
+    waves: [
+      { creature: 'trex', at: 1, params: { speed: 0.55 } },
+      { creature: 'hound', at: 14, params: { speed: 1.6 } },
+      { creature: 'bird', at: 24, params: { speed: 1.7, height: 3.2 } },
+      { creature: 'hound', at: 34, params: { speed: 1.6 } },
+      { creature: 'bird', at: 42, params: { speed: 1.7, height: 2.6 } },
+    ],
+  },
 ];
