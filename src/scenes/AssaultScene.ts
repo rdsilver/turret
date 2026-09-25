@@ -56,7 +56,7 @@ const ENDLESS_ROSTER: Array<[string, number]> = [
   ['shield', 0.75],
   ['hound', 1.5],
   ['centipede', 0.9],
-  ['bird', 1.6],
+  ['bird', 3.0],
 ];
 
 /** Endless waves after the campaign: more, faster, mixed creatures (the strider every fifth wave, the triceratops every fifth from the eighth). */

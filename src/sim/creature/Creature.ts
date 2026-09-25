@@ -78,6 +78,11 @@ const SPAWN_SETTLE = 0.7;
 const GAIT_RAMP = 0.8;
 /** Joint strength below which a leg joint no longer carries its leg. */
 const LEG_FAIL_SCALE = 0.32;
+/** Flyers' altitude hold: stiffness (1/s²) and damping (1/s) per unit mass. */
+const FLY_KP = 6;
+const FLY_KD = 4.5;
+/** Air drag on a crippled flyer's remaining wing while it sinks (per unit mass and lift, 1/s). */
+const FLY_GLIDE_DRAG = 1.6;
 
 let nextCreatureId = 1;
 
@@ -135,6 +140,10 @@ export class Creature {
   private floatT = 0;
   private floatX = 0;
   private floatY = 0;
+  /** Flyers: given their cruising speed yet? */
+  private launched = false;
+  /** Flyers: each wing part's momentum relative to the body last step. */
+  private readonly wingMomentum = new Map<StructurePart, { x: number; y: number }>();
 
   constructor(
     private readonly ctx: SimContext,
@@ -617,41 +626,93 @@ export class Creature {
     this.capacity = lift;
     this.functionalLegs = wingsUp;
     this.ownedLegs = f.wings.length;
-    // Wingbeats: faster when it is struggling to stay up.
-    this.phase += dt * f.flapHz * (1 + 0.5 * (1 - lift));
+    // Wingbeats: faster (and shallower) when it is struggling to stay up.
+    const rate = 1 + 0.5 * (1 - lift);
+    this.phase += dt * f.flapHz * rate;
     const power = 1;
     this.power = power;
+    // The stroke eases in (no jolt from the spawn pose).
+    const ramp = clamp(this.age / GAIT_RAMP, 0, 1);
     for (let i = 0; i < this.gait.length; i++) {
       const { joint, g: gt } = this.gait[i]!;
       if (joint.broken || !this.connected.has(joint.a)) continue;
       joint.setPower(world, power);
       const sn = Math.sin((this.phase + gt.phase) * Math.PI * 2);
-      joint.setDrive(world, gt.shape === 'hold' ? gt.bias : gt.bias + gt.amp * sn);
+      joint.setDrive(world, ramp * (gt.shape === 'hold' ? gt.bias : gt.bias + (gt.amp / rate) * sn));
     }
-    const body = this.core.body;
+    const core = this.core;
+    const body = core.body;
     const m = this.mass;
     const g = this.ctx.physics.gravity;
     const t = this.age;
-    // Altitude hold (PD) with gentle swoops; a pulse with each downstroke.
-    const target = this.bodyHeight0 + f.swoop * Math.sin((t / f.swoopPeriod) * Math.PI * 2);
-    const vUp = -this.core.vy;
-    let up = m * g + m * (3 * (target - this.core.height) - 2.5 * vUp);
-    up *= 1 + 0.3 * Math.sin(this.phase * Math.PI * 2 + Math.PI / 2);
-    up = clamp(up, 0, m * g * f.liftMax * lift);
-    body.applyImpulse({ x: 0, y: -up * dt }, true);
-    // Forward flight (needs wings too).
-    if (this.state !== 'spawning') {
-      const speed = this.spec.gait.speed * this.speedBoost;
-      const fx = clamp(m * 2.5 * (-speed - this.core.vx), -m * 2.5 * lift, m * 2.5 * lift);
-      body.applyImpulse({ x: fx * dt, y: 0 }, true);
+    const speed = this.spec.gait.speed * this.speedBoost;
+    // It arrives on the wing: already cruising when it comes into view.
+    if (!this.launched) {
+      this.launched = true;
+      for (const p of this.connected) {
+        p.body.setLinvel({ x: -speed, y: 0 }, true);
+        // (Its cached velocity too, so the jump doesn't read as an impact.)
+        p.vx = -speed;
+        p.vy = 0;
+      }
     }
-    // Keep the body level (the wings' reaction twists it), as far as the wings allow.
-    const coreI = this.core.mass * this.core.extent * this.core.extent * 0.5 + 1;
+    // The beating wings shove the body about (the muscles' reaction): cancel the
+    // push of their motion relative to the body, so the body flies steadily while
+    // the wings flap. What changed in their relative momentum last step is what
+    // they pushed the body with.
+    const bx = core.x;
+    const by = core.y;
+    let jx = 0;
+    let jy = 0;
+    for (const w of f.wings) {
+      for (const n of w.parts) {
+        const p = this.structure.part(n);
+        if (!p || p.removed || !this.connected.has(p)) {
+          if (p) this.wingMomentum.delete(p);
+          continue;
+        }
+        // The body's velocity carried rigidly out to the wing part.
+        const px = p.mass * (p.vx - (core.vx - core.av * (p.y - by)));
+        const py = p.mass * (p.vy - (core.vy + core.av * (p.x - bx)));
+        const prev = this.wingMomentum.get(p);
+        if (prev) {
+          jx += px - prev.x;
+          jy += py - prev.y;
+          prev.x = px;
+          prev.y = py;
+        } else this.wingMomentum.set(p, { x: px, y: py });
+      }
+    }
+    body.applyImpulse({ x: jx, y: jy }, true);
+    // Altitude hold: a slow, gentle swoop around the spawn height, lifted at the
+    // centre of mass of everything the wings carry (so lift doesn't twist it).
+    const sw = (Math.PI * 2) / f.swoopPeriod;
+    const target = this.bodyHeight0 + f.swoop * Math.sin(t * sw);
+    const vTarget = f.swoop * sw * Math.cos(t * sw);
+    const vUp = -core.vy;
+    let up = m * g + m * (FLY_KP * (target - core.height) + FLY_KD * (vTarget - vUp));
+    up = clamp(up, 0, m * g * f.liftMax * lift);
+    // A wing short, it can't hold height, but what wing it has left still slows
+    // the fall: it glides down instead of dropping.
+    if (lift < 1 && vUp < 0) up += m * FLY_GLIDE_DRAG * lift * -vUp;
+    let cx = 0;
+    for (const p of this.connected) cx += p.x * p.mass;
+    cx = m > 0 ? cx / m : bx;
+    body.applyImpulseAtPoint({ x: 0, y: -up * dt }, { x: cx, y: core.y }, true);
+    // Forward flight needs wings too; a wing short, it no longer hurries, and
+    // the air soon slows it to a glide.
+    const cruise = wingsUp < f.wings.length ? this.spec.gait.speed * lift : speed;
+    const fx = clamp(m * 3 * (-cruise - core.vx), -m * 3 * lift, m * 3 * Math.min(1, lift * 2));
+    body.applyImpulse({ x: fx * dt, y: 0 }, true);
+    // Keep the body level, as far as the wings allow; gliding down on one wing,
+    // it noses down along its path.
+    const glide = lift < 1 ? Math.min(0.4, Math.atan2(Math.max(0, core.vy), Math.max(1, Math.abs(core.vx)))) * clamp((1 - lift) * 2, 0, 1) : 0;
+    const coreI = core.mass * core.extent * core.extent * 0.5 + 1;
     const kp = coreI * 9 * 9 * 10;
     const kd = 2 * Math.sqrt(kp * coreI * 10);
-    const lean = -(this.spec.lean ?? 0) * DEG;
-    let tau = -kp * wrapAngle(this.core.angle - lean) - kd * this.core.av;
-    const cap = m * g * this.core.extent * 2.5 * lift;
+    const lean = -(this.spec.lean ?? 0) * DEG - glide;
+    let tau = -kp * wrapAngle(core.angle - lean) - kd * core.av;
+    const cap = m * g * core.extent * 4 * lift;
     tau = clamp(tau, -cap, cap);
     body.applyTorqueImpulse(tau * dt, true);
     // Down on the ground = stopped.

@@ -75,11 +75,11 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 115,
     reward: 220,
     waves: [
-      { creature: 'bird', at: 1, params: { speed: 1.15, height: 3 } },
-      { creature: 'bird', at: 9, params: { speed: 1.2, height: 2.4 } },
+      { creature: 'bird', at: 1, params: { speed: 2.3, height: 3 } },
+      { creature: 'bird', at: 9, params: { speed: 2.4, height: 2.4 } },
       { creature: 'stickman', at: 12, params: { speed: 0.85 } },
-      { creature: 'bird', at: 19, params: { speed: 1.3, height: 3.4 } },
-      { creature: 'bird', at: 26, params: { speed: 1.25, height: 2.6 } },
+      { creature: 'bird', at: 19, params: { speed: 2.6, height: 3.4 } },
+      { creature: 'bird', at: 29, params: { speed: 2.5, height: 2.6 } },
     ],
   },
   {
@@ -95,7 +95,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'stickman', at: 10, params: { speed: 1 } },
       { creature: 'engine', at: 26, params: { speed: 1.05 } },
       { creature: 'hound', at: 34, params: { speed: 1.6 } },
-      { creature: 'bird', at: 40, params: { speed: 1.6, height: 3 } },
+      { creature: 'bird', at: 40, params: { speed: 3.2, height: 3 } },
     ],
   },
   {
@@ -111,7 +111,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'shield', at: 10, params: { speed: 0.9 } },
       { creature: 'thrower', at: 24, params: { speed: 0.8 } },
       { creature: 'hound', at: 36, params: { speed: 1.6 } },
-      { creature: 'bird', at: 16, params: { speed: 1.5, height: 3.2 } },
+      { creature: 'bird', at: 16, params: { speed: 3, height: 3.2 } },
     ],
   },
   {
@@ -125,7 +125,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'centipede', at: 1 },
       { creature: 'hound', at: 28, params: { speed: 1.6 } },
-      { creature: 'bird', at: 20, params: { speed: 1.6, height: 2.8 } },
+      { creature: 'bird', at: 20, params: { speed: 3.2, height: 2.8 } },
     ],
   },
   {
@@ -143,8 +143,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'shield', at: 22 },
       { creature: 'hound', at: 30, params: { speed: 1.6 } },
       { creature: 'stickman', at: 34, params: { speed: 1 } },
-      { creature: 'bird', at: 18, params: { speed: 1.6, height: 3.2 } },
-      { creature: 'bird', at: 26, params: { speed: 1.7, height: 2.5 } },
+      { creature: 'bird', at: 18, params: { speed: 3.2, height: 3.2 } },
+      { creature: 'bird', at: 26, params: { speed: 3.4, height: 2.5 } },
     ],
   },
   {
@@ -174,8 +174,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'strider', at: 1, params: { speed: 0.4 } },
       { creature: 'hound', at: 20, params: { speed: 1.5 } },
       { creature: 'hound', at: 45, params: { speed: 1.5 } },
-      { creature: 'bird', at: 30, params: { speed: 1.6, height: 3.4 } },
-      { creature: 'bird', at: 34, params: { speed: 1.6, height: 2.6 } },
+      { creature: 'bird', at: 42, params: { speed: 3, height: 3.4 } },
+      { creature: 'bird', at: 50, params: { speed: 3, height: 2.6 } },
     ],
   },
   {

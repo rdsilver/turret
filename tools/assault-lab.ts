@@ -4,7 +4,8 @@
  * when hot) to check the level is winnable with a given weapon, and how close
  * the creatures get.
  *
- *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
+ *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
+ *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
 import { Simulation } from '../src/sim/Simulation';
@@ -40,7 +41,7 @@ const level = ASSAULT_LEVELS.find((l) => l.id === id);
 if (!level) throw new Error(`no level ${id}`);
 
 const sim = new Simulation({ seed: 3, weaponStats: stats, ammo: AMMO.bullet });
-const topLvl = tier ? topTurretLevel(tier) : Number(opt('top', '0'));
+const topLvl = args.includes('--top') ? Number(opt('top', '0')) : tier ? topTurretLevel(tier) : 0;
 if (topLvl > 0) sim.setTopTurret(topTurretStats(topLvl, stats));
 const session = new AssaultSession(sim, level);
 const frames: FrameSnap[] = [];
@@ -80,7 +81,9 @@ run(sim, Number(opt('seconds', '150')), () => {
         break;
       }
     }
-    target = { x: p.x, y: p.y, vx: p.vx, vy: p.vy };
+    // Lead a beating wing by the bird's flight, as a player would, not by its stroke.
+    const v = p.hasTag('wing') ? c.core : p;
+    target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
   }
   const w = sim.weapon;
   if (w.heat > 0.92) cooling = true;
