@@ -1,7 +1,7 @@
 /**
  * Typical machine-gun builds by campaign level (what a player has bought by
  * then, from the level payouts), for balancing creatures and levels:
- *   --tier 1 (fresh), 4, 5, 6, 7, 8, 10
+ *   --tier 1 (fresh) .. 14
  */
 import { UpgradeSystem, type OwnedUpgrades } from '../../src/game/UpgradeSystem';
 import { BASE_MG_STATS, type WeaponStats } from '../../src/sim/weapons/Weapon';
@@ -19,6 +19,8 @@ export const TIERS: Record<string, OwnedUpgrades> = {
   '10': { stabilizer: 4, caliber: 4, autoloader: 3, cooling: 3, piercing: 3, topTurret: 3 },
   '11': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 3, piercing: 3, topTurret: 3 },
   '12': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 4, piercing: 3, topTurret: 3 },
+  '13': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 4, piercing: 3, topTurret: 3, velocity: 2 },
+  '14': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 4, piercing: 3, topTurret: 3, velocity: 3 },
 };
 
 /** Owned top turret level at a tier (0 = none). */
