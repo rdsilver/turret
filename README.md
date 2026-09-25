@@ -8,7 +8,8 @@ A 2D physics prototype with two modes:
   buckle, an engine that overheats, an arm holding a shield, a body that
   comes apart in pieces.
 - **Demolition** — structural engineering, emergent chain reactions and one
-  very large cannon.
+  very large cannon. (Hidden from the main menu for now; `/?play=1` still
+  opens it.)
 
 > *"I understand why this thing is standing. Now I'm going to figure out the
 > funniest way to make it stop standing."*
@@ -56,7 +57,9 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it.
+limb stops obeying it. Every hit also leaves an impact crater in the part
+itself: wood splinters into dark gouges, steel dents, armour only scuffs, and
+hits near an edge chip pieces out of the silhouette.
 
 | Input | Action |
 | --- | --- |
@@ -75,16 +78,20 @@ limb stops obeying it.
 | 6 | Flock | flapping birds | a wing: lose one and it can't stay up (the top turret helps) |
 | 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
 | 8 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
-| 9 | Centipede | segmented centipede | cut it in the middle: every piece of 2+ segments walks on alone |
+| 9 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
 | 10 | Stampede | everything | triage |
-| 11 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 12 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 11 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
+| 12 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 13 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
-After level 12 the game continues with endless mixed waves. Between levels the
+After level 14 the game continues with endless mixed waves (the strider and
+the tyrant take turns as the boss every fifth wave). Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
-automatic gun on a mast that picks the creature closest to the line and goes
-for its weak points. Creatures pick up speed as they near the line; stopped
+automatic gun on a tall mast that picks the creature closest to the line and
+goes for its weak points. It never overheats and keeps firing whatever your
+own gun is doing. Creatures pick up speed as they near the line; stopped
 ones fade away after a few seconds.
 
 ## Demolition controls
@@ -121,10 +128,12 @@ npx tsx tools/creature-lab.ts beetle --shoot shinFL,shinFR --tier 5
 npx tsx tools/assault-lab.ts a07 --tier 7 --aimError 0.3
 #   bot plays a whole level (aims at each creature's weak points, leads
 #   moving targets, human-ish aim error) and prints result + payout
+#   (--seed N varies the run; --top N overrides the top turret)
 npx tsx tools/leg-trace.ts hound FL 3 4.2 2   # gait tuning trace for one leg
+npx tsx tools/fly-trace.ts bird --cut wingL1   # flight steadiness + glide after losing a wing
 ```
 
-Upgrade builds per level (`--tier 1..10`) are defined in `tools/lib/loadouts.ts`.
+Upgrade builds per level (`--tier 1..14`) are defined in `tools/lib/loadouts.ts`.
 
 ## Project layout
 

@@ -5,6 +5,7 @@
  * the creatures get.
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
+ *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -40,7 +41,8 @@ const png = opt('png', `tools/out/assault-${id}.png`);
 const level = ASSAULT_LEVELS.find((l) => l.id === id);
 if (!level) throw new Error(`no level ${id}`);
 
-const sim = new Simulation({ seed: 3, weaponStats: stats, ammo: AMMO.bullet });
+const seed = Number(opt('seed', '0'));
+const sim = new Simulation({ seed: seed || 3, weaponStats: stats, ammo: AMMO.bullet });
 const topLvl = args.includes('--top') ? Number(opt('top', '0')) : tier ? topTurretLevel(tier) : 0;
 if (topLvl > 0) sim.setTopTurret(topTurretStats(topLvl, stats));
 const session = new AssaultSession(sim, level);
@@ -57,7 +59,7 @@ sim.events.on('creatureOverheated', (e) => ev(`${e.creature.spec.name} overheate
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
-const botRng = new Random(99);
+const botRng = new Random(seed ? 200 + seed : 99);
 let errX = 0;
 let errY = 0;
 let cooling = false;
