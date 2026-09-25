@@ -14,7 +14,9 @@
  *  - Parts: Image with an atlas frame from TextureFactory; material alpha is
  *    baked into the texture; subtle darkening by part.wear. Weapon damage
  *    (partDamaged) tints a part redder as its integrity drops, flashes it on
- *    every hit and makes it throb once it is close to breaking. Fading
+ *    every hit and makes it throb once it is close to breaking. Every hit
+ *    also leaves an impact crater in the part's own art (PartCraters: pits,
+ *    chips bitten out of the silhouette, growing as integrity drops). Fading
  *    entities: alpha = fading/fadeDuration.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
@@ -32,6 +34,7 @@ import type { BreakableJoint } from '../sim/BreakableJoint';
 import { PPM } from '../config/constants';
 import { lerpAngle } from '../core/math';
 import { TextureFactory, TEXTURE_RES } from './TextureFactory';
+import { PartCraters, type CraterSet, type CraterStats } from './PartCraters';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
@@ -64,6 +67,8 @@ interface PartVis {
   flash: number;
   /** In the `animated` list (flashing or throbbing). */
   animated: boolean;
+  /** Impact craters (its art moves to the shared crater page) once the part has been hit. */
+  craters: CraterSet | null;
 }
 
 interface ProjVis {
@@ -117,6 +122,7 @@ export class WorldRenderer {
   private readonly markerPool: Image[] = [];
   private readonly glowPool: Image[] = [];
 
+  private readonly craters: PartCraters;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -133,6 +139,7 @@ export class WorldRenderer {
     readonly sim: Simulation,
     readonly textures: TextureFactory,
   ) {
+    this.craters = new PartCraters(scene, textures);
     this.trailGfx = scene.add.graphics().setDepth(DEPTH.projectiles - 0.5);
     this.cableGfx = scene.add.graphics().setDepth(DEPTH.cables);
     const ev = sim.events;
@@ -148,7 +155,7 @@ export class WorldRenderer {
         if (v && v.kind === 0) this.applyPartTint(v, true);
       }),
       ev.on('structureLoaded', () => this.onStructureLoaded()),
-      ev.on('partDamaged', ({ part }) => this.onPartDamaged(part)),
+      ev.on('partDamaged', ({ part, amount, armor, x, y }) => this.onPartDamaged(part, x, y, amount, armor)),
     );
     // Adopt anything that already exists (renderer created after the sim filled up).
     this.needsResync = sim.physics.entities.size > 0;
@@ -221,6 +228,13 @@ export class WorldRenderer {
       this.cablesDirty = false;
     }
     if (this.colliderDebug) this.drawColliders();
+    // Crater repaints + texture uploads: once per damaged part per frame.
+    if (this.craters.pending) this.craters.flush();
+  }
+
+  /** Crater system counters (debug / tests). */
+  get craterStats(): CraterStats {
+    return this.craters.stats;
   }
 
   setStressView(on: boolean): void {
@@ -262,6 +276,10 @@ export class WorldRenderer {
     this.debugGfx?.clear();
     this.trailsDrawn = false;
     this.cablesDirty = true;
+    // Crater art is dropped between levels (memory stays bounded); with
+    // small-arms ammo the crater page is ready before the first hit.
+    this.craters.clear();
+    if (trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
     // Keep texture memory bounded across many (procedural) levels.
     if (trimTextures && this.textures.atlasPages > 6) {
       for (const pool of this.pools.values()) for (const img of pool) img.setTexture(TEX.pixel);
@@ -274,6 +292,7 @@ export class WorldRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.clear(false);
+    this.craters.destroy();
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;
@@ -328,9 +347,10 @@ export class WorldRenderer {
     if (b && b.kind === 0) this.applyPartTint(b, true);
   }
 
-  private onPartDamaged(p: StructurePart): void {
+  private onPartDamaged(p: StructurePart, x: number, y: number, amount: number, armor: number): void {
     const v = p.view as PartVis | null;
     if (!v || v.kind !== 0 || p.removed) return;
+    this.craters.hit(v, x, y, amount, armor);
     v.flash = 1;
     if (!v.animated) {
       v.animated = true;
@@ -386,7 +406,9 @@ export class WorldRenderer {
     img.x = p.x * PPM;
     img.y = p.y * PPM;
     img.rotation = p.angle;
-    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false };
+    const v: PartVis = {
+      kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false, craters: null,
+    };
     if (p.material.id === 'core' || p.isCore) {
       const gf = this.textures.miscFrame(RK.glow);
       const g = this.glowPool.pop() ?? this.scene.add.image(0, 0, gf.key, gf.frame);
@@ -414,6 +436,7 @@ export class WorldRenderer {
       for (let i = v.joints.length - 1; i >= 0; i--) this.removeJointVis(v.joints[i]!.joint);
     }
     v.joints.length = 0;
+    if (v.craters) this.craters.release(v);
     if (v.animated) {
       v.animated = false;
       const i = this.animated.indexOf(v);
@@ -484,9 +507,12 @@ export class WorldRenderer {
     const img = v.img;
     if (v.neutral !== this.stressView) {
       v.neutral = this.stressView;
-      const f = this.textures.partFrame(p, v.neutral);
-      img.setTexture(f.key, f.frame);
-      img.setOrigin(f.originX, f.originY);
+      // Cratered art is repainted on the other variant (flushed before this frame renders).
+      if (!this.craters.rebase(v)) {
+        const f = this.textures.partFrame(p, v.neutral);
+        img.setTexture(f.key, f.frame);
+        img.setOrigin(f.originX, f.originY);
+      }
       force = true;
     }
     if (this.stressView) {
