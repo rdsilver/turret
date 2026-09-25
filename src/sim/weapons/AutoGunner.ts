@@ -50,7 +50,9 @@ export class AutoGunner {
     }
     const m = w.muzzle();
     const tof = Math.hypot(p.x - m.x, p.y - m.y) / Math.max(1, w.speed);
-    const sol = solveAim(m.x, m.y, p.x + p.vx * tof, p.y + p.vy * tof, w.speed, this.ctx.physics.gravity);
+    // A beating wing's own velocity swings with every stroke: lead it by the flight.
+    const v = p.hasTag('wing') && this.creature ? this.creature.core : p;
+    const sol = solveAim(m.x, m.y, p.x + v.vx * tof, p.y + v.vy * tof, w.speed, this.ctx.physics.gravity);
     if (!sol.length) {
       w.triggerHeld = false;
       return;
