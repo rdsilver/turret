@@ -554,7 +554,12 @@ export class Hud {
   private layoutHint(): void {
     const gap = 14;
     const w = this.hintTag.width + gap + this.hintText.width;
-    const x0 = Math.round(this.W / 2 - w / 2);
+    let x0 = Math.round(this.W / 2 - w / 2);
+    // A long hint must not cover the end of the level subtitle (top-left block).
+    const sub = this.levelSub;
+    if (sub.text && sub.y < HINT_Y + 20 && sub.y + sub.height > HINT_Y - 20) {
+      x0 = Math.max(x0, Math.round(sub.x + sub.width + 18 + 24));
+    }
     this.hintTag.x = x0;
     this.hintText.x = x0 + this.hintTag.width + gap;
     const g = this.hintBg;

@@ -117,9 +117,9 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
   {
     id: 'a08',
     name: 'Centipede',
-    subtitle: 'Segments on dozens of legs: two of wood, then steel, then an armoured tail.',
+    subtitle: 'Dozens of legs. Two wooden segments, then steel, then armour.',
     lesson: 'Every cut makes two, each led by its front segment. Pieces of one segment are harmless.',
-    hint: 'The wooden front goes fast. Keep the barrel cool for the armoured tail.',
+    hint: 'Wood goes fast. Save a cool barrel for the armoured tail.',
     seed: 108,
     reward: 280,
     waves: [
@@ -158,7 +158,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'triceratops', at: 1, params: { speed: 0.68 } },
       { creature: 'hound', at: 16, params: { speed: 1.6 } },
-      { creature: 'bird', at: 26, params: { speed: 1.6, height: 3 } },
+      { creature: 'bird', at: 38, params: { speed: 3.2, height: 3 } },
       { creature: 'hound', at: 40, params: { speed: 1.7 } },
     ],
   },
@@ -187,5 +187,21 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 111,
     reward: 450,
     waves: [{ creature: 'orrery', at: 1 }],
+  },
+  {
+    id: 'a12',
+    name: 'Tyrant',
+    subtitle: 'The last one. A steel tyrannosaur, and its stubby little arms throw rubber.',
+    lesson: 'Two legs means no spare: cripple either one and the whole thing comes down.',
+    hint: 'Cut the little arms so your rounds stop bouncing, then hold fire on one shin.',
+    seed: 112,
+    reward: 600,
+    waves: [
+      { creature: 'trex', at: 1, params: { speed: 0.55 } },
+      { creature: 'hound', at: 14, params: { speed: 1.6 } },
+      { creature: 'bird', at: 36, params: { speed: 3.4, height: 3.2 } },
+      { creature: 'hound', at: 34, params: { speed: 1.6 } },
+      { creature: 'bird', at: 54, params: { speed: 3.4, height: 2.6 } },
+    ],
   },
 ];
