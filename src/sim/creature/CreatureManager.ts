@@ -21,6 +21,8 @@ import type { BreakableJoint } from '../BreakableJoint';
 
 /** Velocity change (m/s) a torn-off piece gets from its pop. */
 const POP_DV = 2.6;
+/** Seconds a stopped creature's wreck keeps blocking bullets. */
+const WRECK_SOLID_FOR = 1.5;
 
 export class CreatureManager {
   readonly list: Creature[] = [];
@@ -50,6 +52,16 @@ export class CreatureManager {
     };
     ctx.events.on('partWrecked', dirty);
     ctx.events.on('partShattered', dirty);
+    // A stopped creature's wreck stops soaking up bullets after a moment, so a
+    // big carcass doesn't shield whatever walks in behind it.
+    ctx.events.on('creatureNeutralized', ({ creature }) => {
+      const at = ctx.physics.simTime + WRECK_SOLID_FOR;
+      const off = ctx.physics.addStepHook(() => {
+        if (ctx.physics.simTime < at) return;
+        off();
+        this.makeWreckPassable(creature);
+      });
+    });
   }
 
   /** Spawn a creature standing on the ground with its body centered at sim x. */
@@ -85,10 +97,10 @@ export class CreatureManager {
     return n;
   }
 
-  /** Smallest body x among active creatures (closest to the turret), or Infinity. */
+  /** Front-most point of any active creature (closest to the turret), or Infinity. */
   frontX(): number {
     let x = Infinity;
-    for (const c of this.list) if (c.active && !c.core.removed) x = Math.min(x, c.core.x);
+    for (const c of this.list) if (c.active && !c.core.removed) x = Math.min(x, c.frontX);
     return x;
   }
 
@@ -99,6 +111,19 @@ export class CreatureManager {
     if (cs.length === 1) return cs[0];
     for (const c of cs) if (c.owns(part)) return c;
     return cs[0];
+  }
+
+  /** Parts of this creature (and loose pieces nobody controls) let bullets through. */
+  private makeWreckPassable(c: Creature): void {
+    const cs = this.byStructure.get(c.structure);
+    if (!cs || !this.list.includes(c)) return;
+    const groups = interactionGroups(GROUP.CREATURE, 0xffff & ~(GROUP.CREATURE | GROUP.PROJECTILE));
+    for (const p of c.structure.parts) {
+      if (p.removed) continue;
+      // Parts still carried by a living creature (the other half of a cut centipede) stay solid.
+      if (cs.some((k) => k.active && k.owns(p))) continue;
+      p.collider.setCollisionGroups(groups);
+    }
   }
 
   /** Remove every creature (and its parts) from the world. */

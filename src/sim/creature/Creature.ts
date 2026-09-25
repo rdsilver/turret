@@ -183,6 +183,18 @@ export class Creature {
     return this.core.x;
   }
 
+  /** Front-most point (smallest x, m) of the body still attached to it: what reaches the line first. */
+  get frontX(): number {
+    if (this.connectedDirty) this.refreshBody();
+    let x = Infinity;
+    for (const p of this.connected) {
+      if (p.removed || p.wrecked) continue;
+      const e = p.x - p.halfWidthNow;
+      if (e < x) x = e;
+    }
+    return x === Infinity ? this.core.x : x;
+  }
+
   get active(): boolean {
     return this.state !== 'neutralized';
   }

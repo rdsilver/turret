@@ -62,8 +62,8 @@ export class AssaultSession {
         this.creatures.push(creature);
         this.extra++;
       }),
-      ev.on('creatureNeutralized', ({ creature, x }) => {
-        if (this.state === 'running' && !this.stopX.has(creature)) this.stopX.set(creature, x);
+      ev.on('creatureNeutralized', ({ creature }) => {
+        if (this.state === 'running' && !this.stopX.has(creature)) this.stopX.set(creature, creature.frontX);
       }),
     );
   }
@@ -98,7 +98,8 @@ export class AssaultSession {
     }
     for (const c of this.creatures) {
       if (!c.active || c.core.removed) continue;
-      const d = c.x - DEFENSE_LINE_X;
+      // Big creatures reach the line with their front, long before their middle does.
+      const d = c.frontX - DEFENSE_LINE_X;
       if (d < this.closest) this.closest = d;
       // Only a creature still on the move breaches (one toppling over the line after it was stopped doesn't).
       if (d < 0 && (c.state === 'walking' || c.state === 'crippled')) {

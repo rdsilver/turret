@@ -48,9 +48,9 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 104,
     reward: 170,
     waves: [
-      { creature: 'hound', at: 1, params: { speed: 1.4 } },
-      { creature: 'stickman', at: 8, params: { speed: 0.8 } },
-      { creature: 'hound', at: 22, params: { speed: 1.5 } },
+      { creature: 'hound', at: 1, params: { speed: 1.6 } },
+      { creature: 'stickman', at: 8, params: { speed: 0.9 } },
+      { creature: 'hound', at: 22, params: { speed: 1.7 } },
     ],
   },
   {
@@ -62,8 +62,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 105,
     reward: 220,
     waves: [
-      { creature: 'beetle', at: 1, params: { speed: 0.62 } },
-      { creature: 'stickman', at: 26, params: { speed: 0.85 } },
+      { creature: 'beetle', at: 1, params: { speed: 0.7 } },
+      { creature: 'stickman', at: 26, params: { speed: 0.95 } },
     ],
   },
   {
@@ -75,10 +75,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 106,
     reward: 240,
     waves: [
-      { creature: 'engine', at: 1, params: { speed: 0.9 } },
-      { creature: 'stickman', at: 10, params: { speed: 0.9 } },
-      { creature: 'engine', at: 26, params: { speed: 0.95 } },
-      { creature: 'hound', at: 34, params: { speed: 1.4 } },
+      { creature: 'engine', at: 1, params: { speed: 1 } },
+      { creature: 'stickman', at: 10, params: { speed: 1 } },
+      { creature: 'engine', at: 26, params: { speed: 1.05 } },
+      { creature: 'hound', at: 34, params: { speed: 1.6 } },
     ],
   },
   {
@@ -90,10 +90,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 107,
     reward: 300,
     waves: [
-      { creature: 'shield', at: 1 },
-      { creature: 'shield', at: 10, params: { speed: 0.8 } },
-      { creature: 'thrower', at: 24 },
-      { creature: 'hound', at: 36, params: { speed: 1.5 } },
+      { creature: 'shield', at: 1, params: { speed: 0.85 } },
+      { creature: 'shield', at: 10, params: { speed: 0.9 } },
+      { creature: 'thrower', at: 24, params: { speed: 0.8 } },
+      { creature: 'hound', at: 36, params: { speed: 1.6 } },
     ],
   },
   {
@@ -106,7 +106,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 280,
     waves: [
       { creature: 'centipede', at: 1 },
-      { creature: 'hound', at: 28, params: { speed: 1.5 } },
+      { creature: 'hound', at: 28, params: { speed: 1.6 } },
     ],
   },
   {
@@ -135,7 +135,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 110,
     reward: 500,
     waves: [
-      { creature: 'strider', at: 1 },
+      { creature: 'strider', at: 1, params: { speed: 0.4 } },
       { creature: 'hound', at: 20, params: { speed: 1.5 } },
       { creature: 'hound', at: 45, params: { speed: 1.5 } },
     ],

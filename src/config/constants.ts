@@ -45,7 +45,7 @@ export const ARENA = {
 
 /** Turret pivot location in simulation space. */
 /** Every creature is built at this multiple of its blueprint size. */
-export const CREATURE_SCALE = 2;
+export const CREATURE_SCALE = 3;
 
 export const TURRET = {
   x: 2.5,

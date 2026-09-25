@@ -107,5 +107,5 @@ console.log(
   `\nSUMMARY ${id}${Object.keys(params).length ? ' ' + JSON.stringify(params) : ''}: walked ${walked.toFixed(1)} m in ${seconds}s (avg ${(walked / seconds).toFixed(2)} m/s), state=${c.state} cause=${c.cause ?? '-'}, reached line at ${reachedLine >= 0 ? reachedLine.toFixed(1) + 's' : 'never'}, rounds fired=${rounds} hits=${hits}`,
 );
 const cx = Math.min(spawnX, c.x);
-await renderFilmstrip(frames, png, { left: cx - 14, right: spawnX + 10, top: -14, bottom: 1.5 }, { cols: 3 });
+await renderFilmstrip(frames, png, { left: cx - 18, right: spawnX + 14, top: -20, bottom: 1.5 }, { cols: 3 });
 console.log('filmstrip', png);
