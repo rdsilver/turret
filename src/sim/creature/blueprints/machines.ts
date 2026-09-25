@@ -41,7 +41,7 @@ registerCreature('engine', (d, _rng, params) => {
   const tref = (draftMass(d) + legMass) * G * 0.5;
   for (const side of ['L', 'R']) {
     d.joints.push({ kind: 'muscle', id: `shoulder${side}`, a: 'torso', b: `arm${side}`, at: [0, shoulderY], seam: 0.16, strength: 2.5, muscle: { torque: tref * 0.12, min: -120, max: 150, omega: 18 } });
-    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: 0.2, mat: 'steel', density: legDensity, hipTorque: tref * 1.8, kneeTorque: tref * 1.8, hp: P('legHp', 0.6), footW: 0.5, omega: 80 }, 'torso');
+    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: 0.2, mat: 'steel', density: legDensity, hipTorque: tref * 1.8, kneeTorque: tref * 1.8, hp: P('legHp', 0.6), footW: 0.5, omega: 80, strength: 3.5 }, 'torso');
   }
   return {
     name: 'Engine Walker',

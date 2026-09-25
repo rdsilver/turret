@@ -62,6 +62,8 @@ const NEUTRALIZE_AFTER = 1.8;
 const STUCK_WINDOW = 7;
 const STUCK_DISTANCE = 0.35;
 const SPAWN_SETTLE = 0.7;
+/** Seconds over which the gait eases in after spawning. */
+const GAIT_RAMP = 0.8;
 /** Joint strength below which a leg joint no longer carries its leg. */
 const LEG_FAIL_SCALE = 0.32;
 
@@ -83,6 +85,8 @@ export class Creature {
 
   state: CreatureState = 'spawning';
   cause: NeutralizeCause | null = null;
+  /** Age (s) when it was stopped, -1 while active. */
+  neutralizedAt = -1;
   /** Gait phase in cycles. */
   phase = 0;
   /** 0..1 power from engines / heart. */
@@ -331,7 +335,9 @@ export class Creature {
 
     // --- muscles: gait -----------------------------------------------------
     const walking = this.state !== 'neutralized' && this.age > SPAWN_SETTLE && power > 0.05 && this.capacity > 0 && !downed && !stalled;
-    const speed = this.spec.gait.speed * this.capacity * power;
+    // The gait eases in over its first moments (a standing start, not a jolt that snaps hips).
+    const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
+    const speed = this.spec.gait.speed * this.capacity * power * ramp;
     if (walking) {
       // The gait runs at the TARGET speed (legs keep cycling if it's blocked: it struggles).
       const rate = speed / Math.max(0.2, this.spec.gait.stride);
@@ -353,7 +359,8 @@ export class Creature {
       if (joint.broken || !this.connected.has(joint.a)) continue;
       joint.setPower(world, musclePower);
       const s = Math.sin((this.phase + gt.phase) * Math.PI * 2);
-      const target = !walking || gt.shape === 'hold' ? gt.bias : gt.shape === 'sin' ? gt.bias + gt.amp * s : gt.bias + gt.amp * Math.max(0, s);
+      const amp = gt.amp * ramp;
+      const target = !walking || gt.shape === 'hold' ? gt.bias : gt.shape === 'sin' ? gt.bias + amp * s : gt.bias + amp * Math.max(0, s);
       joint.setDrive(world, target);
     }
 
@@ -477,6 +484,7 @@ export class Creature {
     if (this.state === 'neutralized') return;
     this.state = 'neutralized';
     this.cause = cause;
+    this.neutralizedAt = this.age;
     this.ctx.events.emit('creatureNeutralized', { creature: this, cause, x: this.core.x, y: this.core.y });
   }
 }

@@ -109,6 +109,8 @@ export interface SimEvents {
   /** A creature can no longer advance (for good). */
   creatureNeutralized: { creature: Creature; cause: NeutralizeCause; x: number; y: number };
   creatureOverheated: { creature: Creature; x: number; y: number };
+  /** A limb (or any piece) was torn off a creature: a tiny pop at the break. */
+  limbPopped: { creature: Creature; part: StructurePart; x: number; y: number };
   /** A creature used an ability (e.g. threw a rubber shield). */
   creatureAbility: { creature: Creature; ability: string; x: number; y: number };
   /** An active creature crossed the defense line. */

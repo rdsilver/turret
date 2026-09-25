@@ -60,7 +60,7 @@ registerCreature('thrower', (d, _rng, params) => {
   const legLen = 0.85;
   const hipY = 0.12 + legLen * 2;
   const torsoH = 1.15;
-  const speed = typeof params.speed === 'number' ? params.speed : 1.1;
+  const speed = typeof params.speed === 'number' ? params.speed : 0.7;
   d.box(0, hipY + torsoH / 2 - 0.05, 0.46, torsoH, 'wood', { id: 'torso', densityScale: density, tags: ['core'], hpScale: 2.5 });
   d.circle(0, hipY + torsoH + 0.22, 0.27, 'wood', { id: 'head', densityScale: density * 0.6, hpScale: 1.6 });
   d.weld('head', 'torso', { at: [0, hipY + torsoH - 0.05], seam: 0.3, strength: 3 });

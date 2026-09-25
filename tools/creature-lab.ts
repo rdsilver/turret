@@ -61,6 +61,7 @@ sim.events.on('partWrecked', (e) => ev(`WRECKED ${e.part.name}`));
 sim.events.on('creatureNeutralized', (e) => ev(`NEUTRALIZED cause=${e.cause} at x=${e.x.toFixed(1)}`));
 sim.events.on('creatureAbility', (e) => ev(`ability ${e.ability}`));
 sim.events.on('creatureOverheated', () => ev('ENGINE OVERHEATED'));
+sim.events.on('limbPopped', (e) => ev(`POP ${e.part.name} off ${e.creature.spec.name}`));
 sim.events.on('creatureSplit', (e) => ev(`SPLIT: ${e.creature.spec.name} led by ${e.creature.core.name} at x=${e.creature.x.toFixed(1)}`));
 
 const frames: FrameSnap[] = [];
@@ -106,5 +107,5 @@ console.log(
   `\nSUMMARY ${id}${Object.keys(params).length ? ' ' + JSON.stringify(params) : ''}: walked ${walked.toFixed(1)} m in ${seconds}s (avg ${(walked / seconds).toFixed(2)} m/s), state=${c.state} cause=${c.cause ?? '-'}, reached line at ${reachedLine >= 0 ? reachedLine.toFixed(1) + 's' : 'never'}, rounds fired=${rounds} hits=${hits}`,
 );
 const cx = Math.min(spawnX, c.x);
-await renderFilmstrip(frames, png, { left: cx - 9, right: spawnX + 5, top: -8, bottom: 1.5 }, { cols: 3 });
+await renderFilmstrip(frames, png, { left: cx - 14, right: spawnX + 10, top: -14, bottom: 1.5 }, { cols: 3 });
 console.log('filmstrip', png);

@@ -15,21 +15,32 @@ import { Creature } from './Creature';
 import { getCreatureBlueprint, type CreatureParams, type CreatureSpec } from './CreatureTypes';
 import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
-import { GROUP, interactionGroups } from '../../config/constants';
+import { CREATURE_SCALE, GROUP, interactionGroups } from '../../config/constants';
+import { scaleCreature } from './blueprints/kit';
+import type { BreakableJoint } from '../BreakableJoint';
+
+/** Velocity change (m/s) a torn-off piece gets from its pop. */
+const POP_DV = 2.6;
 
 export class CreatureManager {
   readonly list: Creature[] = [];
   private byStructure = new Map<Structure, Creature[]>();
   /** Structures that lost a joint and may have split (checked before the next step). */
   private splitCheck = new Set<Structure>();
+  /** Joints broken last step: a piece torn off a creature pops. */
+  private popCheck: BreakableJoint[] = [];
+  /** Sim time of each creature's last pop (one pop per tear, not one per joint). */
+  private lastPop = new WeakMap<Creature, number>();
 
   constructor(private readonly ctx: SimContext) {
     ctx.physics.addPreStepHook((dt) => this.preStep(dt));
-    ctx.events.on('jointBroken', ({ joint }) => {
+    ctx.events.on('jointBroken', ({ joint, cause }) => {
       const cs = this.byStructure.get(joint.a.structure as Structure);
       if (!cs) return;
       for (const c of cs) c.onJointBroken();
       if (cs[0]!.spec.split) this.splitCheck.add(joint.a.structure as Structure);
+      // Engine blasts make their own bang; silent removals make none.
+      if (cause !== 'removed' && cause !== 'explosion' && joint.b) this.popCheck.push(joint);
     });
     const dirty = ({ part }: { part: StructurePart }) => {
       const cs = this.byStructure.get(part.structure as Structure);
@@ -46,6 +57,7 @@ export class CreatureManager {
     const rng = new Random(seed);
     const draft = new StructureDraft(rng);
     const spec = getCreatureBlueprint(blueprintId)(draft, rng, params);
+    scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
     const def = draft.toDef(x, spec.name);
     const structure = buildStructure(this.ctx.physics, def);
     // Limbs overlap in a 2D side view: creature parts never collide with each other.
@@ -97,9 +109,11 @@ export class CreatureManager {
     this.list.length = 0;
     this.byStructure.clear();
     this.splitCheck.clear();
+    this.popCheck.length = 0;
   }
 
   private preStep(dt: number): void {
+    if (this.popCheck.length) this.checkPops();
     if (this.splitCheck.size) this.checkSplits();
     for (let i = 0; i < this.list.length; i++) {
       const c = this.list[i]!;
@@ -112,6 +126,46 @@ export class CreatureManager {
         getAbility(a.id)?.step?.(c, a, this.ctx, dt, organ);
       }
     }
+  }
+
+  /**
+   * A joint break that tore a piece off a creature (a limb, a head, a plate, a
+   * segment) makes a tiny pop: the piece gets a small outward kick and a
+   * limbPopped event (effects + sound). Several joints going at once (a
+   * wrecked part lets go of all its joints) make a single pop.
+   */
+  private checkPops(): void {
+    const now = this.ctx.physics.simTime;
+    for (const j of this.popCheck) {
+      const b = j.b;
+      if (!b) continue;
+      const cs = this.byStructure.get(j.a.structure as Structure);
+      if (!cs) continue;
+      const c = cs.find((k) => k.owns(j.a) || k.owns(b));
+      if (!c) continue;
+      const ownsA = c.owns(j.a);
+      const ownsB = c.owns(b);
+      if (ownsA && ownsB) continue; // still attached another way: nothing came off
+      // Only while it is fighting (or just went down): not every creak of a settling wreck.
+      if (c.neutralizedAt >= 0 && c.age - c.neutralizedAt > 1.5) continue;
+      if (now - (this.lastPop.get(c) ?? -1) < 0.12) continue;
+      this.lastPop.set(c, now);
+      const piece = ownsA ? b : j.a;
+      const body = ownsA ? j.a : b;
+      if (!piece.removed && piece.body.isDynamic()) {
+        let dx = piece.x - body.x;
+        let dy = piece.y - body.y;
+        const d = Math.hypot(dx, dy) || 1;
+        dx /= d;
+        dy /= d;
+        // Small outward kick with a little lift (y is down): a pop, not a blast.
+        const J = piece.mass * POP_DV;
+        piece.body.applyImpulse({ x: dx * J, y: (dy - 0.6) * J }, true);
+        piece.body.applyTorqueImpulse((this.ctx.rng.next() - 0.5) * piece.mass * piece.extent * POP_DV, true);
+      }
+      this.ctx.events.emit('limbPopped', { creature: c, part: piece, x: j.wx, y: j.wy });
+    }
+    this.popCheck.length = 0;
   }
 
   /** Turn big uncontrolled pieces of split-capable creatures into creatures of their own. */

@@ -55,6 +55,10 @@ type Text = Phaser.GameObjects.Text;
 type Rect = Phaser.GameObjects.Rectangle;
 
 const M = 48;
+/** Hint line: just under the top-centre counter and progress bar. */
+const HINT_Y = 128;
+/** First popup row, below the hint. */
+const POPUP_Y = 186;
 const POWER_SEGS = 14;
 const POWER_MIN = 0.35;
 const MAX_AMMO_PIPS = 4;
@@ -123,7 +127,7 @@ export class Hud {
   private readonly powerSegs: Rect[] = [];
   private readonly powerText: Text;
 
-  // Hint (bottom-centre)
+  // Hint (top-centre, under the counter / progress bar)
   private readonly hintBg: Phaser.GameObjects.Graphics;
   private readonly hintTag: Text;
   private readonly hintText: Text;
@@ -231,15 +235,15 @@ export class Hud {
     this.powerText = add(mono(scene, px + POWER_SEGS * 14 + 10, vy, '', SIZE.xs, THEME.text, { weight: 600, originY: 0.5 }));
 
 
-    // ---------------------------------------------------------------- hint (bottom-centre, above the strip)
+    // ---------------------------------------------------------------- hint (top-centre, under the progress bar)
     this.hintBg = add(scene.add.graphics());
-    this.hintTag = add(mono(scene, 0, H - 118, 'HINT', SIZE.micro, THEME.accent, { weight: 700, spacing: 2, originY: 0.5 }));
-    this.hintText = add(mono(scene, 0, H - 118, '', SIZE.sm, THEME.text, { originY: 0.5 }));
+    this.hintTag = add(mono(scene, 0, HINT_Y, 'HINT', SIZE.micro, THEME.accent, { weight: 700, spacing: 2, originY: 0.5 }));
+    this.hintText = add(mono(scene, 0, HINT_Y, '', SIZE.sm, THEME.text, { originY: 0.5 }));
     this.setHintAlpha(0);
 
     // ---------------------------------------------------------------- popups
     for (let i = 0; i < 4; i++) {
-      const t = add(mono(scene, cx, 150, '', SIZE.xl - 4, THEME.accent, { weight: 800, originX: 0.5, originY: 0.5 }));
+      const t = add(mono(scene, cx, POPUP_Y, '', SIZE.xl - 4, THEME.accent, { weight: 800, originX: 0.5, originY: 0.5 }));
       t.setVisible(false).setDepth(20);
       this.popups.push({ text: t, key: '', age: 0, life: 1.3, active: false, slot: 0 });
     }
@@ -506,7 +510,7 @@ export class Hud {
     this.updateBanner(0);
   }
 
-  /** Contextual hint line near the bottom. Empty string hides it. */
+  /** Contextual hint line near the top. Empty string hides it. */
   hint(text: string): void {
     if (!text) {
       this.hintT = -1;
@@ -548,7 +552,6 @@ export class Hud {
   }
 
   private layoutHint(): void {
-    const H = this.H;
     const gap = 14;
     const w = this.hintTag.width + gap + this.hintText.width;
     const x0 = Math.round(this.W / 2 - w / 2);
@@ -558,9 +561,9 @@ export class Hud {
     g.clear();
     if (!this.hintText.text) return;
     g.fillStyle(THEME.bgDeep, 0.82);
-    g.fillRoundedRect(x0 - 18, H - 138, w + 36, 40, 4);
+    g.fillRoundedRect(x0 - 18, HINT_Y - 20, w + 36, 40, 4);
     g.lineStyle(1, THEME.accentNum, 0.5);
-    g.strokeRoundedRect(x0 - 17.5, H - 137.5, w + 35, 39, 4);
+    g.strokeRoundedRect(x0 - 17.5, HINT_Y - 19.5, w + 35, 39, 4);
   }
 
   private setHintAlpha(a: number): void {
@@ -572,9 +575,10 @@ export class Hud {
     this.hintTag.visible = vis;
     this.hintText.visible = vis;
     if (vis) {
-      const off = (1 - a) * 8;
-      this.hintTag.y = this.H - 118 + off;
-      this.hintText.y = this.H - 118 + off;
+      // Drops in from above as it fades in.
+      const off = -(1 - a) * 8;
+      this.hintTag.y = HINT_Y + off;
+      this.hintText.y = HINT_Y + off;
       this.hintBg.y = off;
     }
   }
@@ -595,7 +599,7 @@ export class Hud {
       const out = clamp01((t - (p.life - 0.45)) / 0.45);
       p.text.setScale(scale);
       p.text.alpha = Math.min(clamp01(t / 0.06), 1 - out);
-      p.text.y = 150 + p.slot * 46 - out * 22;
+      p.text.y = POPUP_Y + p.slot * 46 - out * 22;
     }
   }
 

@@ -44,6 +44,9 @@ export const ARENA = {
 } as const;
 
 /** Turret pivot location in simulation space. */
+/** Every creature is built at this multiple of its blueprint size. */
+export const CREATURE_SCALE = 2;
+
 export const TURRET = {
   x: 2.5,
   /** Pivot height above ground (meters). */

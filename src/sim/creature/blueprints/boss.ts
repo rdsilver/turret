@@ -69,7 +69,7 @@ registerCreature('strider', (d, _rng, params) => {
     ['BR', bodyW / 2 - 0.45],
   ];
   for (const [side, x] of hips) {
-    buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.24, mat: 'steel', density: legDensity, hipTorque: tref * 2.5, kneeTorque: tref * 3, hp: P('legHp', 1.4), footW: 0.6, omega: P('omega', 90) }, 'body');
+    buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.24, mat: 'steel', density: legDensity, hipTorque: tref * 2.5, kneeTorque: tref * 3, hp: P('legHp', 1.4), footW: 0.6, omega: P('omega', 90), strength: 4.5 }, 'body');
   }
   const amp = 0.4;
   const gait: Record<string, MuscleGait> = {};

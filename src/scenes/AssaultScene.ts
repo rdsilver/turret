@@ -48,7 +48,7 @@ type Flow = 'playing' | 'ending' | 'results';
 const ENDLESS_ROSTER: Array<[string, number]> = [
   ['stickman', 1.0],
   ['hound', 1.5],
-  ['thrower', 1.1],
+  ['thrower', 0.8],
   ['engine', 0.8],
   ['beetle', 0.55],
   ['shield', 0.75],

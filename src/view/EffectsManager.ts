@@ -41,6 +41,8 @@ const UP = -HALF_PI;
 /** Particle gravity (px/s^2): sim gravity 12 m/s^2 * PPM, a touch heavier so debris reads snappy. */
 const G = 12 * PPM * 1.15;
 const GROUND_DUST = 0x8f8a7e;
+/** Radius (m) of the little pop when a limb tears off. */
+const LIMB_POP_RADIUS = 0.6;
 
 const SLOW_TARGET = 0.35;
 const SLOW_IN = 0.08;
@@ -318,6 +320,7 @@ export class EffectsManager {
     this.on('partDamaged', this.onPartDamaged);
     this.on('partWrecked', this.onPartWrecked);
     this.on('creatureOverheated', this.onOverheated);
+    this.on('limbPopped', this.onLimbPopped);
     this.on('creatureNeutralized', this.onNeutralized);
     this.on('creatureAbility', this.onAbility);
     this.on('breach', this.onBreach);
@@ -346,6 +349,58 @@ export class EffectsManager {
     this.puff(x, y, 4, this.dustColor[mat] ?? GROUND_DUST, 14, 0.3);
     if (family(mat) === 'metal') this.sparkBurst(x, y, 12, 420, 0, Math.PI);
     this.camera.addTrauma(0.12, 0.4);
+  }
+
+  /** A limb tore off: a very small explosion (a pop, nothing like an engine going up). */
+  private onLimbPopped(e: SimEvents['limbPopped']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    const R = LIMB_POP_RADIUS * PPM;
+    const b = resetBurst();
+    this.flash(x, y, R * 1.3, 0xffe2b0, 90, 0.85);
+    this.flash(x, y, R * 0.5, 0xffffff, 45, 1);
+    // A few little fireball blobs.
+    b.tint = 0xffb050;
+    b.tintVar = 0.15;
+    b.tintEnd = 0x5a1a08;
+    b.speedMin = 15;
+    b.speedMax = 70;
+    b.lifeMin = 160;
+    b.lifeMax = 320;
+    b.scaleMin = (R * 0.3) / 32;
+    b.scaleMax = (R * 0.55) / 32;
+    b.endScale = 1.5;
+    b.easeOut = true;
+    b.alpha = 0.8;
+    b.fadePow = 1.4;
+    b.drag = 3;
+    b.gravity = -60;
+    b.jitter = R * 0.2;
+    this.emit(this.glow, x, y, 4);
+    // A puff of smoke.
+    resetBurst();
+    b.tint = 0x3a3d44;
+    b.tintVar = 0.25;
+    b.speedMin = 15;
+    b.speedMax = 60;
+    b.lifeMin = 600;
+    b.lifeMax = 1100;
+    b.delayMax = 60;
+    b.scaleMin = (R * 0.3) / 16;
+    b.scaleMax = (R * 0.5) / 16;
+    b.endScale = 2;
+    b.easeOut = true;
+    b.alpha = 0.4;
+    b.alphaVar = 0.3;
+    b.fadeIn = 0.08;
+    b.fadePow = 1.5;
+    b.drag = 2.2;
+    b.gravity = -30;
+    b.jitter = R * 0.3;
+    this.emit(this.dust, x, y, 3);
+    this.sparkBurst(x, y, 7, 240, UP, Math.PI);
+    this.ring(x, y, R * 1.4, 200, 0.35, 0xfff1dc);
+    this.camera.addTrauma(0.05, 0.3);
   }
 
   private onOverheated(e: SimEvents['creatureOverheated']): void {

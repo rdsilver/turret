@@ -192,6 +192,7 @@ export class AudioManager {
     on('jointBroken', this.onBroken);
     on('partShattered', this.onShattered);
     on('explosion', this.onExplosion);
+    on('limbPopped', this.onLimbPopped);
     on('bigCollapse', this.onBigCollapse);
     on('objectiveComplete', this.onObjective);
     on('partFallen', this.onPartFallen);
@@ -347,6 +348,11 @@ export class AudioManager {
     const x = e.x * PPM;
     this.start('explosion', 0.6 + 0.35 * Math.min(1, p), 1.1 - 0.15 * Math.min(1, p), this.panFor(x), false);
     if (p > 0.6) this.start('debris', 0.35, 1, this.panFor(x), false);
+  }
+
+  /** Torn-off limb: the explosion sample, quiet and pitched up into a small pop. */
+  private onLimbPopped(e: SimEvents['limbPopped']): void {
+    this.start('explosion', 0.22, 1.8 + Math.random() * 0.25, this.panFor(e.x * PPM), false);
   }
 
   private onBigCollapse(e: SimEvents['bigCollapse']): void {

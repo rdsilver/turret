@@ -62,7 +62,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 105,
     reward: 220,
     waves: [
-      { creature: 'beetle', at: 1 },
+      { creature: 'beetle', at: 1, params: { speed: 0.62 } },
       { creature: 'stickman', at: 26, params: { speed: 0.85 } },
     ],
   },
@@ -75,9 +75,9 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 106,
     reward: 240,
     waves: [
-      { creature: 'engine', at: 1 },
+      { creature: 'engine', at: 1, params: { speed: 0.9 } },
       { creature: 'stickman', at: 10, params: { speed: 0.9 } },
-      { creature: 'engine', at: 26, params: { speed: 0.85 } },
+      { creature: 'engine', at: 26, params: { speed: 0.95 } },
       { creature: 'hound', at: 34, params: { speed: 1.4 } },
     ],
   },
@@ -92,8 +92,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'shield', at: 1 },
       { creature: 'shield', at: 10, params: { speed: 0.8 } },
-      { creature: 'thrower', at: 20 },
-      { creature: 'hound', at: 30, params: { speed: 1.5 } },
+      { creature: 'thrower', at: 24 },
+      { creature: 'hound', at: 36, params: { speed: 1.5 } },
     ],
   },
   {
