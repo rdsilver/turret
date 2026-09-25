@@ -706,7 +706,10 @@ export class UpgradeScene extends Phaser.Scene {
     gameState().save();
     for (const c of this.cameras.cameras) c.fadeOut(220, 13, 15, 18);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      if (target === 'Game') this.scene.start('Game', { mode: this.mode });
+      if (target === 'Game') {
+        if (this.mode === 'assault') this.scene.start('Assault', {});
+        else this.scene.start('Game', { mode: 'campaign' });
+      }
       else this.scene.start('Menu');
     });
   }

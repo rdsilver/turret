@@ -191,7 +191,10 @@ export class MenuScene extends Phaser.Scene {
     this.leaving = true;
     const cams = this.cameras.cameras;
     cams.forEach((c) => c.fadeOut(220, 13, 15, 18));
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Game', data));
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      if (data.mode === 'assault') this.scene.start('Assault', {});
+      else this.scene.start('Game', data);
+    });
   }
 
   private newGame(): void {

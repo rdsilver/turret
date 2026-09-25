@@ -259,8 +259,7 @@ export class Creature {
     const speed = this.spec.gait.speed * this.capacity * power;
     if (walking) {
       // The gait runs at the TARGET speed (legs keep cycling if it's blocked: it struggles).
-      const v = Math.abs(this.core.vx);
-      const rate = Math.max(v, speed) / Math.max(0.2, this.spec.gait.stride);
+      const rate = speed / Math.max(0.2, this.spec.gait.stride);
       this.phase += rate * dt;
     }
     for (const leg of this.legs) {

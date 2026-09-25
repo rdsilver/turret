@@ -7,6 +7,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { UpgradeScene } from './scenes/UpgradeScene';
+import { AssaultScene } from './scenes/AssaultScene';
 
 setRapier(RAPIER);
 
@@ -20,7 +21,7 @@ const game = new Phaser.Game({
   disableContextMenu: true,
   // index.html's #game flexbox centres the canvas; CENTER_BOTH would add its margins on top.
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.NO_CENTER },
-  scene: [BootScene, MenuScene, GameScene, UIScene, UpgradeScene],
+  scene: [BootScene, MenuScene, GameScene, AssaultScene, UIScene, UpgradeScene],
 });
 
 // Handy for debugging from the console / automated smoke tests.

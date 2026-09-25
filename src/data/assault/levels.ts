@@ -14,7 +14,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     hint: 'Hold the trigger on one leg. Let the barrel cool when it glows.',
     seed: 101,
     reward: 80,
-    waves: [{ creature: 'stickman', at: 1 }],
+    waves: [{ creature: 'stickman', at: 1, params: { speed: 0.7 } }],
   },
   {
     id: 'a02',
@@ -25,8 +25,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 102,
     reward: 110,
     waves: [
-      { creature: 'stickman', at: 1 },
-      { creature: 'stickman', at: 7, params: { speed: 1.5 } },
+      { creature: 'stickman', at: 1, params: { speed: 0.75 } },
+      { creature: 'stickman', at: 14, params: { speed: 0.85 } },
     ],
   },
   {

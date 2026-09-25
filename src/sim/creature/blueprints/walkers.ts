@@ -22,7 +22,7 @@ function buildLeg(
   side: string,
   hipX: number,
   hipY: number,
-  o: { thigh: number; shin: number; w: number; mat: MaterialId; density: number; hipTorque: number; kneeTorque: number; hp?: number },
+  o: { thigh: number; shin: number; w: number; mat: MaterialId; density: number; hipTorque: number; kneeTorque: number; hp?: number; footW?: number },
   body: string,
 ): LegBuild {
   const footH = 0.12;
@@ -32,7 +32,7 @@ function buildLeg(
   const far = side.endsWith('R') ? ['back'] : [];
   d.box(hipX, kneeY + (hipY - kneeY) / 2, o.w, hipY - kneeY + 0.08, o.mat, { id: ids.thigh, densityScale: o.density, tags: ['limb', ...far], hpScale: o.hp });
   d.box(hipX, footH + o.shin / 2, o.w * 0.88, o.shin + 0.06, o.mat, { id: ids.shin, densityScale: o.density, tags: ['limb', ...far], hpScale: o.hp });
-  d.box(hipX - 0.1, footH / 2, 0.46, footH, o.mat, { id: ids.foot, densityScale: o.density, friction: 1.2, tags: ['limb', 'foot', ...far] });
+  d.box(hipX - 0.1, footH / 2, o.footW ?? 0.46, footH, o.mat, { id: ids.foot, densityScale: o.density, friction: 1.2, tags: ['limb', 'foot', ...far] });
   d.joints.push({ kind: 'muscle', id: ids.hip, a: body, b: ids.thigh, at: [hipX, hipY], seam: o.w, strength: 2.5, muscle: { torque: o.hipTorque, min: -65, max: 80, omega: 42 } });
   d.joints.push({ kind: 'muscle', id: ids.knee, a: ids.thigh, b: ids.shin, at: [hipX, kneeY], seam: o.w, strength: 2.5, muscle: { torque: o.kneeTorque, min: -140, max: 6, omega: 42 } });
   d.weld(ids.foot, ids.shin, { at: [hipX, footH], seam: o.w * 0.8, strength: 3 });
@@ -67,30 +67,30 @@ function draftMass(d: StructureDraft): number {
  * target: a few hits weaken one enough to buckle under its own weight.
  */
 registerCreature('stickman', (d, _rng, params) => {
+  const S = typeof params.scale === 'number' ? params.scale : 1.35;
   const density = 0.45;
-  const legLen = 0.85;
+  const legLen = 0.85 * S;
   const hipY = 0.12 + legLen * 2;
-  const torsoH = 1.1;
-  const speed = typeof params.speed === 'number' ? params.speed : 1.3;
+  const torsoH = 1.1 * S;
+  const speed = typeof params.speed === 'number' ? params.speed : 0.8;
   // Body first (so leg torques can be sized from the total mass).
-  d.box(0, hipY + torsoH / 2 - 0.05, 0.4, torsoH, 'wood', { id: 'torso', densityScale: density, tags: ['core'], hpScale: 2.5 });
-  d.circle(0, hipY + torsoH + 0.22, 0.27, 'wood', { id: 'head', densityScale: density * 0.6, hpScale: 1.6 });
-  d.weld('head', 'torso', { at: [0, hipY + torsoH - 0.05], seam: 0.3, strength: 3 });
+  d.box(0, hipY + torsoH / 2 - 0.05, 0.52 * S, torsoH, 'wood', { id: 'torso', densityScale: density, tags: ['core'], hpScale: 2.5 });
+  d.circle(0, hipY + torsoH + 0.22 * S, 0.3 * S, 'wood', { id: 'head', densityScale: density * 0.6, hpScale: 1.6 });
+  d.weld('head', 'torso', { at: [0, hipY + torsoH - 0.05], seam: 0.34 * S, strength: 3 });
   // Arms (swing for balance and style).
-  const shoulderY = hipY + torsoH - 0.18;
+  const shoulderY = hipY + torsoH - 0.18 * S;
   for (const side of ['L', 'R']) {
     const far = side === 'R' ? ['back'] : [];
-    d.box(0, shoulderY - 0.36, 0.12, 0.74, 'wood', { id: `arm${side}`, densityScale: density, tags: ['limb', ...far] });
-    d.box(0, shoulderY - 1.02, 0.1, 0.62, 'wood', { id: `fore${side}`, densityScale: density, tags: ['limb', ...far] });
-    d.weld(`fore${side}`, `arm${side}`, { at: [0, shoulderY - 0.72], seam: 0.1, strength: 3 });
+    d.box(0, shoulderY - 0.36 * S, 0.17 * S, 0.74 * S, 'wood', { id: `arm${side}`, densityScale: density, tags: ['limb', ...far] });
+    d.box(0, shoulderY - 1.02 * S, 0.14 * S, 0.62 * S, 'wood', { id: `fore${side}`, densityScale: density, tags: ['limb', ...far] });
+    d.weld(`fore${side}`, `arm${side}`, { at: [0, shoulderY - 0.72 * S], seam: 0.14 * S, strength: 3 });
   }
-  const tmp = d.parts.length;
-  void tmp;
-  const massEstimate = draftMass(d) + 4 * 0.17 * legLen * 520 * density + 2 * 0.46 * 0.12 * 520 * density;
-  const tref = massEstimate * G * 0.5;
+  const legW = 0.24 * S;
+  const massEstimate = draftMass(d) + 4 * legW * legLen * 520 * density + 2 * 0.46 * S * 0.12 * 520 * density;
+  const tref = massEstimate * G * 0.5 * S;
   for (const side of ['L', 'R']) {
-    d.joints.push({ kind: 'muscle', id: `shoulder${side}`, a: 'torso', b: `arm${side}`, at: [0, shoulderY], seam: 0.12, strength: 2.5, muscle: { torque: tref * 0.15, min: -120, max: 150, omega: 18 } });
-    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: 0.17, mat: 'wood', density, hipTorque: tref * 1.6, kneeTorque: tref * 1.4, hp: 1.3 }, 'torso');
+    d.joints.push({ kind: 'muscle', id: `shoulder${side}`, a: 'torso', b: `arm${side}`, at: [0, shoulderY], seam: 0.17 * S, strength: 2.5, muscle: { torque: tref * 0.15, min: -120, max: 150, omega: 18 } });
+    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: legW, mat: 'wood', density, hipTorque: tref * 1.6, kneeTorque: tref * 1.4, hp: 1.3, footW: 0.46 * S }, 'torso');
   }
   const spec: CreatureSpec = {
     name: 'Stick Walker',
@@ -99,7 +99,7 @@ registerCreature('stickman', (d, _rng, params) => {
       { name: 'left', joints: ['hipL', 'kneeL'], parts: ['thighL', 'shinL', 'footL'], foot: 'footL' },
       { name: 'right', joints: ['hipR', 'kneeR'], parts: ['thighR', 'shinR', 'footR'], foot: 'footR' },
     ],
-    gait: { speed, stride: 2.6, muscles: walkerGait(0.5) },
+    gait: { speed, stride: 2.6 * S, muscles: walkerGait(0.5) },
     lean: 4,
     vitals: ['torso', 'head'],
     bounty: 60,
