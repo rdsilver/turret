@@ -1,7 +1,9 @@
 /**
  * The top turret: an automatic gun on a mast above the main turret, bought in
  * the workshop (upgrade 'topTurret'). Lighter and less accurate than the
- * player's gun; it shares the ammunition belt (armour-piercing rounds).
+ * player's gun; it shares the ammunition belt (armour-piercing rounds). It has
+ * its own cooling: it never overheats and never stops firing while there is a
+ * target, whatever the main gun is doing.
  */
 import type { WeaponStats } from '../sim/weapons/Weapon';
 
@@ -17,8 +19,6 @@ export const TOP_TURRET_STATS: Readonly<WeaponStats> = {
   impactMultiplier: 1,
   previewTime: 0,
   automatic: true,
-  heatPerShot: 0.035,
-  coolRate: 0.2,
   damage: 0.22,
 };
 

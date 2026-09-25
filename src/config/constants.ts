@@ -48,11 +48,11 @@ export const ARENA = {
 export const TOP_TURRET = {
   x: 1.3,
   /** Pivot height above ground (m). */
-  pivotHeight: 8.4,
+  pivotHeight: 13.5,
   barrelLength: 2.2,
   minAngleDeg: -75,
-  /** It sits high: it can point well below the horizon. */
-  maxAngleDeg: 55,
+  /** It sits high: it can point steeply down at creatures near the line. */
+  maxAngleDeg: 75,
 };
 
 /** Every creature is built at this multiple of its blueprint size. */

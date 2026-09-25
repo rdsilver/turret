@@ -16,7 +16,6 @@ import { LabBackdrop } from '../ui/LabBackdrop';
 import { MenuVignette, type CellRect } from '../ui/MenuVignette';
 import { AudioManager } from '../audio/AudioManager';
 import { gameState, resetGameState } from '../game/GameState';
-import { levelManager } from '../game/LevelManager';
 import { hashString } from '../core/Random';
 
 /** Parse a user-entered structure code: base-36 codes (as shown in-game) or any text (hashed). */
@@ -86,11 +85,7 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(X, 446, 60, 3, THEME.accentNum).setOrigin(0, 0.5);
 
     // ------------------------------------------------------------ buttons
-    const campaignDone = gs.levelIndex >= levelManager.count;
     const started = gs.levelIndex > 0;
-    const playSub = campaignDone
-      ? `ENDLESS · STRUCTURE ${pad2(gs.levelIndex - levelManager.count + 1)}`
-      : `CAMPAIGN · LEVEL ${pad2(gs.levelIndex + 1)} / ${pad2(levelManager.count)}${gs.money > 0 ? ` · ${money(gs.money)}` : ''}`;
     const bw = 560;
     const bh = 64;
     const bx = X + bw / 2;
@@ -110,7 +105,7 @@ export class MenuScene extends Phaser.Scene {
         ? `CREATURES · ALL ${pad2(aTotal)} CLEARED · REPLAY THE LAST`
         : `CREATURES · LEVEL ${pad2(gs.assaultIndex + 1)} / ${pad2(aTotal)}${gs.money > 0 ? ` · ${money(gs.money)}` : ''}`;
     mk(aStarted ? 'CONTINUE' : 'PLAY', aSub, 'ENTER', ['Enter', 'NumpadEnter', 'Space'], () => this.go({ mode: 'assault' }), 'primary');
-    mk('DEMOLITION', playSub, 'M', ['KeyM'], () => this.go({ mode: 'campaign' }));
+    // Demolition (the structure campaign) is hidden from the menu for now.
     this.newGameBtn = mk('NEW GAME', aStarted || started || gs.money > 0 ? 'ERASES ALL PROGRESS' : 'START FRESH', 'N', ['KeyN'], () => this.newGame());
     mk('SANDBOX', 'TESTBED · SPAWN, GRAB, BREAK · DEBUG TOOLS', 'B', ['KeyB'], () => this.go({ mode: 'sandbox' }));
     const daily = dailySeed();

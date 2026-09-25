@@ -1,7 +1,7 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
  * closest to the line, aims at its first remaining weak point (leading it by
- * the flight time) and holds the trigger, easing off when the barrel runs hot.
+ * the flight time) and holds the trigger for as long as it has a target.
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
@@ -14,7 +14,6 @@ const RETARGET = 0.35;
 
 export class AutoGunner {
   enabled = true;
-  private cooling = false;
   private retarget = 0;
   private creature: Creature | null = null;
   private part: StructurePart | null = null;
@@ -57,9 +56,7 @@ export class AutoGunner {
       return;
     }
     w.setAngle(sol[0]!);
-    if (w.heat > 0.9) this.cooling = true;
-    if (this.cooling && w.heat < 0.45) this.cooling = false;
-    w.triggerHeld = !this.cooling && !w.overheated;
+    w.triggerHeld = true;
   }
 
   private pick(): void {
