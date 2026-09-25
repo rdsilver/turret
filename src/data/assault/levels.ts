@@ -117,9 +117,9 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
   {
     id: 'a08',
     name: 'Centipede',
-    subtitle: 'A long chain of segments on dozens of legs.',
-    lesson: 'Every cut makes two. Pieces of one segment are harmless: cut it in the middle.',
-    hint: 'Aim at the middle segments, not the armoured head.',
+    subtitle: 'Segments on dozens of legs: two of wood, then steel, then an armoured tail.',
+    lesson: 'Every cut makes two, each led by its front segment. Pieces of one segment are harmless.',
+    hint: 'The wooden front goes fast. Keep the barrel cool for the armoured tail.',
     seed: 108,
     reward: 280,
     waves: [
