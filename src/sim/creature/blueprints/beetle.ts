@@ -63,6 +63,7 @@ registerCreature('beetle', (d, _rng, params) => {
   }
   return {
     name: 'Beetle',
+    weakPoints: ['shinFL', 'shinFR', 'thighFL', 'thighFR', 'shinBL', 'shinBR', 'head'],
     core: 'body',
     legs: legs.map((id) => ({ name: id, joints: [`hip${id}`, `knee${id}`], parts: [`thigh${id}`, `shin${id}`, `foot${id}`], foot: `foot${id}` })),
     legGroups: [

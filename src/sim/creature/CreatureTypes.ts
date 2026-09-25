@@ -58,6 +58,24 @@ export interface FloatSpec {
   bobPeriod: number;
 }
 
+export interface FlyWing {
+  /** Joints from the body outward (any broken = wing lost; damage weakens lift). */
+  joints: string[];
+  /** Wing parts (any wrecked or cut off = wing lost). */
+  parts: string[];
+}
+
+export interface FlySpec {
+  wings: FlyWing[];
+  /** Wingbeats per second (the gait muscles run on this clock). */
+  flapHz: number;
+  /** Lift available with every wing healthy, as a multiple of its weight. */
+  liftMax: number;
+  /** Gentle altitude swoops around the spawn height (m, s). */
+  swoop: number;
+  swoopPeriod: number;
+}
+
 export interface CreatureSpec {
   name: string;
   /** Part id of the body the controller balances and propels. */
@@ -93,6 +111,8 @@ export interface CreatureSpec {
   abilities?: AbilitySpec[];
   /** Base payout for stopping it. */
   bounty?: number;
+  /** Where a gunner should aim, best first (parts that are gone are skipped). The top turret uses it. */
+  weakPoints?: string[];
   /**
    * Floating creatures don't walk: every part is moved kinematically. The core
    * drifts toward the turret (gait.speed) with a gentle bob, spinning; each ring
@@ -101,6 +121,12 @@ export interface CreatureSpec {
    * drops.
    */
   float?: FloatSpec;
+  /**
+   * Flying creatures hold their spawn altitude on flapping wings. Lift follows
+   * the wings still working (and their damage): lose one and it can't stay
+   * up; it is stopped when it comes down.
+   */
+  fly?: FlySpec;
   /**
    * Cut in two, a piece with at least `min` parts tagged `tag` (and legs) walks
    * on as a creature of its own, led by its front-most tagged part.

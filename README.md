@@ -72,16 +72,20 @@ limb stops obeying it.
 | 3 | The Thrower | walker with a sling arm that throws rubber shields | the sling arm (bullets bounce off rubber) |
 | 4 | The Hound | fast quadruped | both front (or both back) legs |
 | 5 | Shell Game | armoured beetle, six steel legs | legs under the shell; armour-piercing rounds |
-| 6 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 7 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
-| 8 | Centipede | segmented centipede | cut it in the middle: every piece of 2+ segments walks on alone |
-| 9 | Stampede | everything | triage |
-| 10 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 11 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 6 | Flock | flapping birds | a wing: lose one and it can't stay up (the top turret helps) |
+| 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 8 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 9 | Centipede | segmented centipede | cut it in the middle: every piece of 2+ segments walks on alone |
+| 10 | Stampede | everything | triage |
+| 11 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 12 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
 
-After level 11 the game continues with endless mixed waves. Between levels the
+After level 12 the game continues with endless mixed waves. Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
-armour-piercing rounds).
+armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
+automatic gun on a mast that picks the creature closest to the line and goes
+for its weak points. Creatures pick up speed as they near the line; stopped
+ones fade away after a few seconds.
 
 ## Demolition controls
 

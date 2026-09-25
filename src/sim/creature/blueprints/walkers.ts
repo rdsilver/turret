@@ -37,6 +37,7 @@ registerCreature('stickman', (d, _rng, params) => {
   }
   const spec: CreatureSpec = {
     name: 'Stick Walker',
+    weakPoints: ['shinL', 'thighL', 'shinR', 'thighR', 'torso'],
     core: 'torso',
     legs: [
       { name: 'left', joints: ['hipL', 'kneeL'], parts: ['thighL', 'shinL', 'footL'], foot: 'footL' },
@@ -82,6 +83,7 @@ registerCreature('thrower', (d, _rng, params) => {
   delete gait.shoulderR; // driven by the ability (wind-up / release)
   return {
     name: 'Thrower',
+    weakPoints: ['sling', 'shinL', 'thighL', 'shinR', 'torso'],
     core: 'torso',
     legs: [
       { name: 'left', joints: ['hipL', 'kneeL'], parts: ['thighL', 'shinL', 'footL'], foot: 'footL' },
@@ -132,6 +134,7 @@ registerCreature('hound', (d, _rng, params) => {
   }
   return {
     name: 'Hound',
+    weakPoints: ['shinFL', 'thighFL', 'shinFR', 'thighFR', 'head', 'body'],
     core: 'body',
     legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     gait: { speed, stride: P('stride', 3), muscles: gait },

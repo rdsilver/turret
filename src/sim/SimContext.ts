@@ -13,6 +13,7 @@ import type { FractureSystem } from './Fracture';
 import type { StatusEffects } from './StatusEffects';
 import type { DamageSystem } from './Damage';
 import type { DebrisManager } from './DebrisManager';
+import type { CreatureManager } from './creature/CreatureManager';
 
 export interface SimContext {
   readonly physics: PhysicsWorld;
@@ -23,6 +24,7 @@ export interface SimContext {
   readonly status: StatusEffects;
   readonly damage: DamageSystem;
   readonly debris: DebrisManager;
+  readonly creatures: CreatureManager;
   /** Deterministic randomness for gameplay (spread, fracture patterns...). */
   readonly rng: Random;
 }

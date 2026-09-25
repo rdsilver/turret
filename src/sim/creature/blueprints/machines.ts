@@ -45,6 +45,7 @@ registerCreature('engine', (d, _rng, params) => {
   }
   return {
     name: 'Engine Walker',
+    weakPoints: ['engine', 'shinL', 'shinR'],
     core: 'torso',
     legs: LEGS2,
     gait: { speed, stride: 2.8, muscles: walkerGait(0.45) },
@@ -93,6 +94,7 @@ registerCreature('shield', (d, _rng, params) => {
   gait.shoulderL = { shape: 'hold', amp: 0, bias: 0, phase: 0 };
   return {
     name: 'Shield-Bearer',
+    weakPoints: ['shieldArm', 'head', 'shinL', 'shinR', 'torso'],
     core: 'torso',
     legs: LEGS2,
     gait: { speed, stride: 2.8, muscles: gait },

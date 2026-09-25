@@ -15,7 +15,8 @@ import { AssaultSession } from '../src/game/AssaultSession';
 import { scoreAssault } from '../src/game/AssaultScoring';
 import { ASSAULT_LEVELS } from '../src/data/assault/levels';
 import { DEFENSE_LINE_X } from '../src/game/AssaultLevel';
-import { loadout } from './lib/loadouts';
+import { loadout, topTurretLevel } from './lib/loadouts';
+import { topTurretStats } from '../src/data/topTurret';
 import { Random } from '../src/core/Random';
 
 await initRapier();
@@ -39,6 +40,8 @@ const level = ASSAULT_LEVELS.find((l) => l.id === id);
 if (!level) throw new Error(`no level ${id}`);
 
 const sim = new Simulation({ seed: 3, weaponStats: stats, ammo: AMMO.bullet });
+const topLvl = tier ? topTurretLevel(tier) : Number(opt('top', '0'));
+if (topLvl > 0) sim.setTopTurret(topTurretStats(topLvl, stats));
 const session = new AssaultSession(sim, level);
 const frames: FrameSnap[] = [];
 const log: string[] = [];
@@ -50,18 +53,6 @@ sim.events.on('creatureAbility', (e) => ev(`${e.creature.spec.name}: ${e.ability
 sim.events.on('breach', (e) => ev(`BREACH by ${e.creature.spec.name}`));
 sim.events.on('creatureSplit', (e) => ev(`split: ${e.creature.spec.name}`));
 sim.events.on('creatureOverheated', (e) => ev(`${e.creature.spec.name} overheated`));
-// Where a sensible gunner aims on each creature, in order (skips parts that are gone).
-const AIM: Record<string, string[]> = {
-  stickman: ['shinL', 'thighL', 'shinR', 'thighR', 'torso'],
-  thrower: ['sling', 'shinL', 'thighL', 'shinR', 'torso'],
-  hound: ['shinFL', 'thighFL', 'shinFR', 'thighFR', 'head', 'body'],
-  beetle: ['shinFL', 'shinFR', 'thighFL', 'thighFR', 'shinBL', 'shinBR', 'head'],
-  engine: ['engine', 'shinL', 'shinR'],
-  shield: ['shieldArm', 'head', 'shinL', 'shinR', 'torso'],
-  centipede: ['seg2', 'seg3', 'seg1', 'seg4', 'seg0', 'seg5'],
-  strider: ['slingA', 'slingB', 'engine', 'shinFL', 'shinFR', 'thighFL', 'thighFR'],
-  orrery: ['tri'],
-};
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -80,7 +71,7 @@ run(sim, Number(opt('seconds', '150')), () => {
     if (!c.active || c.core.removed || c.age < 0.5) continue;
     if (c.x >= best) continue;
     best = c.x;
-    const names = aimPart === 'auto' ? (AIM[c.kind] ?? []) : [aimPart];
+    const names = aimPart === 'auto' ? (c.spec.weakPoints ?? []) : [aimPart];
     let p = c.core;
     for (const n of names) {
       const q = c.structure.part(n);
@@ -115,6 +106,7 @@ run(sim, Number(opt('seconds', '150')), () => {
 const o = session.outcome();
 const r = scoreAssault(o);
 console.log(log.join('\n'));
+if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));

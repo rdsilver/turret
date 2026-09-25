@@ -103,6 +103,8 @@ export class Creature {
   phase = 0;
   /** 0..1 power from engines / heart. */
   power = 1;
+  /** Walking-speed multiplier set by the game (creatures hurry as they near the line). */
+  speedBoost = 1;
   /** 0..1 locomotion capacity from working legs. */
   capacity = 1;
   functionalLegs = 0;
@@ -336,6 +338,10 @@ export class Creature {
       this.floatStep(dt);
       return;
     }
+    if (this.spec.fly) {
+      this.flyStep(dt);
+      return;
+    }
     this.age += dt;
     const world = this.ctx.physics.world;
     const g = this.ctx.physics.gravity;
@@ -390,7 +396,7 @@ export class Creature {
     const walking = this.state !== 'neutralized' && this.age > SPAWN_SETTLE && power > 0.05 && this.capacity > 0 && !downed && !stalled;
     // The gait eases in over its first moments (a standing start, not a jolt that snaps hips).
     const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
-    const speed = this.spec.gait.speed * this.capacity * power * ramp;
+    const speed = this.spec.gait.speed * this.capacity * power * ramp * this.speedBoost;
     if (walking) {
       // The gait runs at the TARGET speed (legs keep cycling if it's blocked: it struggles).
       const rate = speed / Math.max(0.2, this.spec.gait.stride);
@@ -539,6 +545,7 @@ export class Creature {
     part.collider.setCollisionGroups(interactionGroups(GROUP.CREATURE, 0xffff & ~(GROUP.CREATURE | GROUP.PROJECTILE)));
     this.connectedDirty = true;
     this.ctx.events.emit('limbPopped', { creature: this, part, x: part.x, y: part.y });
+    this.ctx.creatures.fadePieceLater(part);
   }
 
   /** Floating: drift toward the turret, bob, spin the core and turn every ring around it. */
@@ -553,7 +560,7 @@ export class Creature {
     if (this.state === 'neutralized') return;
     if (this.state === 'spawning' && this.age > SPAWN_SETTLE) this.state = 'walking';
     const f = this.spec.float!;
-    if (this.state !== 'spawning') this.floatX -= this.spec.gait.speed * dt;
+    if (this.state !== 'spawning') this.floatX -= this.spec.gait.speed * this.speedBoost * dt;
     this.floatT += dt;
     const t = this.floatT;
     const cx = this.floatX;
@@ -566,6 +573,98 @@ export class Creature {
       const s = Math.sin(rot);
       p.body.setNextKinematicTranslation({ x: cx + c * fp.dx - s * fp.dy, y: cy + s * fp.dx + c * fp.dy });
       p.body.setNextKinematicRotation(fp.angle + rot);
+    }
+  }
+
+  /** Flying: flap, hold altitude on whatever lift the wings still give, glide toward the turret. */
+  private flyStep(dt: number): void {
+    this.age += dt;
+    const f = this.spec.fly!;
+    const world = this.ctx.physics.world;
+    for (const v of this.vitals) {
+      if (v.removed || v.wrecked || v.integrity <= 0 || !this.connected.has(v)) {
+        this.neutralize('killed');
+        break;
+      }
+    }
+    if (this.state === 'neutralized') {
+      // Limp: the wings fold and it drops.
+      const limp = Math.max(0, this.power - dt * 0.7);
+      this.power = limp;
+      for (const { joint } of this.gait) if (!joint.broken) joint.setPower(world, limp);
+      return;
+    }
+    if (this.state === 'spawning' && this.age > SPAWN_SETTLE) this.state = 'walking';
+    // Lift from each wing still attached and working, weakened by damage.
+    let lift = 0;
+    let wingsUp = 0;
+    for (const w of f.wings) {
+      let ok = true;
+      let health = 1;
+      for (const n of w.joints) {
+        const j = this.muscles.get(n);
+        if (!j || j.broken || !this.connected.has(j.b ?? j.a)) ok = false;
+        else health = Math.min(health, j.strengthScale);
+      }
+      for (const n of w.parts) {
+        const p = this.structure.part(n);
+        if (!p || p.removed || p.wrecked || !this.connected.has(p)) ok = false;
+      }
+      if (!ok || health < LEG_FAIL_SCALE) continue;
+      wingsUp++;
+      lift += (0.4 + 0.6 * health) / f.wings.length;
+    }
+    this.capacity = lift;
+    this.functionalLegs = wingsUp;
+    this.ownedLegs = f.wings.length;
+    // Wingbeats: faster when it is struggling to stay up.
+    this.phase += dt * f.flapHz * (1 + 0.5 * (1 - lift));
+    const power = 1;
+    this.power = power;
+    for (let i = 0; i < this.gait.length; i++) {
+      const { joint, g: gt } = this.gait[i]!;
+      if (joint.broken || !this.connected.has(joint.a)) continue;
+      joint.setPower(world, power);
+      const sn = Math.sin((this.phase + gt.phase) * Math.PI * 2);
+      joint.setDrive(world, gt.shape === 'hold' ? gt.bias : gt.bias + gt.amp * sn);
+    }
+    const body = this.core.body;
+    const m = this.mass;
+    const g = this.ctx.physics.gravity;
+    const t = this.age;
+    // Altitude hold (PD) with gentle swoops; a pulse with each downstroke.
+    const target = this.bodyHeight0 + f.swoop * Math.sin((t / f.swoopPeriod) * Math.PI * 2);
+    const vUp = -this.core.vy;
+    let up = m * g + m * (3 * (target - this.core.height) - 2.5 * vUp);
+    up *= 1 + 0.3 * Math.sin(this.phase * Math.PI * 2 + Math.PI / 2);
+    up = clamp(up, 0, m * g * f.liftMax * lift);
+    body.applyImpulse({ x: 0, y: -up * dt }, true);
+    // Forward flight (needs wings too).
+    if (this.state !== 'spawning') {
+      const speed = this.spec.gait.speed * this.speedBoost;
+      const fx = clamp(m * 2.5 * (-speed - this.core.vx), -m * 2.5 * lift, m * 2.5 * lift);
+      body.applyImpulse({ x: fx * dt, y: 0 }, true);
+    }
+    // Keep the body level (the wings' reaction twists it), as far as the wings allow.
+    const coreI = this.core.mass * this.core.extent * this.core.extent * 0.5 + 1;
+    const kp = coreI * 9 * 9 * 10;
+    const kd = 2 * Math.sqrt(kp * coreI * 10);
+    const lean = -(this.spec.lean ?? 0) * DEG;
+    let tau = -kp * wrapAngle(this.core.angle - lean) - kd * this.core.av;
+    const cap = m * g * this.core.extent * 2.5 * lift;
+    tau = clamp(tau, -cap, cap);
+    body.applyTorqueImpulse(tau * dt, true);
+    // Down on the ground = stopped.
+    if (this.state === 'spawning') return;
+    const grounded = this.core.height - this.core.halfHeightNow < 0.8;
+    if (grounded || lift <= 0) {
+      this.immobileTime += dt;
+      this.state = 'immobilized';
+      // Touching down is the end of it (a hard landing may bounce, but it's down).
+      if (this.immobileTime >= (grounded ? 0.1 : 3)) this.neutralize(grounded ? 'downed' : 'legs');
+    } else {
+      this.immobileTime = 0;
+      this.state = wingsUp < f.wings.length ? 'crippled' : 'walking';
     }
   }
 

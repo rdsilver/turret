@@ -50,22 +50,22 @@ export const BASE_WEAPON_STATS: Readonly<WeaponStats> = {
 };
 
 /**
- * Starting machine gun: slow, weak, inaccurate. Hold to fire; the barrel heats
- * up and locks when overheated until it cools to 35%.
+ * Starting machine gun: a stream of light rounds, inaccurate. Hold to fire;
+ * the barrel heats up and locks when overheated until it cools to 35%.
  */
 export const BASE_MG_STATS: Readonly<WeaponStats> = {
   muzzleVelocity: 60,
-  projectileMass: 0.7,
+  projectileMass: 0.5,
   projectileRadius: 0.07,
-  reloadTime: 1 / 3.5,
+  reloadTime: 1 / 7,
   spread: 3 * DEG,
-  recoil: 0.2,
+  recoil: 0.12,
   impactMultiplier: 1,
   previewTime: 0.45,
   automatic: true,
-  heatPerShot: 0.08,
+  heatPerShot: 0.04,
   coolRate: 0.24,
-  damage: 0.6,
+  damage: 0.3,
 };
 
 export interface TrajectoryPrediction {
@@ -83,12 +83,32 @@ export function createPrediction(maxPoints = 160): TrajectoryPrediction {
   return { points: new Float32Array(maxPoints * 2), count: 0, hit: false, hitX: 0, hitY: 0, time: 0 };
 }
 
+/** Where a gun sits and how far it can swivel (sim space; angles in radians, negative = up). */
+export interface WeaponMount {
+  x: number;
+  y: number;
+  barrel: number;
+  minAngle: number;
+  maxAngle: number;
+}
+
+/** The main turret's mount. */
+export const MAIN_MOUNT: Readonly<WeaponMount> = {
+  x: TURRET.x,
+  y: -TURRET.pivotHeight,
+  barrel: TURRET.barrelLength,
+  minAngle: TURRET.minAngleDeg * DEG,
+  maxAngle: TURRET.maxAngleDeg * DEG,
+};
+
 export class Weapon {
   stats: WeaponStats;
   ammo: AmmoDef;
-  readonly pivotX = TURRET.x;
-  readonly pivotY = -TURRET.pivotHeight;
-  readonly barrelLength = TURRET.barrelLength;
+  readonly pivotX: number;
+  readonly pivotY: number;
+  readonly barrelLength: number;
+  private readonly minAngle: number;
+  private readonly maxAngle: number;
   /** Sim-space angle: 0 = right, negative = up. */
   angle = -30 * DEG;
   /** 0.35..1 fraction of muzzle velocity. */
@@ -109,15 +129,27 @@ export class Weapon {
 
   private ray: RapierNS.Ray | null = null;
   private readonly m = { x: 0, y: 0 };
+  private readonly offStep: () => void;
 
   constructor(
     private readonly ctx: SimContext,
     stats: WeaponStats,
     ammo: AmmoDef,
+    mount: Readonly<WeaponMount> = MAIN_MOUNT,
   ) {
     this.stats = { ...stats };
     this.ammo = ammo;
-    ctx.physics.addStepHook((dt) => this.update(dt));
+    this.pivotX = mount.x;
+    this.pivotY = mount.y;
+    this.barrelLength = mount.barrel;
+    this.minAngle = mount.minAngle;
+    this.maxAngle = mount.maxAngle;
+    this.offStep = ctx.physics.addStepHook((dt) => this.update(dt));
+  }
+
+  /** Stop updating (a removed secondary gun). */
+  dispose(): void {
+    this.offStep();
   }
 
   get ready(): boolean {
@@ -136,11 +168,11 @@ export class Weapon {
 
   aimAt(wx: number, wy: number): void {
     const a = Math.atan2(wy - this.pivotY, wx - this.pivotX);
-    this.angle = clamp(a, TURRET.minAngleDeg * DEG, TURRET.maxAngleDeg * DEG);
+    this.angle = clamp(a, this.minAngle, this.maxAngle);
   }
 
   setAngle(a: number): void {
-    this.angle = clamp(a, TURRET.minAngleDeg * DEG, TURRET.maxAngleDeg * DEG);
+    this.angle = clamp(a, this.minAngle, this.maxAngle);
   }
 
   setPower(p: number): void {

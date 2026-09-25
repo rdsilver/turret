@@ -25,7 +25,8 @@ import { buildStructure } from './StructureBuilder';
 import type { Structure } from './Structure';
 import type { StructureDef } from './StructureDefinition';
 import { StructurePart } from './StructurePart';
-import { DEFAULT_GRAVITY, PHYSICS_DT, TURRET } from '../config/constants';
+import { DEFAULT_GRAVITY, PHYSICS_DT, TOP_TURRET, TURRET } from '../config/constants';
+import { AutoGunner } from './weapons/AutoGunner';
 import { DEFAULT_AMMO } from '../data/ammo';
 
 export type SimPhase = 'empty' | 'standing' | 'collapsing' | 'settled';
@@ -56,6 +57,9 @@ export class Simulation implements SimContext {
   readonly damage: DamageSystem;
   readonly creatures: CreatureManager;
   readonly weapon: Weapon;
+  /** The top turret (automatic), when owned. */
+  topWeapon: Weapon | null = null;
+  private topGunner: AutoGunner | null = null;
 
   structure: Structure | null = null;
   detector: CollapseDetector | null = null;
@@ -158,6 +162,26 @@ export class Simulation implements SimContext {
   update(realDt: number): number {
     return this.physics.update(realDt);
   }
+
+  /** Mount (stats) or remove (null) the automatic top turret. */
+  setTopTurret(stats: WeaponStats | null): void {
+    this.topGunner?.dispose();
+    this.topWeapon?.dispose();
+    this.topGunner = null;
+    this.topWeapon = null;
+    if (!stats) return;
+    const mount = {
+      x: TOP_TURRET.x,
+      y: -TOP_TURRET.pivotHeight,
+      barrel: TOP_TURRET.barrelLength,
+      minAngle: (TOP_TURRET.minAngleDeg * Math.PI) / 180,
+      maxAngle: (TOP_TURRET.maxAngleDeg * Math.PI) / 180,
+    };
+    this.topWeapon = new Weapon(this, stats, this.weapon.ammo, mount);
+    this.topWeapon.angle = 0;
+    this.topGunner = new AutoGunner(this, this.topWeapon);
+  }
+
 
   fire() {
     return this.weapon.fire();

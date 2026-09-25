@@ -35,6 +35,8 @@ const ARROW = '→';
 
 export class UpgradeSystem {
   private readonly byId = new Map<string, UpgradeDef>();
+  /** Creature campaign levels cleared (gates `unlockAfter`); tools leave it open. */
+  progress = Infinity;
 
   constructor(readonly defs: UpgradeDef[] = UPGRADES) {
     for (const d of defs) this.byId.set(d.id, d);
@@ -81,6 +83,7 @@ export class UpgradeSystem {
   isUnlocked(id: string, owned: OwnedUpgrades): boolean {
     const d = this.byId.get(id);
     if (!d) return false;
+    if (d.unlockAfter !== undefined && this.progress < d.unlockAfter) return false;
     return !d.requires || this.level(d.requires.id, owned) >= d.requires.level;
   }
 
@@ -88,7 +91,9 @@ export class UpgradeSystem {
   lockedReason(id: string, owned: OwnedUpgrades): string | null {
     const d = this.byId.get(id);
     if (!d) return 'Unknown upgrade';
-    if (this.isUnlocked(id, owned) || !d.requires) return null;
+    if (this.isUnlocked(id, owned)) return null;
+    if (d.unlockAfter !== undefined && this.progress < d.unlockAfter) return `Clear level ${d.unlockAfter}`;
+    if (!d.requires) return null;
     const req = this.byId.get(d.requires.id);
     const name = req?.name ?? d.requires.id;
     return req && req.maxLevel > 1 ? `Requires ${name} ${roman(d.requires.level)}` : `Requires ${name}`;
@@ -155,6 +160,10 @@ export class UpgradeSystem {
       const name = AMMO[d.unlocksAmmo]?.name ?? d.unlocksAmmo;
       const from = lvl >= 1 ? name : 'locked';
       return { label: 'Ammunition', from, to: name, text: lvl >= 1 ? `${name} · unlocked` : `Unlocks ${name}`, maxed };
+    }
+    if (d.id === 'topTurret') {
+      const mk = (n: number): string => (n <= 0 ? 'none' : `Mk ${['I', 'II', 'III'][n - 1] ?? n}`);
+      return { label: 'Top turret', from: mk(lvl), to: mk(Math.min(d.maxLevel, lvl + 1)), text: maxed ? 'max' : `${mk(lvl)} ${ARROW} ${mk(lvl + 1)}`, maxed };
     }
     return { label: d.name, from: `Lv ${lvl}`, to: `Lv ${Math.min(d.maxLevel, lvl + 1)}`, text: maxed ? 'max' : `Lv ${lvl} ${ARROW} ${lvl + 1}`, maxed };
   }

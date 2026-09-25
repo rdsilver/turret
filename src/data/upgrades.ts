@@ -13,7 +13,7 @@
  */
 import type { WeaponStats } from '../sim/weapons/Weapon';
 
-export type UpgradeBranch = 'core' | 'heavy' | 'rapid' | 'demolition' | 'precision' | 'experimental';
+export type UpgradeBranch = 'core' | 'heavy' | 'rapid' | 'demolition' | 'precision' | 'experimental' | 'support';
 
 /** How the workshop shows an upgrade's effect ("Muzzle velocity 34.0 → 36.7 m/s"). */
 export interface UpgradeStatView {
@@ -41,6 +41,8 @@ export interface UpgradeDef {
   requires?: { id: string; level: number };
   /** Workshop text in creature (assault) mode, when the cannon wording doesn't fit. */
   assaultDescription?: string;
+  /** Creature campaign levels that must be cleared before it can be bought. */
+  unlockAfter?: number;
   /** Game modes whose workshop lists it (default: both). */
   modes?: Array<'assault' | 'campaign'>;
   /** Primary stat shown in the "from → to" preview (stat upgrades only). */
@@ -63,6 +65,7 @@ export const UPGRADE_BRANCHES: UpgradeBranchInfo[] = [
   { id: 'heavy', name: 'Heavy', description: 'Mass and momentum.' },
   { id: 'rapid', name: 'Rapid', description: 'Rate of fire.' },
   { id: 'experimental', name: 'Experimental', description: 'Rounds that change the physics instead of adding force.' },
+  { id: 'support', name: 'Support', description: 'Extra guns that fight on their own.' },
 ];
 
 const DEG = Math.PI / 180;
@@ -144,6 +147,19 @@ export const UPGRADES: UpgradeDef[] = [
     },
     view: { label: 'Trajectory preview', stat: 'previewTime', unit: 's', digits: 2 },
     assaultDescription: 'Solves the flight path further ahead. The tracer line extends toward the impact point.',
+  },
+
+  // ------------------------------------------------------------------ support
+  {
+    id: 'topTurret',
+    name: 'Top Turret',
+    branch: 'support',
+    description: 'A second, automatic gun on a mast above the turret. It picks the creature closest to the line and goes for its weak points on its own.',
+    maxLevel: 3,
+    costs: [380, 420, 600],
+    perLevel: 'mount it · faster fire · heavier, tighter rounds',
+    modes: ['assault'],
+    unlockAfter: 5,
   },
 
   // ------------------------------------------------------------------ machine gun

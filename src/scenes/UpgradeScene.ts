@@ -30,11 +30,12 @@ import { AMMO } from '../data/ammo';
 
 type Text = Phaser.GameObjects.Text;
 
-const BRANCH_ORDER: UpgradeBranch[] = ['core', 'heavy', 'rapid', 'precision', 'demolition', 'experimental'];
+const BRANCH_ORDER: UpgradeBranch[] = ['core', 'heavy', 'rapid', 'support', 'precision', 'demolition', 'experimental'];
 /** Branch names in creature (assault) mode, where the turret is a machine gun. */
 const ASSAULT_BRANCH_LABEL: Record<string, string> = {
   core: 'GUN',
   rapid: 'ROUNDS · BARREL',
+  support: 'SUPPORT',
 };
 const BRANCH_LABEL: Record<string, string> = {
   core: 'CANNON',
@@ -121,6 +122,7 @@ export class UpgradeScene extends Phaser.Scene {
   create(): void {
     void loadUiFonts();
     this.upg = new UpgradeSystem();
+    this.upg.progress = gameState().assaultIndex;
     this.cards = [];
     this.ammoRows = [];
     this.buttons = [];
@@ -318,7 +320,9 @@ export class UpgradeScene extends Phaser.Scene {
     const maxed = level >= def.maxLevel;
     let locked: string | null = null;
     const req = def.requires;
-    if (req && (owned[req.id] ?? 0) < req.level) {
+    if (def.unlockAfter !== undefined && gs.assaultIndex < def.unlockAfter) {
+      locked = `CLEAR LEVEL ${def.unlockAfter} TO UNLOCK`;
+    } else if (req && (owned[req.id] ?? 0) < req.level) {
       const rd = this.upg.defs.find((d) => d.id === req.id);
       const rn = rd?.name ?? req.id;
       locked = rd && rd.maxLevel > 1 ? `REQUIRES ${rn.toUpperCase()} LV${req.level}` : `REQUIRES ${rn.toUpperCase()}`;

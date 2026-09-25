@@ -81,6 +81,7 @@ registerCreature('strider', (d, _rng, params) => {
   }
   return {
     name: 'Strider',
+    weakPoints: ['slingA', 'slingB', 'engine', 'shinFL', 'shinFR', 'thighFL', 'thighFR'],
     core: 'body',
     legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     legGroups: [

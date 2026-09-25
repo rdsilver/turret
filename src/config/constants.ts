@@ -44,6 +44,17 @@ export const ARENA = {
 } as const;
 
 /** Turret pivot location in simulation space. */
+/** The top turret: an automatic gun on a mast above the main turret (bought in the workshop). */
+export const TOP_TURRET = {
+  x: 1.3,
+  /** Pivot height above ground (m). */
+  pivotHeight: 8.4,
+  barrelLength: 2.2,
+  minAngleDeg: -75,
+  /** It sits high: it can point well below the horizon. */
+  maxAngleDeg: 55,
+};
+
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;
 

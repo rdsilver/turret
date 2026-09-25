@@ -15,6 +15,8 @@ import { AMMO } from '../data/ammo';
 import { ASSAULT_LEVELS } from '../data/assault/levels';
 import { creatureIds } from '../sim/creature/CreatureTypes';
 import { AssaultSession } from '../game/AssaultSession';
+import { topTurretStats } from '../data/topTurret';
+import { TopTurretView } from '../view/TopTurretView';
 import { scoreAssault } from '../game/AssaultScoring';
 import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef } from '../game/AssaultLevel';
 import { gameState } from '../game/GameState';
@@ -54,6 +56,7 @@ const ENDLESS_ROSTER: Array<[string, number]> = [
   ['shield', 0.75],
   ['hound', 1.5],
   ['centipede', 0.9],
+  ['bird', 1.6],
 ];
 
 /** Endless waves after the campaign: more, faster, mixed creatures (the strider every fifth wave). */
@@ -90,6 +93,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   private world!: WorldRenderer;
   private background!: BackgroundRenderer;
   private turret!: TurretView;
+  private topTurret: TopTurretView | null = null;
   private cam!: CameraDirector;
   private effects!: EffectsManager;
   private defense!: DefenseLineView;
@@ -148,6 +152,13 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.background = new BackgroundRenderer(this);
     this.world = new WorldRenderer(this, this.sim, this.textureFactory);
     this.turret = new TurretView(this, this.sim.weapon);
+    // The automatic top turret, once bought.
+    const topLevel = this.upgrades.level('topTurret', gs.upgrades);
+    this.topTurret = null;
+    if (topLevel > 0) {
+      this.sim.setTopTurret(topTurretStats(topLevel, this.sim.weapon.stats));
+      this.topTurret = new TopTurretView(this, this.sim.topWeapon!);
+    }
     this.effects = new EffectsManager(this, this.sim, this.cam);
     this.defense = new DefenseLineView(this, DEFENSE_LINE_X);
     this.audio = new AudioManager(this);
@@ -209,6 +220,10 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.hinted = false;
     this.sim.weapon.heat = 0;
     this.sim.weapon.overheated = false;
+    if (this.sim.topWeapon) {
+      this.sim.topWeapon.heat = 0;
+      this.sim.topWeapon.overheated = false;
+    }
     this.world.setStressView(this.stressDebug);
     if (!this.debugMenu.visible) {
       this.sim.physics.paused = false;
@@ -374,6 +389,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     w.predict(this.prediction);
     this.turret.showPreview = this.flow === 'playing';
     this.turret.update(dt, this.prediction);
+    this.topTurret?.update();
     this.world.update(physics.alpha, dt);
     this.grabView.update();
     const front = this.sim.creatures.frontX();
@@ -596,6 +612,8 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.effects.destroy();
     this.world.destroy();
     this.turret.destroy();
+    this.topTurret?.destroy();
+    this.topTurret = null;
     this.background.destroy();
     this.defense.destroy();
     this.grabView.destroy();

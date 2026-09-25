@@ -12,12 +12,19 @@ export const TIERS: Record<string, OwnedUpgrades> = {
   '3': { stabilizer: 1, caliber: 1, autoloader: 1 },
   '4': { stabilizer: 2, caliber: 2, autoloader: 1, cooling: 1 },
   '5': { stabilizer: 2, caliber: 2, autoloader: 2, cooling: 1, piercing: 1 },
-  '6': { stabilizer: 3, caliber: 3, autoloader: 2, cooling: 1, piercing: 1 },
-  '7': { stabilizer: 3, caliber: 3, autoloader: 2, cooling: 2, piercing: 2 },
-  '8': { stabilizer: 3, caliber: 4, autoloader: 3, cooling: 2, piercing: 2 },
-  '9': { stabilizer: 4, caliber: 4, autoloader: 3, cooling: 2, piercing: 2 },
-  '10': { stabilizer: 4, caliber: 4, autoloader: 3, cooling: 3, piercing: 3 },
+  '6': { stabilizer: 3, caliber: 2, autoloader: 2, cooling: 1, piercing: 1, topTurret: 1 },
+  '7': { stabilizer: 3, caliber: 3, autoloader: 2, cooling: 1, piercing: 2, topTurret: 1 },
+  '8': { stabilizer: 3, caliber: 3, autoloader: 3, cooling: 2, piercing: 2, topTurret: 2 },
+  '9': { stabilizer: 4, caliber: 4, autoloader: 3, cooling: 2, piercing: 2, topTurret: 2 },
+  '10': { stabilizer: 4, caliber: 4, autoloader: 3, cooling: 3, piercing: 3, topTurret: 3 },
+  '11': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 3, piercing: 3, topTurret: 3 },
+  '12': { stabilizer: 4, caliber: 5, autoloader: 4, cooling: 4, piercing: 3, topTurret: 3 },
 };
+
+/** Owned top turret level at a tier (0 = none). */
+export function topTurretLevel(tier: string): number {
+  return TIERS[tier]?.topTurret ?? 0;
+}
 
 export function loadout(tier: string): WeaponStats {
   const owned = TIERS[tier];

@@ -99,6 +99,7 @@ export function scaleCreature(d: StructureDraft, spec: CreatureSpec, s: number):
   }
   spec.gait.stride *= s;
   if (spec.float) spec.float.bob *= s;
+  if (spec.fly) spec.fly.swoop *= s;
   for (const a of spec.abilities ?? []) {
     if (typeof a.ahead === 'number') a.ahead *= s;
     // Thrown shields grow less than the thrower: full-size ones become walls.

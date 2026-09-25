@@ -6,3 +6,4 @@ import './blueprints/machines';
 import './blueprints/centipede';
 import './blueprints/boss';
 import './blueprints/orrery';
+import './blueprints/bird';

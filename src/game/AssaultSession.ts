@@ -10,6 +10,9 @@ import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef, type WaveEntry } from '.
 
 export type AssaultState = 'running' | 'won' | 'lost';
 
+/** Extra speed (fraction) a creature has gained by the time it reaches the line. */
+export const URGENCY = 0.6;
+
 export interface AssaultOutcome {
   level: AssaultLevelDef;
   won: boolean;
@@ -101,6 +104,8 @@ export class AssaultSession {
       // Big creatures reach the line with their front, long before their middle does.
       const d = c.frontX - DEFENSE_LINE_X;
       if (d < this.closest) this.closest = d;
+      // They pick up speed as the line gets close.
+      c.speedBoost = 1 + URGENCY * Math.max(0, Math.min(1, 1 - d / (SPAWN_X - DEFENSE_LINE_X)));
       // Only a creature still on the move breaches (one toppling over the line after it was stopped doesn't).
       if (d < 0 && (c.state === 'walking' || c.state === 'crippled')) {
         this.state = 'lost';

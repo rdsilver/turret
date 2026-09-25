@@ -23,6 +23,12 @@ import type { BreakableJoint } from '../BreakableJoint';
 const POP_DV = 2.6;
 /** Seconds a stopped creature's wreck keeps blocking bullets. */
 const WRECK_SOLID_FOR = 1.5;
+/** A wreck starts fading this long after the creature was stopped… */
+const WRECK_FADE_AFTER = 3;
+/** …and takes this long to fade out. */
+const WRECK_FADE_TIME = 3;
+/** Torn-off limbs of creatures still fighting fade after this long. */
+const PIECE_FADE_AFTER = 4;
 
 export class CreatureManager {
   readonly list: Creature[] = [];
@@ -53,15 +59,11 @@ export class CreatureManager {
     ctx.events.on('partWrecked', dirty);
     ctx.events.on('partShattered', dirty);
     ctx.events.on('partWrecked', ({ part }) => this.creatureOf(part)?.onPartWrecked(part));
-    // A stopped creature's wreck stops soaking up bullets after a moment, so a
-    // big carcass doesn't shield whatever walks in behind it.
+    // A stopped creature's wreck stops soaking up bullets after a moment, then
+    // fades away, so a big carcass doesn't shield (or clutter) what comes next.
     ctx.events.on('creatureNeutralized', ({ creature }) => {
-      const at = ctx.physics.simTime + WRECK_SOLID_FOR;
-      const off = ctx.physics.addStepHook(() => {
-        if (ctx.physics.simTime < at) return;
-        off();
-        this.makeWreckPassable(creature);
-      });
+      this.after(WRECK_SOLID_FOR, () => this.makeWreckPassable(creature));
+      this.after(WRECK_FADE_AFTER, () => this.fadeWreck(creature));
     });
   }
 
@@ -112,6 +114,49 @@ export class CreatureManager {
     if (cs.length === 1) return cs[0];
     for (const c of cs) if (c.owns(part)) return c;
     return cs[0];
+  }
+
+  /** Run `fn` once, `delay` sim seconds from now. */
+  private after(delay: number, fn: () => void): void {
+    const at = this.ctx.physics.simTime + delay;
+    const off = this.ctx.physics.addStepHook(() => {
+      if (this.ctx.physics.simTime < at) return;
+      off();
+      fn();
+    });
+  }
+
+  /** Is this part still carried by a living creature? */
+  private alive(part: StructurePart): boolean {
+    const cs = this.byStructure.get(part.structure as Structure);
+    return !!cs && cs.some((k) => k.active && k.owns(part));
+  }
+
+  /** Fade out this creature's remains (and loose pieces nobody controls). */
+  private fadeWreck(c: Creature): void {
+    if (!this.list.includes(c)) return;
+    for (const p of c.structure.parts) if (!p.removed && !this.alive(p)) this.ctx.debris.fade(p, WRECK_FADE_TIME);
+  }
+
+  /** A piece torn off a living creature fades after a while (unless something picked it up again). */
+  fadePieceLater(piece: StructurePart): void {
+    this.after(PIECE_FADE_AFTER, () => {
+      if (piece.removed || this.alive(piece)) return;
+      // Everything still attached to the piece goes with it.
+      const stack = [piece];
+      const seen = new Set<StructurePart>([piece]);
+      while (stack.length) {
+        const p = stack.pop()!;
+        this.ctx.debris.fade(p, WRECK_FADE_TIME);
+        for (const j of p.joints) {
+          const o = j.broken ? null : j.other(p);
+          if (o && !o.removed && !seen.has(o) && !this.alive(o)) {
+            seen.add(o);
+            stack.push(o);
+          }
+        }
+      }
+    });
   }
 
   /** Parts of this creature (and loose pieces nobody controls) let bullets through. */
@@ -190,6 +235,7 @@ export class CreatureManager {
         piece.body.applyTorqueImpulse((this.ctx.rng.next() - 0.5) * piece.mass * piece.extent * POP_DV, true);
       }
       this.ctx.events.emit('limbPopped', { creature: c, part: piece, x: j.wx, y: j.wy });
+      this.fadePieceLater(piece);
     }
     this.popCheck.length = 0;
   }

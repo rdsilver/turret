@@ -54,6 +54,7 @@ registerCreature('orrery', (d, _rng, params) => {
   }
   return {
     name: 'Orrery',
+    weakPoints: ['tri'],
     core: 'tri',
     legs: [],
     gait: { speed, stride: 1, muscles: {} },

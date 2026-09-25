@@ -62,6 +62,7 @@ registerCreature('centipede', (d, _rng, params) => {
   for (let i = 0; i < n - 1; i++) gait[`link${i}`] = { shape: 'hold', amp: 0, bias: 0, phase: 0 };
   return {
     name: 'Centipede',
+    weakPoints: ['seg2', 'seg3', 'seg1', 'seg4', 'seg0', 'seg5'],
     core: 'seg0',
     legs,
     gait: { speed, stride: P('stride', 1.3), muscles: gait },
