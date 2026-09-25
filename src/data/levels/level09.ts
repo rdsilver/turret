@@ -22,7 +22,7 @@ import { DEFAULT_GRAVITY } from '../../config/constants';
 import { registerModule } from '../../sim/generator/StructureGenerator';
 import { braceBay } from '../../sim/generator/modules/bracing';
 import { partMass } from '../../sim/generator/modules/sizing';
-import { MATERIALS } from '../../sim/Materials';
+import { MATERIALS, type MaterialId } from '../../sim/Materials';
 
 const n = (v: unknown, d: number): number => (typeof v === 'number' ? v : d);
 
@@ -156,13 +156,12 @@ registerModule('level09-crane', (ctx) => {
   }
   for (const w of webs) d.weldOverlaps(w, { among: [boom, top, ...webs], strength: 2, seam: webT * 2, minArea: 0.001 });
   if (cat >= 0) d.weld(top, cat, { at: [X(half), jb + jibD - chordT / 2], seam: 0.5, strength: rootStrength });
-  // Trolley under the boom, load block welded under it. (A load hanging on a cable or a hook bar
-  // never comes to rest: pendulums have no damping.)
-  const trolley = add(d.boxOn(X(loadX), pTop - 0.3, 0.8, 0.3, 'steel', { id: 'trolley', densityScale: 0.4 }));
-  d.weld(trolley, boom, { at: [X(loadX), pTop], seam: 0.8, strength: 2 });
+  // Load block welded straight under the boom near the tip: the trolley is drawn as a thin plate
+  // on top of it. (A load hanging on a cable or a hook bar never comes to rest - pendulums have no
+  // damping - and a light trolley between the boom and a heavy load keeps ringing.)
   if (loadW > 0 && loadH > 0) {
-    const load = add(d.boxOn(X(loadX), pTop - 0.3 - loadH, loadW, loadH, 'concrete', { id: 'load', tags: ['weight'] }));
-    d.weld(load, trolley, { at: [X(loadX), pTop - 0.3], seam: 0.6, strength: 4 });
+    const load = add(d.boxOn(X(loadX), pTop - loadH, loadW, loadH, 'concrete', { id: 'load', tags: ['weight'] }));
+    d.weld(load, boom, { at: [X(loadX), pTop], seam: loadW, strength: 3 });
   }
 
   // ---- counterweight: solve its mass so the moments about the mast axis cancel.
@@ -182,21 +181,34 @@ registerModule('level09-crane', (ctx) => {
   const slabH = cwH / nSlabs;
   const slabM = mcw / nSlabs;
   const slabs: number[] = [];
-  const hang = s.cwMode !== 'stack';
+  const hang = s.cwMode !== 'stack' && s.cwMode !== 'hook';
   // 'hang': a column of slabs hanging under the counter-jib, slab 0 at the top, each slab welded
   // under the one above along a `pinSeam` lug sized at `pinStrength` x the weight hanging from it.
   // 'stack': slabs resting on top of the counter-jib, slab 0 at the bottom, each lug holding
   // `pinStrength` x one slab's weight (contact carries the load).
-  const yAt = (k: number) => (hang ? pTop - (k + 1) * slabH : pTop + boomH + k * slabH);
+  const yAt = (k: number) => (s.cwMode !== 'stack' ? pTop - (k + 1) * slabH : pTop + boomH + k * slabH);
   for (let k = 0; k < nSlabs; k++) slabs.push(add(d.boxOn(hx, yAt(k), cwW, slabH, 'concrete', { id: `counterweight.${k}`, tags: ['counterweight'] })));
   d.markLoose(slabs);
   const pinSeam = n(s.pinSeam, cwW);
   const tension = MATERIALS.concrete.bond.tension; // concrete is the weaker side of every bond here
+  const hook = s.cwMode === 'hook';
   for (let k = 0; k < nSlabs; k++) {
-    const carried = hang ? slabM * (nSlabs - k) : slabM;
-    const strength = +((n(s.pinStrength, hang ? 1.4 : 1) * carried * g) / (tension * pinSeam)).toFixed(3);
-    const at: [number, number] = [hx, hang ? pTop - k * slabH : pTop + boomH + k * slabH];
-    d.weld(slabs[k]!, k === 0 ? cj : slabs[k - 1]!, { at, seam: pinSeam, strength, tags: k < 3 ? ['weakpoint'] : undefined });
+    const carried = hang || hook ? slabM * (nSlabs - k) : slabM;
+    const at: [number, number] = [hx, hang || hook ? pTop - k * slabH : pTop + boomH + k * slabH];
+    if (hook && k === 0) {
+      // 'hook': the whole column hangs from ONE brittle lug: plenty of strength in tension
+      // (`hookStrength` x the column's weight) but a narrow seam (`hookSeam`) gives it little
+      // bending strength, and a brittle bond (`hookBond`) lets it bend only a little before it
+      // snaps. Hanging straight it carries no moment at all; swing the column hard and it goes.
+      const bond = (s.hookBond as MaterialId) ?? 'stone';
+      const seam = n(s.hookSeam, 0.2);
+      const strength = +((n(s.hookStrength, 2) * carried * g) / (MATERIALS[bond].bond.tension * seam)).toFixed(3);
+      d.weld(slabs[0]!, cj, { at, seam, strength, bond, tags: ['weakpoint'] });
+      continue;
+    }
+    const factor = hook ? n(s.slabWeld, 4) : n(s.pinStrength, hang ? 1.4 : 1);
+    const strength = +((factor * carried * g) / (tension * pinSeam)).toFixed(3);
+    d.weld(slabs[k]!, k === 0 ? cj : slabs[k - 1]!, { at, seam: pinSeam, strength, tags: !hook && k < 3 ? ['weakpoint'] : undefined });
   }
 
   // Overturning check: tipping / restoring moment about the base edge once k slabs are gone
@@ -213,7 +225,7 @@ registerModule('level09-crane', (ctx) => {
     }),
   };
 
-  return { parts, top: Math.max(pTop + catH, pTop + boomH + jibD, hang ? 0 : pTop + boomH + cwH), width: baseW, x: x0 };
+  return { parts, top: Math.max(pTop + catH, pTop + boomH + jibD, s.cwMode === 'stack' ? pTop + boomH + cwH : 0), width: baseW, x: x0 };
 });
 
 export const level09: LevelDef = {
