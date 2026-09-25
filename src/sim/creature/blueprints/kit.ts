@@ -80,9 +80,9 @@ export function scaleCreature(d: StructureDraft, spec: CreatureSpec, s: number):
     p.x *= s;
     p.y *= s;
     // Hit points would grow with part area (partMaxHp); let them grow only
-    // mildly (×1.3 at triple size), since bigger parts are also easier to hit.
+    // mildly (×1.3 at 3.6× size), since bigger parts are also easier to hit.
     const a = shapeArea(p.shape);
-    p.hpScale = (p.hpScale ?? 1) * ((0.35 + Math.sqrt(a)) / (0.35 + Math.sqrt(a * s * s))) * Math.pow(s, 0.24);
+    p.hpScale = (p.hpScale ?? 1) * ((0.35 + Math.sqrt(a)) / (0.35 + Math.sqrt(a * s * s))) * Math.pow(s, 0.205);
     const sh = p.shape;
     if (sh.kind === 'box') p.shape = { kind: 'box', w: sh.w * s, h: sh.h * s };
     else if (sh.kind === 'circle') p.shape = { kind: 'circle', r: sh.r * s };

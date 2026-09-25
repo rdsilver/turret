@@ -52,7 +52,7 @@ export class CreatureManager {
     };
     ctx.events.on('partWrecked', dirty);
     ctx.events.on('partShattered', dirty);
-    ctx.events.on('partDamaged', ({ part }) => this.creatureOf(part)?.onPartHit(part));
+    ctx.events.on('partWrecked', ({ part }) => this.creatureOf(part)?.onPartWrecked(part));
     // A stopped creature's wreck stops soaking up bullets after a moment, so a
     // big carcass doesn't shield whatever walks in behind it.
     ctx.events.on('creatureNeutralized', ({ creature }) => {

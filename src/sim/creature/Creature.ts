@@ -26,7 +26,7 @@ import type { BreakableJoint } from '../BreakableJoint';
 import type { CreatureSpec, LegSpec, MuscleGait } from './CreatureTypes';
 import { DEG, clamp, wrapAngle } from '../../core/math';
 import { R } from '../RapierModule';
-import { TURRET } from '../../config/constants';
+import { GROUP, interactionGroups } from '../../config/constants';
 
 export type CreatureState = 'spawning' | 'walking' | 'crippled' | 'immobilized' | 'neutralized';
 export type NeutralizeCause = 'legs' | 'downed' | 'power' | 'killed' | 'stuck';
@@ -133,8 +133,6 @@ export class Creature {
   private floatT = 0;
   private floatX = 0;
   private floatY = 0;
-  /** Per-ring phase knock (rad) from hits, easing back to zero. */
-  private ringKick: number[] = [];
 
   constructor(
     private readonly ctx: SimContext,
@@ -207,7 +205,6 @@ export class Creature {
     this.floatY = core.y;
     const kinematic = R().RigidBodyType.KinematicPositionBased;
     this.floatParts = [];
-    this.ringKick = f.rings.map(() => 0);
     for (const p of this.structure.parts) {
       if (p.removed) continue;
       p.body.setBodyType(kinematic, true);
@@ -531,22 +528,17 @@ export class Creature {
     }
   }
 
-  /** Where a floater is in its alignment cycle (0..1; 0 = every ring lined up), or -1. */
-  get floatCycle(): number {
-    const f = this.spec.float;
-    return f ? (this.floatT / f.period) % 1 : -1;
-  }
-
-  /** A part of this creature was hit (called by the manager). Floater rings flinch. */
-  onPartHit(part: StructurePart): void {
-    const f = this.spec.float;
-    if (!f || !this.floatParts || this.state === 'neutralized') return;
-    const fp = this.floatParts.find((q) => q.part === part);
-    if (!fp || fp.ring < 0) return;
-    const k = this.ringKick[fp.ring] ?? 0;
-    // Knocked along its own spin (never back into line), a little less each time it's already off.
-    const dir = Math.sign(f.rings[fp.ring]!.turns) || 1;
-    this.ringKick[fp.ring] = k + dir * f.flinch * (0.6 + 0.4 * this.ctx.rng.next());
+  /** A part of this creature was wrecked (called by the manager). A floater's ring part drops away. */
+  onPartWrecked(part: StructurePart): void {
+    if (!this.floatParts || this.state === 'neutralized') return;
+    const i = this.floatParts.findIndex((q) => q.part === part);
+    if (i < 0 || this.floatParts[i]!.ring < 0) return;
+    this.floatParts.splice(i, 1);
+    this.release(part);
+    // Falling armour is debris: it no longer stops rounds.
+    part.collider.setCollisionGroups(interactionGroups(GROUP.CREATURE, 0xffff & ~(GROUP.CREATURE | GROUP.PROJECTILE)));
+    this.connectedDirty = true;
+    this.ctx.events.emit('limbPopped', { creature: this, part, x: part.x, y: part.y });
   }
 
   /** Floating: drift toward the turret, bob, spin the core and turn every ring around it. */
@@ -563,24 +555,13 @@ export class Creature {
     const f = this.spec.float!;
     if (this.state !== 'spawning') this.floatX -= this.spec.gait.speed * dt;
     this.floatT += dt;
+    const t = this.floatT;
     const cx = this.floatX;
-    const cy = this.floatY + f.bob * Math.sin((this.floatT / f.bobPeriod) * Math.PI * 2);
-    // Every ring is built with a gap pointing left (angle π); `aim` turns that
-    // gap toward the turret, and at whole periods every ring is back there: a
-    // clear corridor to the core, open for a moment.
-    const aim = Math.atan2(-TURRET.pivotHeight - cy, TURRET.x - cx) - Math.PI;
-    const cycles = this.floatT / f.period;
-    const ease = Math.exp(-dt / Math.max(0.05, f.recover));
-    for (let i = 0; i < this.ringKick.length; i++) this.ringKick[i]! *= ease;
+    const cy = this.floatY + f.bob * Math.sin((t / f.bobPeriod) * Math.PI * 2);
     for (const fp of this.floatParts!) {
       const p = fp.part;
       if (p.removed) continue;
-      let rot: number;
-      if (fp.ring < 0) rot = f.spin * this.floatT;
-      else {
-        const r = f.rings[fp.ring]!;
-        rot = aim + ((Math.PI * 2) / r.symmetry) * r.turns * cycles + this.ringKick[fp.ring]!;
-      }
+      const rot = (fp.ring < 0 ? f.spin : f.rings[fp.ring]!.spin) * t;
       const c = Math.cos(rot);
       const s = Math.sin(rot);
       p.body.setNextKinematicTranslation({ x: cx + c * fp.dx - s * fp.dy, y: cy + s * fp.dx + c * fp.dy });
@@ -588,18 +569,20 @@ export class Creature {
     }
   }
 
+  /** Hand a kinematic floater part over to physics, keeping its current motion. */
+  private release(part: StructurePart): void {
+    if (part.removed) return;
+    const b = part.body;
+    const v = b.linvel();
+    const w = b.angvel();
+    b.setBodyType(R().RigidBodyType.Dynamic, true);
+    b.setLinvel(v, true);
+    b.setAngvel(w, true);
+  }
+
   /** A floater's heart is gone: everything drops, blown apart by a small burst. */
   private dropFloat(): void {
-    const dynamic = R().RigidBodyType.Dynamic;
-    for (const fp of this.floatParts!) {
-      const b = fp.part.body;
-      if (fp.part.removed) continue;
-      const v = b.linvel();
-      const w = b.angvel();
-      b.setBodyType(dynamic, true);
-      b.setLinvel(v, true);
-      b.setAngvel(w, true);
-    }
+    for (const fp of this.floatParts!) this.release(fp.part);
     const c = this.core;
     this.ctx.explosions.schedule(c.x, c.y, 2.2 * c.extent + 2, 0.3, 0, 'material');
   }

@@ -64,8 +64,6 @@ interface PartVis {
   flash: number;
   /** In the `animated` list (flashing or throbbing). */
   animated: boolean;
-  /** Glow sprite scale at rest (cores). */
-  baseGlowScale: number;
 }
 
 interface ProjVis {
@@ -388,7 +386,7 @@ export class WorldRenderer {
     img.x = p.x * PPM;
     img.y = p.y * PPM;
     img.rotation = p.angle;
-    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false, baseGlowScale: 1 };
+    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false };
     if (p.material.id === 'core' || p.isCore) {
       const gf = this.textures.miscFrame(RK.glow);
       const g = this.glowPool.pop() ?? this.scene.add.image(0, 0, gf.key, gf.frame);
@@ -397,7 +395,6 @@ export class WorldRenderer {
       g.setDepth(DEPTH.structure - 0.2);
       g.setTint(p.material.color);
       g.setScale((p.extent * PPM * 2 * 2.4) / 64);
-      v.baseGlowScale = g.scaleX;
       g.setAlpha(0.3);
       g.setVisible(true).setActive(true);
       g.x = img.x;
@@ -549,7 +546,7 @@ export class WorldRenderer {
   /** Critical parts throb only while their creature is still a threat. */
   private throbbing(p: StructurePart): boolean {
     const c = this.sim.creatures.creatureOf(p);
-    return !!c && c.active && p.joints.length > 0;
+    return !!c && c.active && (p.joints.length > 0 || !!c.spec.float);
   }
 
   private updateAnimated(realDt: number): void {
@@ -579,17 +576,8 @@ export class WorldRenderer {
       if (!show) continue;
       g.x = v.img.x;
       g.y = v.img.y;
-      let pulse = 0.26 + 0.1 * Math.sin(t * 2.6 + v.entity.id);
-      // A floater's heart flares as its rings swing into line (the moment to fire).
-      const c = this.sim.creatures.creatureOf(v.entity);
-      if (c && c.active && c.spec.float) {
-        const cyc = c.floatCycle;
-        const near = Math.min(cyc, 1 - cyc) * c.spec.float.period;
-        const flare = Math.max(0, 1 - near / 0.7);
-        pulse += 0.55 * flare * flare;
-        g.setScale(v.baseGlowScale * (1 + 0.5 * flare));
-      }
-      g.alpha = Math.min(1, pulse) * v.img.alpha;
+      const pulse = 0.26 + 0.1 * Math.sin(t * 2.6 + v.entity.id);
+      g.alpha = pulse * v.img.alpha;
     }
   }
 

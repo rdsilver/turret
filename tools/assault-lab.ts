@@ -65,9 +65,6 @@ const AIM: Record<string, string[]> = {
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
-// Floaters (orrery): a patient gunner fires only when the corridor will be open
-// as the round arrives; --spray holds the trigger regardless.
-const spray = args.includes('--spray');
 const botRng = new Random(99);
 let errX = 0;
 let errY = 0;
@@ -77,7 +74,7 @@ run(sim, Number(opt('seconds', '150')), () => {
   session.update();
   if (session.state !== 'running') return;
   // Bot gunner: target the closest active creature.
-  let target = null as null | { x: number; y: number; vx: number; vy: number; cycle: number; period: number };
+  let target = null as null | { x: number; y: number; vx: number; vy: number };
   let best = Infinity;
   for (const c of session.creatures) {
     if (!c.active || c.core.removed || c.age < 0.5) continue;
@@ -92,7 +89,7 @@ run(sim, Number(opt('seconds', '150')), () => {
         break;
       }
     }
-    target = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, cycle: c.floatCycle, period: c.spec.float?.period ?? 0 };
+    target = { x: p.x, y: p.y, vx: p.vx, vy: p.vy };
   }
   const w = sim.weapon;
   if (w.heat > 0.92) cooling = true;
@@ -108,14 +105,7 @@ run(sim, Number(opt('seconds', '150')), () => {
     const tof = Math.hypot(target.x - m.x, target.y - m.y) / w.speed;
     const sol = solveAim(m.x, m.y, target.x + target.vx * tof + errX, target.y + target.vy * tof + errY, w.speed, sim.physics.gravity);
     if (sol.length) w.setAngle(sol[0]!);
-    let fire = true;
-    if (target.cycle >= 0 && !spray) {
-      // Arrival phase within ±0.25 s of the alignment.
-      const arrive = (target.cycle + tof / target.period) % 1;
-      const off = Math.min(arrive, 1 - arrive) * target.period;
-      fire = off < 0.25;
-    }
-    w.triggerHeld = fire;
+    w.triggerHeld = true;
   } else w.triggerHeld = false;
   if (session.elapsed - lastFrame > 8) {
     lastFrame = session.elapsed;
@@ -128,5 +118,5 @@ console.log(log.join('\n'));
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));
-await renderFilmstrip(frames.slice(-8), png, { left: 0, right: 70, top: -20, bottom: 1.5 }, { cols: 4 });
+await renderFilmstrip(frames.slice(-8), png, { left: 0, right: 72, top: -24, bottom: 1.5 }, { cols: 4 });
 console.log('filmstrip', png);
