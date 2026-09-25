@@ -3,10 +3,18 @@
  * legs, rippling forward in a wave. Shooting its legs barely slows it down
  * (there are so many). Wreck a segment and it comes apart: every piece of two
  * or more segments keeps coming as a creature of its own, led by its front
- * segment. Cut it in the middle (twice) and it's done fastest; chew it from
- * the front and each new leader takes over.
+ * segment; a piece of one segment is harmless.
+ *
+ * It is graded from the front: a wooden head and two wooden segments, then
+ * steel, then an armoured tail. From the turret's low angle the front shields
+ * everything behind it, so the gun chews it from the head back: the wood goes
+ * fast, the steel takes a while, and the last pair needs one long burst from
+ * a cool barrel — but the tail is also the farthest from the line. The top
+ * turret fires from above and works the fewest-cuts plan (every other
+ * segment: seg1, seg3, seg4), which can leave single harmless segments behind.
  */
 import { registerCreature, type CreatureSpec, type LegSpec, type MuscleGait } from '../CreatureTypes';
+import { MATERIALS } from '../../Materials';
 import { G, buildLeg, draftMass } from './kit';
 
 registerCreature('centipede', (d, _rng, params) => {
@@ -20,12 +28,19 @@ registerCreature('centipede', (d, _rng, params) => {
   const y = hipY + segH / 2 - 0.04;
   const speed = P('speed', 0.9);
   const density = 0.5;
+  // Materials from the front: two wood, then the rest split steel-then-armour
+  // (steel takes the odd one). Every segment weighs the same as a wooden one,
+  // so the gait doesn't care what it's made of.
+  const nSteel = Math.ceil((n - 2) / 2);
+  const hp = { wood: P('woodHp', 2), steel: P('steelHp', 0.9), armor: P('armorHp', 0.9) };
   for (let i = 0; i < n; i++) {
-    const tags = i === 0 ? ['segment', 'core'] : ['segment'];
-    d.box(i * pitch, y, segW, segH, 'wood', { id: `seg${i}`, densityScale: density, tags, hpScale: P('segHp', 2.4) });
+    const mat = i < 2 ? 'wood' : i < 2 + nSteel ? 'steel' : 'armor';
+    const tags = i === 0 ? ['segment', 'core'] : mat === 'armor' ? ['segment', 'armor'] : ['segment'];
+    const densityScale = (density * MATERIALS.wood.density) / MATERIALS[mat].density;
+    d.box(i * pitch, y, segW, segH, mat, { id: `seg${i}`, densityScale, tags, hpScale: hp[mat] });
   }
-  // Armoured head with mandibles, in front of the first segment.
-  d.box(-0.72, y + 0.06, 0.5, 0.4, 'steel', { id: 'head', densityScale: 0.03, tags: ['armor'], hpScale: 2 });
+  // Wooden head with steel mandibles, in front of the first segment.
+  d.box(-0.72, y + 0.06, 0.5, 0.4, 'wood', { id: 'head', densityScale: 0.4, hpScale: P('headHp', 1.6) });
   d.weld('head', 'seg0', { at: [-0.47, y + 0.06], seam: 0.36, strength: 3 });
   d.strut(-0.95, y - 0.1, -1.22, y - 0.28, 0.08, 'steel', { id: 'jaw', densityScale: 0.08 });
   d.weld('jaw', 'head', { at: [-0.96, y - 0.1], seam: 0.08, strength: 3 });
@@ -60,9 +75,15 @@ registerCreature('centipede', (d, _rng, params) => {
     }
   }
   for (let i = 0; i < n - 1; i++) gait[`link${i}`] = { shape: 'hold', amp: 0, bias: 0, phase: 0 };
+  // Aim plan: every other segment (the fewest cuts that leave only single
+  // segments), taking the front one of the last pair; the rest after.
+  const cuts: number[] = [];
+  for (let i = 1; i < n; i += 2) cuts.push(i);
+  if (n % 2 === 0) cuts[cuts.length - 1] = n - 2;
+  const weakPoints = [...cuts, ...Array.from({ length: n }, (_, i) => i).filter((i) => !cuts.includes(i))].map((i) => `seg${i}`);
   return {
     name: 'Centipede',
-    weakPoints: ['seg2', 'seg3', 'seg1', 'seg4', 'seg0', 'seg5'],
+    weakPoints,
     core: 'seg0',
     legs,
     gait: { speed, stride: P('stride', 1.3), muscles: gait },
