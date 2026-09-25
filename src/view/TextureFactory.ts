@@ -201,6 +201,21 @@ export class TextureFactory {
     return f;
   }
 
+  /** Cache key of a part's art (parts with equal keys look identical). */
+  artName(part: StructurePart, neutral = false): string {
+    return partName(part, neutral);
+  }
+
+  /**
+   * Paint a part's art (identical to its partFrame) at the top-left of `ctx`,
+   * which must be at least measurePart(part.shape, TEXELS_PER_M) in size.
+   */
+  paintArt(ctx: CanvasRenderingContext2D, part: StructurePart, neutral = false): void {
+    const mat = neutral ? neutralMaterial(part.material) : part.material;
+    const s = TEXELS_PER_M;
+    paintPart(ctx, part.shape, mat, s, measurePart(part.shape, s), { fixed: part.fixed, seed: hashString(partName(part, false)) });
+  }
+
   /** Standalone texture key with the same art as partFrame (external callers). */
   partKey(part: StructurePart): string {
     return this.standalonePart(part, partName(part, false), part.material);
@@ -269,7 +284,7 @@ function partName(part: StructurePart, neutral: boolean): string {
 const neutralCache = new Map<MaterialId, MaterialDef>();
 
 /** Same material, repainted light grey (keeps pattern + outline) for heat-map tinting. */
-function neutralMaterial(m: MaterialDef): MaterialDef {
+export function neutralMaterial(m: MaterialDef): MaterialDef {
   let n = neutralCache.get(m.id);
   if (!n) {
     n = { ...m, color: 0xe3e7ed, outline: 0x3a4049, alpha: m.alpha < 1 ? 0.8 : 1 };
