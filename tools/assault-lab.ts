@@ -60,9 +60,14 @@ const AIM: Record<string, string[]> = {
   shield: ['shieldArm', 'head', 'shinL', 'shinR', 'torso'],
   centipede: ['seg2', 'seg3', 'seg1', 'seg4', 'seg0', 'seg5'],
   strider: ['slingA', 'slingB', 'engine', 'shinFL', 'shinFR', 'thighFL', 'thighFR'],
+  orrery: ['tri'],
 };
-// Human-ish aim: a slowly wandering error (m) around the chosen point.
+// Human-ish aim: a slowly wandering error around the chosen point whose
+// standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
+// Floaters (orrery): a patient gunner fires only when the corridor will be open
+// as the round arrives; --spray holds the trigger regardless.
+const spray = args.includes('--spray');
 const botRng = new Random(99);
 let errX = 0;
 let errY = 0;
@@ -72,7 +77,7 @@ run(sim, Number(opt('seconds', '150')), () => {
   session.update();
   if (session.state !== 'running') return;
   // Bot gunner: target the closest active creature.
-  let target = null as null | { x: number; y: number; vx: number; vy: number };
+  let target = null as null | { x: number; y: number; vx: number; vy: number; cycle: number; period: number };
   let best = Infinity;
   for (const c of session.creatures) {
     if (!c.active || c.core.removed || c.age < 0.5) continue;
@@ -87,22 +92,30 @@ run(sim, Number(opt('seconds', '150')), () => {
         break;
       }
     }
-    target = { x: p.x, y: p.y, vx: p.vx, vy: p.vy };
+    target = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, cycle: c.floatCycle, period: c.spec.float?.period ?? 0 };
   }
   const w = sim.weapon;
   if (w.heat > 0.92) cooling = true;
   if (cooling && w.heat < 0.4) cooling = false;
   if (aimError > 0) {
     const k = 1.5 / 60;
-    errX += (botRng.gaussian() * aimError * 2.5 - errX) * k;
-    errY += (botRng.gaussian() * aimError * 2.5 - errY) * k;
+    const kick = aimError * Math.sqrt(2 * k);
+    errX += -errX * k + botRng.gaussian() * kick;
+    errY += -errY * k + botRng.gaussian() * kick;
   }
   if (target && !cooling) {
     const m = w.muzzle();
     const tof = Math.hypot(target.x - m.x, target.y - m.y) / w.speed;
     const sol = solveAim(m.x, m.y, target.x + target.vx * tof + errX, target.y + target.vy * tof + errY, w.speed, sim.physics.gravity);
     if (sol.length) w.setAngle(sol[0]!);
-    w.triggerHeld = true;
+    let fire = true;
+    if (target.cycle >= 0 && !spray) {
+      // Arrival phase within ±0.25 s of the alignment.
+      const arrive = (target.cycle + tof / target.period) % 1;
+      const off = Math.min(arrive, 1 - arrive) * target.period;
+      fire = off < 0.25;
+    }
+    w.triggerHeld = fire;
   } else w.triggerHeld = false;
   if (session.elapsed - lastFrame > 8) {
     lastFrame = session.elapsed;

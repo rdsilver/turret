@@ -25,6 +25,8 @@ import type { StructurePart } from '../StructurePart';
 import type { BreakableJoint } from '../BreakableJoint';
 import type { CreatureSpec, LegSpec, MuscleGait } from './CreatureTypes';
 import { DEG, clamp, wrapAngle } from '../../core/math';
+import { R } from '../RapierModule';
+import { TURRET } from '../../config/constants';
 
 export type CreatureState = 'spawning' | 'walking' | 'crippled' | 'immobilized' | 'neutralized';
 export type NeutralizeCause = 'legs' | 'downed' | 'power' | 'killed' | 'stuck';
@@ -55,6 +57,16 @@ interface SupportGroup {
   active: boolean;
   hipX: number;
   hipY: number;
+}
+
+/** A floating creature's part and its pose relative to the core at spawn. */
+interface FloatPart {
+  part: StructurePart;
+  dx: number;
+  dy: number;
+  angle: number;
+  /** Index into spec.float.rings; -1 = spins with the core. */
+  ring: number;
 }
 
 /** Seconds a creature must stay immobile before it counts as stopped for good. */
@@ -116,6 +128,13 @@ export class Creature {
   /** Strongest attached hip muscle torque (caps the body-trim torque). */
   private hipTorque = 0;
   private groups: LegRuntime[][] = [];
+  /** Floating creatures: every part, moved kinematically each step. */
+  private floatParts: FloatPart[] | null = null;
+  private floatT = 0;
+  private floatX = 0;
+  private floatY = 0;
+  /** Per-ring phase knock (rad) from hits, easing back to zero. */
+  private ringKick: number[] = [];
 
   constructor(
     private readonly ctx: SimContext,
@@ -176,7 +195,25 @@ export class Creature {
     }
     this.bodyHeight0 = core.h0;
     this.stuckRefX = core.x;
+    if (spec.float) this.initFloat(spec);
     this.refreshBody();
+  }
+
+  /** Floating: all parts become kinematic and remember their pose around the core. */
+  private initFloat(spec: CreatureSpec): void {
+    const f = spec.float!;
+    const core = this.core;
+    this.floatX = core.x;
+    this.floatY = core.y;
+    const kinematic = R().RigidBodyType.KinematicPositionBased;
+    this.floatParts = [];
+    this.ringKick = f.rings.map(() => 0);
+    for (const p of this.structure.parts) {
+      if (p.removed) continue;
+      p.body.setBodyType(kinematic, true);
+      const ring = f.rings.findIndex((r) => !!p.name && r.parts.includes(p.name));
+      this.floatParts.push({ part: p, dx: p.x - core.x, dy: p.y - core.y, angle: p.angle, ring });
+    }
   }
 
   get x(): number {
@@ -225,7 +262,10 @@ export class Creature {
     this.connectedDirty = false;
     const seen = this.connected;
     seen.clear();
-    if (!this.core.removed) {
+    if (this.floatParts) {
+      // Nothing holds a floater together but its own motion: every part is its body.
+      for (const fp of this.floatParts) if (!fp.part.removed) seen.add(fp.part);
+    } else if (!this.core.removed) {
       const stack: StructurePart[] = [this.core];
       seen.add(this.core);
       while (stack.length) {
@@ -295,6 +335,10 @@ export class Creature {
       return;
     }
     if (this.connectedDirty) this.refreshBody();
+    if (this.floatParts) {
+      this.floatStep(dt);
+      return;
+    }
     this.age += dt;
     const world = this.ctx.physics.world;
     const g = this.ctx.physics.gravity;
@@ -487,6 +531,79 @@ export class Creature {
     }
   }
 
+  /** Where a floater is in its alignment cycle (0..1; 0 = every ring lined up), or -1. */
+  get floatCycle(): number {
+    const f = this.spec.float;
+    return f ? (this.floatT / f.period) % 1 : -1;
+  }
+
+  /** A part of this creature was hit (called by the manager). Floater rings flinch. */
+  onPartHit(part: StructurePart): void {
+    const f = this.spec.float;
+    if (!f || !this.floatParts || this.state === 'neutralized') return;
+    const fp = this.floatParts.find((q) => q.part === part);
+    if (!fp || fp.ring < 0) return;
+    const k = this.ringKick[fp.ring] ?? 0;
+    // Knocked along its own spin (never back into line), a little less each time it's already off.
+    const dir = Math.sign(f.rings[fp.ring]!.turns) || 1;
+    this.ringKick[fp.ring] = k + dir * f.flinch * (0.6 + 0.4 * this.ctx.rng.next());
+  }
+
+  /** Floating: drift toward the turret, bob, spin the core and turn every ring around it. */
+  private floatStep(dt: number): void {
+    this.age += dt;
+    for (const v of this.vitals) {
+      if (v.removed || v.wrecked || v.integrity <= 0) {
+        this.neutralize('killed');
+        break;
+      }
+    }
+    if (this.state === 'neutralized') return;
+    if (this.state === 'spawning' && this.age > SPAWN_SETTLE) this.state = 'walking';
+    const f = this.spec.float!;
+    if (this.state !== 'spawning') this.floatX -= this.spec.gait.speed * dt;
+    this.floatT += dt;
+    const cx = this.floatX;
+    const cy = this.floatY + f.bob * Math.sin((this.floatT / f.bobPeriod) * Math.PI * 2);
+    // Every ring is built with a gap pointing left (angle π); `aim` turns that
+    // gap toward the turret, and at whole periods every ring is back there: a
+    // clear corridor to the core, open for a moment.
+    const aim = Math.atan2(-TURRET.pivotHeight - cy, TURRET.x - cx) - Math.PI;
+    const cycles = this.floatT / f.period;
+    const ease = Math.exp(-dt / Math.max(0.05, f.recover));
+    for (let i = 0; i < this.ringKick.length; i++) this.ringKick[i]! *= ease;
+    for (const fp of this.floatParts!) {
+      const p = fp.part;
+      if (p.removed) continue;
+      let rot: number;
+      if (fp.ring < 0) rot = f.spin * this.floatT;
+      else {
+        const r = f.rings[fp.ring]!;
+        rot = aim + ((Math.PI * 2) / r.symmetry) * r.turns * cycles + this.ringKick[fp.ring]!;
+      }
+      const c = Math.cos(rot);
+      const s = Math.sin(rot);
+      p.body.setNextKinematicTranslation({ x: cx + c * fp.dx - s * fp.dy, y: cy + s * fp.dx + c * fp.dy });
+      p.body.setNextKinematicRotation(fp.angle + rot);
+    }
+  }
+
+  /** A floater's heart is gone: everything drops, blown apart by a small burst. */
+  private dropFloat(): void {
+    const dynamic = R().RigidBodyType.Dynamic;
+    for (const fp of this.floatParts!) {
+      const b = fp.part.body;
+      if (fp.part.removed) continue;
+      const v = b.linvel();
+      const w = b.angvel();
+      b.setBodyType(dynamic, true);
+      b.setLinvel(v, true);
+      b.setAngvel(w, true);
+    }
+    const c = this.core;
+    this.ctx.explosions.schedule(c.x, c.y, 2.2 * c.extent + 2, 0.3, 0, 'material');
+  }
+
   /** Foot touching (or within a few cm of) the ground. */
   footDown(foot: StructurePart): boolean {
     return !foot.removed && foot.height - foot.halfHeightNow < 0.1;
@@ -497,6 +614,7 @@ export class Creature {
     this.state = 'neutralized';
     this.cause = cause;
     this.neutralizedAt = this.age;
+    if (this.floatParts) this.dropFloat();
     this.ctx.events.emit('creatureNeutralized', { creature: this, cause, x: this.core.x, y: this.core.y });
   }
 }

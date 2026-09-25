@@ -50,8 +50,9 @@ Useful URLs while developing:
 
 ## Creature campaign
 
-Creatures enter from the right and walk toward the red defence line in front
-of the turret. If any creature crosses it on its feet, the level is lost
+Creatures (big ones: a stick walker stands about 11 m tall) enter from the
+right and walk toward the red defence line in front of the turret. If any
+creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
@@ -76,8 +77,9 @@ limb stops obeying it.
 | 8 | Centipede | segmented centipede | cut it in the middle: every piece of 2+ segments walks on alone |
 | 9 | Stampede | everything | triage |
 | 10 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 11 | Thread the Needle | the Orrery: nested rings (square → octagon) of armour turning around a floating triangle | one round on the triangle — fire as the corner gaps line up (the triangle flares); hits knock rings out of step, so spraying keeps the way shut |
 
-After level 10 the game continues with endless mixed waves. Between levels the
+After level 11 the game continues with endless mixed waves. Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds).
 

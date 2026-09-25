@@ -140,4 +140,14 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'hound', at: 45, params: { speed: 1.5 } },
     ],
   },
+  {
+    id: 'a11',
+    name: 'Thread the Needle',
+    subtitle: 'Nested rings of armour turning around a glowing triangle.',
+    lesson: 'One round on the triangle is all it takes. Wait for the gaps to line up, then fire.',
+    hint: 'Every few seconds the corner gaps swing into a line facing you. Fire just before.',
+    seed: 111,
+    reward: 450,
+    waves: [{ creature: 'orrery', at: 1 }],
+  },
 ];

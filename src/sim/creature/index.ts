@@ -5,3 +5,4 @@ import './blueprints/beetle';
 import './blueprints/machines';
 import './blueprints/centipede';
 import './blueprints/boss';
+import './blueprints/orrery';

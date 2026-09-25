@@ -42,6 +42,32 @@ export interface AbilitySpec {
   [param: string]: number | string | boolean;
 }
 
+export interface FloatRing {
+  /** Part ids that rotate together around the core. */
+  parts: string[];
+  /** Pattern repeats (e.g. an N-gon's N): the ring realigns every `period / turns`… */
+  symmetry: number;
+  /** …after turning `turns` pattern steps per period; sign = direction. */
+  turns: number;
+}
+
+export interface FloatSpec {
+  /**
+   * Seconds between moments when every ring is back in its aligned pose, with
+   * the aligned direction turned to face the turret.
+   */
+  period: number;
+  rings: FloatRing[];
+  /** Core spin (rad/s). */
+  spin: number;
+  /** Vertical bob amplitude (m) and period (s). */
+  bob: number;
+  bobPeriod: number;
+  /** A hit knocks its ring out of step by up to this much (rad), easing back over `recover` s. */
+  flinch: number;
+  recover: number;
+}
+
 export interface CreatureSpec {
   name: string;
   /** Part id of the body the controller balances and propels. */
@@ -77,6 +103,13 @@ export interface CreatureSpec {
   abilities?: AbilitySpec[];
   /** Base payout for stopping it. */
   bounty?: number;
+  /**
+   * Floating creatures don't walk: every part is moved kinematically. The core
+   * drifts toward the turret (gait.speed) with a gentle bob, spinning; each ring
+   * of parts rotates rigidly around it. Stopped only by destroying a vital part,
+   * after which everything drops.
+   */
+  float?: FloatSpec;
   /**
    * Cut in two, a piece with at least `min` parts tagged `tag` (and legs) walks
    * on as a creature of its own, led by its front-most tagged part.
