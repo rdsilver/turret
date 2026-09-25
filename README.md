@@ -1,7 +1,14 @@
 # TURRET
 
-A 2D physics demolition prototype about structural engineering, emergent
-chain reactions and one very large cannon.
+A 2D physics prototype with two modes:
+
+- **Play (creature campaign)** — mechanical creatures walk at your turret. Hold
+  the trigger on a machine gun and take them apart before any of them reaches
+  the defence line. Every creature has a physical weak point: knees that
+  buckle, an engine that overheats, an arm holding a shield, a body that
+  comes apart in pieces.
+- **Demolition** — structural engineering, emergent chain reactions and one
+  very large cannon.
 
 > *"I understand why this thing is standing. Now I'm going to figure out the
 > funniest way to make it stop standing."*
@@ -39,8 +46,42 @@ Useful URLs while developing:
 | `/?play=1` | continue the campaign |
 | `/?play=1&level=7` | jump straight to campaign level 7 |
 | `/?sandbox=1` | physics sandbox with the debug menu open |
+| `/?assault=1&level=4` | jump straight to creature level 4 |
 
-## Controls
+## Creature campaign
+
+Creatures enter from the right and walk toward the red defence line in front
+of the turret. If any creature crosses it on its feet, the level is lost
+(retry with R). Nothing has a health bar: bullets wear a part down (it turns
+redder as it weakens) and weaken the joints around it until the physics does
+the rest — a weak knee buckles under the creature's own weight, a severed
+limb stops obeying it.
+
+| Input | Action |
+| --- | --- |
+| Mouse | aim (tracer line shows the flight path) |
+| Hold left mouse / Space | fire; the barrel heats up and locks when it overheats |
+| R | restart level |
+| Esc | main menu |
+
+| # | Level | Creature | Weak point |
+| --- | --- | --- | --- |
+| 1 | First Contact | Stick walker | knees |
+| 2 | Pair | two walkers | stop the closest first |
+| 3 | The Thrower | walker with a sling arm that throws rubber shields | the sling arm (bullets bounce off rubber) |
+| 4 | The Hound | fast quadruped | both front (or both back) legs |
+| 5 | Shell Game | armoured beetle, six steel legs | legs under the shell; armour-piercing rounds |
+| 6 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 7 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 8 | Centipede | segmented centipede | cut it in the middle: every piece of 2+ segments walks on alone |
+| 9 | Stampede | everything | triage |
+| 10 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+
+After level 10 the game continues with endless mixed waves. Between levels the
+workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
+armour-piercing rounds).
+
+## Demolition controls
 
 | Input | Action |
 | --- | --- |
@@ -65,7 +106,19 @@ npx tsx tools/level-lab.ts level05 --sweep full --brute 6 --stats base
 #   measures which single shots demolish the level, how many random shots it
 #   takes, and renders a filmstrip + stress heat map PNG into tools/out/
 npx tsx tools/bench.ts   # scaling benchmark: 100 -> 2000 welded bodies
+
+# Creatures
+npx tsx tools/creature-lab.ts hound --seconds 20
+#   walk test: speed, stability, filmstrip PNG
+npx tsx tools/creature-lab.ts beetle --shoot shinFL,shinFR --tier 5
+#   hold fire on parts in turn with the level-5 upgrade build
+npx tsx tools/assault-lab.ts a07 --tier 7 --aimError 0.3
+#   bot plays a whole level (aims at each creature's weak points, leads
+#   moving targets, human-ish aim error) and prints result + payout
+npx tsx tools/leg-trace.ts hound FL 3 4.2 2   # gait tuning trace for one leg
 ```
+
+Upgrade builds per level (`--tier 1..10`) are defined in `tools/lib/loadouts.ts`.
 
 ## Project layout
 
