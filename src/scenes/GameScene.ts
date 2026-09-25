@@ -50,7 +50,6 @@ export interface GameSceneData {
 
 type Flow = 'aiming' | 'collapsing' | 'results';
 
-const SCAN_SECONDS = 5;
 /** Wall-clock cap on a level's synchronous pre-settle (real levels need < 100 ms). */
 const SETTLE_BUDGET_MS = 1500;
 
@@ -93,8 +92,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   private debugSlowMo = false;
   private stressDebug = false;
   private massScale = 1;
-  private scanCharges = 0;
-  private scanTimer = 0;
   private unlockedAmmo: string[] = ['standard'];
   private resultsDelay = -1;
   private lastChainFlash = 0;
@@ -225,8 +222,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.session = new LevelSession(this.sim, this.level);
     this.flow = 'aiming';
     this.resultsDelay = -1;
-    this.scanCharges = this.upgrades.scanCharges(gameState().upgrades);
-    this.scanTimer = 0;
     this.world.setStressView(this.stressDebug);
     // Debug time controls never outlive a reload unless the debug tools are in use.
     if (!this.debugMenu.visible && this.mode !== 'sandbox') {
@@ -359,9 +354,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         case 'Escape':
           this.scene.start('Menu');
           break;
-        case 'KeyS':
-          this.activateScan();
-          break;
         case 'Space':
           this.tryFire();
           break;
@@ -435,17 +427,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.hud?.flash(this.sim.weapon.ammo.name.toUpperCase(), '#9fd3ff');
   }
 
-  private activateScan(): void {
-    if (this.scanTimer > 0) return;
-    if (this.scanCharges <= 0 && this.mode !== 'sandbox') {
-      this.hud?.flash('NO SCANNER CHARGES', '#ff6b5e');
-      return;
-    }
-    if (this.mode !== 'sandbox') this.scanCharges--;
-    this.scanTimer = SCAN_SECONDS;
-    this.world.setStressView(true);
-  }
-
   // ------------------------------------------------------------------ frame
 
   update(_time: number, _deltaMs: number): void {
@@ -459,11 +440,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.effects.update(dt);
     physics.timeScale = this.effects.timeScale * (this.debugSlowMo ? 0.2 : 1);
     this.sim.update(dt);
-
-    if (this.scanTimer > 0) {
-      this.scanTimer -= dt;
-      if (this.scanTimer <= 0) this.world.setStressView(this.stressDebug);
-    }
 
     this.sim.weapon.predict(this.prediction);
     this.turret.showPreview = this.flow === 'aiming' || this.mode === 'sandbox';
@@ -492,8 +468,6 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         ammoName: this.sim.weapon.ammo.name,
         ammoId: this.sim.weapon.ammo.id,
         ammoCost: this.sim.weapon.ammo.cost,
-        scanCharges: this.scanCharges,
-        scanActive: this.scanTimer > 0,
         phase: this.sim.phase,
         sandbox: this.mode === 'sandbox',
       },
@@ -643,7 +617,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   }
   setStressView(on: boolean): void {
     this.stressDebug = on;
-    this.world.setStressView(on || this.scanTimer > 0);
+    this.world.setStressView(on);
   }
   isStressView(): boolean {
     return this.stressDebug;

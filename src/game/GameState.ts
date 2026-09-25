@@ -113,7 +113,10 @@ export class GameState {
     if (isObj(d.upgrades)) {
       for (const [id, lvl] of Object.entries(d.upgrades)) {
         const n = int(lvl, 0, 0);
-        if (n > 0) gs.upgrades[id] = n;
+        const refund = RETIRED_UPGRADES[id];
+        // Upgrades removed from the game give their money back.
+        if (refund) gs.money += refund.slice(0, n).reduce((a, c) => a + c, 0);
+        else if (n > 0) gs.upgrades[id] = n;
       }
     }
     if (isObj(d.records)) {
@@ -157,6 +160,11 @@ export class GameState {
     }
   }
 }
+
+/** Level costs of upgrades that no longer exist (refunded on load). */
+const RETIRED_UPGRADES: Record<string, readonly number[]> = {
+  scanner: [100, 190, 320],
+};
 
 /** Upgrade older save layouts to the current version (none yet). */
 function migrate(d: Record<string, unknown>): Record<string, unknown> {

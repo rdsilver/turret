@@ -1,7 +1,7 @@
 /**
  * In-game HUD (screen space, scrollFactor 0 on the UI camera/scene). OWNER: UI agent.
  * Shows level title/objective, shots vs par, money, objective progress bar,
- * reload + power, ammo name, scanner charges, short popups ("CHAIN x12") and
+ * reload + power, ammo name, short popups ("CHAIN x12") and
  * a big banner when the structure collapses. Minimal, readable, lab-style.
  *
  * Performance: text is only re-rasterised when its value changes; bars are
@@ -40,8 +40,6 @@ export interface HudState {
   power: number;
   ammoName: string;
   ammoCost: number;
-  scanCharges: number;
-  scanActive: boolean;
   phase: SimPhase;
   sandbox: boolean;
   /** Optional: current ammo id (otherwise matched by name). */
@@ -124,8 +122,6 @@ export class Hud {
   private reloadLabel!: Text;
   private readonly powerSegs: Rect[] = [];
   private readonly powerText: Text;
-  private readonly scanKey: Phaser.GameObjects.Graphics;
-  private readonly scanText: Text;
 
   // Hint (bottom-centre)
   private readonly hintBg: Phaser.GameObjects.Graphics;
@@ -153,8 +149,6 @@ export class Hud {
     power: -1,
     ammo: '',
     cost: -1,
-    scan: -1,
-    scanActive: false,
   };
 
   constructor(readonly scene: Phaser.Scene) {
@@ -198,10 +192,10 @@ export class Hud {
     const vy = H - 32; // value row
     const strip = add(scene.add.graphics());
     strip.fillStyle(THEME.bgDeep, 0.72);
-    strip.fillRoundedRect(M - 16, H - 78, 1040, 66, 4);
+    strip.fillRoundedRect(M - 16, H - 78, 910, 66, 4);
     strip.lineStyle(1, THEME.panelEdge, 1);
-    strip.strokeRoundedRect(M - 15.5, H - 77.5, 1039, 65, 4);
-    for (const x of [352, 612, 900]) {
+    strip.strokeRoundedRect(M - 15.5, H - 77.5, 909, 65, 4);
+    for (const x of [352, 612]) {
       strip.fillStyle(THEME.panelEdge, 1);
       strip.fillRect(M + x - 20, H - 66, 1, 42);
     }
@@ -236,12 +230,6 @@ export class Hud {
     }
     this.powerText = add(mono(scene, px + POWER_SEGS * 14 + 10, vy, '', SIZE.xs, THEME.text, { weight: 600, originY: 0.5 }));
 
-    // SCANNER
-    const scx = M + 900;
-    add(mono(scene, scx, sy, 'SCANNER', SIZE.micro, THEME.textFaint, { weight: 600, spacing: 1, originY: 0.5 }));
-    this.scanKey = add(scene.add.graphics({ x: scx, y: vy }));
-    add(mono(scene, scx + 11, vy, 'S', SIZE.micro, THEME.textDim, { weight: 700, originX: 0.5, originY: 0.5 }));
-    this.scanText = add(mono(scene, scx + 30, vy, '', SIZE.xs, THEME.text, { weight: 600, originY: 0.5 }));
 
     // ---------------------------------------------------------------- hint (bottom-centre, above the strip)
     this.hintBg = add(scene.add.graphics());
@@ -476,26 +464,6 @@ export class Hud {
       }
     }
 
-    // Scanner
-    if (state.scanCharges !== L.scan || state.scanActive !== L.scanActive) {
-      L.scan = state.scanCharges;
-      L.scanActive = state.scanActive;
-      const infinite = state.sandbox;
-      const txt = state.scanActive ? 'SCANNING' : infinite ? 'SCAN ∞' : `SCAN ×${state.scanCharges}`;
-      this.scanText.setText(txt);
-      const col = state.scanActive ? THEME.info : state.scanCharges > 0 || infinite ? THEME.text : THEME.textFaint;
-      setColorIfChanged(this.scanText, col);
-      const g = this.scanKey;
-      g.clear();
-      if (state.scanActive) {
-        g.fillStyle(THEME.infoNum, 0.2);
-        g.fillRoundedRect(0, -11, 22, 22, 3);
-      }
-      g.lineStyle(1, state.scanActive ? THEME.infoNum : THEME.rule, 1);
-      g.strokeRoundedRect(0.5, -10.5, 21, 21, 3);
-    }
-    if (state.scanActive) this.scanText.alpha = 0.65 + 0.35 * Math.sin(this.scene.time.now * 0.012);
-    else if (this.scanText.alpha !== 1) this.scanText.alpha = 1;
 
     // Hint fade
     if (this.hintT >= 0 && this.hintT < 1) {

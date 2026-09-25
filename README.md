@@ -48,7 +48,6 @@ Useful URLs while developing:
 | Left click / Space | fire |
 | Mouse wheel, W / S, Up / Down | muzzle power |
 | Q / E, 1–4 | switch ammunition (once unlocked) |
-| S | stress scanner: shows the load heat map for 5 s (charges come from upgrades) |
 | R | restart level |
 | Esc | main menu |
 | `` ` `` (backquote) | debug menu |

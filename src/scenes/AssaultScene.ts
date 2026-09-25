@@ -43,8 +43,6 @@ export interface AssaultSceneData {
 
 type Flow = 'playing' | 'ending' | 'results';
 
-const SCAN_SECONDS = 5;
-
 /** Endless waves after the campaign: more, faster, mixed creatures. */
 export function endlessAssault(k: number): AssaultLevelDef {
   const n = 3 + Math.floor(k * 0.8);
@@ -101,8 +99,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   private debugSlowMo = false;
   private stressDebug = false;
   private massScale = 1;
-  private scanCharges = 0;
-  private scanTimer = 0;
   private endTimer = -1;
   private hinted = false;
   private offs: Array<() => void> = [];
@@ -198,8 +194,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.hinted = false;
     this.sim.weapon.heat = 0;
     this.sim.weapon.overheated = false;
-    this.scanCharges = this.upgrades.scanCharges(gameState().upgrades);
-    this.scanTimer = 0;
     this.world.setStressView(this.stressDebug);
     if (!this.debugMenu.visible) {
       this.sim.physics.paused = false;
@@ -314,9 +308,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
           case 'Escape':
             this.scene.start('Menu');
             break;
-          case 'KeyS':
-            this.activateScan();
-            break;
           case 'Space':
             this.spaceHeld = true;
             break;
@@ -348,17 +339,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     );
   }
 
-  private activateScan(): void {
-    if (this.scanTimer > 0) return;
-    if (this.scanCharges <= 0) {
-      this.hud?.flash('NO SCANNER CHARGES', '#ff6b5e');
-      return;
-    }
-    this.scanCharges--;
-    this.scanTimer = SCAN_SECONDS;
-    this.world.setStressView(true);
-  }
-
   // ------------------------------------------------------------------ frame
 
   update(): void {
@@ -375,11 +355,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     physics.timeScale = this.effects.timeScale * (this.debugSlowMo ? 0.2 : 1);
     this.sim.update(dt);
     this.session.update();
-
-    if (this.scanTimer > 0) {
-      this.scanTimer -= dt;
-      if (this.scanTimer <= 0) this.world.setStressView(this.stressDebug);
-    }
 
     w.predict(this.prediction);
     this.turret.showPreview = this.flow === 'playing';
@@ -426,8 +401,6 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
         ammoName: w.ammo.name,
         ammoCost: 0,
         ammoId: w.ammo.id,
-        scanCharges: this.scanCharges,
-        scanActive: this.scanTimer > 0,
         phase: 'standing',
         sandbox: false,
         heat: w.heat,
@@ -547,7 +520,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   }
   setStressView(on: boolean): void {
     this.stressDebug = on;
-    this.world.setStressView(on || this.scanTimer > 0);
+    this.world.setStressView(on);
   }
   isStressView(): boolean {
     return this.stressDebug;

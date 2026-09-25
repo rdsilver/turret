@@ -12,8 +12,10 @@
  *    entities every frame. Interpolate: pos = prev + (cur - prev) * alpha
  *    (angles via lerpAngle). Pixels = meters * PPM (see coords.ts).
  *  - Parts: Image with an atlas frame from TextureFactory; material alpha is
- *    baked into the texture; subtle darkening by part.wear. Fading entities:
- *    alpha = fading/fadeDuration.
+ *    baked into the texture; subtle darkening by part.wear. Weapon damage
+ *    (partDamaged) tints a part redder as its integrity drops, flashes it on
+ *    every hit and makes it throb once it is close to breaking. Fading
+ *    entities: alpha = fading/fadeDuration.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
  *  - Stress view (setStressView): parts tinted by the max joint.stressVis of
@@ -58,6 +60,10 @@ interface PartVis {
   depth: number;
   /** Showing the neutral (heat-map) texture variant. */
   neutral: boolean;
+  /** Hit flash 1..0 (decays in real time). */
+  flash: number;
+  /** In the `animated` list (flashing or throbbing). */
+  animated: boolean;
 }
 
 interface ProjVis {
@@ -81,6 +87,10 @@ const DAMAGE_COLOR = 0xff5a2a;
 const WELD_GREY = 0x59616d;
 const DETACHED_STRESS_TINT = 0x5a6573;
 const CABLE_COLOR = 0xcfd6e0;
+/** Seconds a hit flash takes to fade. */
+const HIT_FLASH_TIME = 0.16;
+/** Integrity below which a part throbs (about to break). */
+const CRITICAL_INTEGRITY = 0.3;
 /** Lowest y (world px) a sagging cable is drawn at: resting on the ground surface (y = 0). */
 const CABLE_FLOOR = -1;
 
@@ -95,6 +105,8 @@ export class WorldRenderer {
   private readonly joints = new Set<JointVis>();
   private readonly cables: JointVis[] = [];
   private readonly cores: PartVis[] = [];
+  /** Damaged parts whose tint animates (hit flash, critical throb). */
+  private readonly animated: PartVis[] = [];
   private readonly fading: Entity[] = [];
 
   /** Entities positioned last frame / this frame (final sync when they fall asleep). */
@@ -136,6 +148,7 @@ export class WorldRenderer {
         if (v && v.kind === 0) this.applyPartTint(v, true);
       }),
       ev.on('structureLoaded', () => this.onStructureLoaded()),
+      ev.on('partDamaged', ({ part }) => this.onPartDamaged(part)),
     );
     // Adopt anything that already exists (renderer created after the sim filled up).
     this.needsResync = sim.physics.entities.size > 0;
@@ -200,6 +213,7 @@ export class WorldRenderer {
 
     if (this.fading.length) this.updateFading();
     if (this.cores.length) this.updateCores();
+    if (this.animated.length) this.updateAnimated(realDt);
     if (this.projs.length || this.trailsDrawn) this.drawTrails();
     if (this.cables.length && (cableTouched || this.cablesDirty)) this.drawCables();
     else if (!this.cables.length && this.cablesDirty) {
@@ -239,6 +253,7 @@ export class WorldRenderer {
     this.joints.clear();
     this.cables.length = 0;
     this.cores.length = 0;
+    this.animated.length = 0;
     this.fading.length = 0;
     this.syncPrev.length = 0;
     this.syncCur.length = 0;
@@ -313,6 +328,17 @@ export class WorldRenderer {
     if (b && b.kind === 0) this.applyPartTint(b, true);
   }
 
+  private onPartDamaged(p: StructurePart): void {
+    const v = p.view as PartVis | null;
+    if (!v || v.kind !== 0 || p.removed) return;
+    v.flash = 1;
+    if (!v.animated) {
+      v.animated = true;
+      this.animated.push(v);
+    }
+    this.applyPartTint(v, true);
+  }
+
   private onStructureLoaded(): void {
     const s = this.sim.structure;
     if (!s) return;
@@ -360,7 +386,7 @@ export class WorldRenderer {
     img.x = p.x * PPM;
     img.y = p.y * PPM;
     img.rotation = p.angle;
-    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false };
+    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false };
     if (p.material.id === 'core' || p.isCore) {
       const gf = this.textures.miscFrame(RK.glow);
       const g = this.glowPool.pop() ?? this.scene.add.image(0, 0, gf.key, gf.frame);
@@ -388,6 +414,11 @@ export class WorldRenderer {
       for (let i = v.joints.length - 1; i >= 0; i--) this.removeJointVis(v.joints[i]!.joint);
     }
     v.joints.length = 0;
+    if (v.animated) {
+      v.animated = false;
+      const i = this.animated.indexOf(v);
+      if (i >= 0) this.animated.splice(i, 1);
+    }
     this.release(v.img, v.depth);
     if (v.glow) {
       v.glow.setVisible(false).setActive(false);
@@ -436,9 +467,11 @@ export class WorldRenderer {
   }
 
   /**
-   * Normal view: wear darkening (multiply). Stress view: the part swaps to its
-   * neutral light-grey texture variant multiplied by the heat colour (keeps
-   * outline + pattern readable), pulsing when yielding.
+   * Normal view: wear darkening, and weapon damage pulls the green and blue
+   * channels down so the part turns redder as its integrity drops (multiply).
+   * Stress view: the part swaps to its neutral light-grey texture variant
+   * multiplied by the heat colour (keeps outline + pattern readable), pulsing
+   * when yielding.
    *
    * Only the MULTIPLY tint mode is used on purpose: Phaser decodes other tint
    * modes with an exact float compare on an interpolated varying, which drops
@@ -478,15 +511,56 @@ export class WorldRenderer {
       v.tintSig = sig;
       img.setTint(color);
     } else {
-      const w = p.wear;
-      // Far-side limbs (2D side view) render darker so overlapping legs read apart.
-      const back = p.hasTag('back') ? 0.62 : 1;
-      const k = (w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1) * back;
-      const color = grey(k);
+      const color = this.damageTint(v);
       if (color === v.tintSig && !force) return;
       v.tintSig = color;
-      if (k >= 1) img.clearTint();
+      if (color === 0xffffff) img.clearTint();
       else img.setTint(color);
+    }
+  }
+
+  /** Normal-view multiply tint: wear darkening, damage reddening, hit flash, critical throb. */
+  private damageTint(v: PartVis): number {
+    const p = v.entity;
+    // Far-side limbs (2D side view) render darker so overlapping legs read apart.
+    const back = p.hasTag('back');
+    const d = 1 - p.integrity;
+    if (d < 0.005 && v.flash <= 0) {
+      const w = p.wear;
+      const k = (w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1) * (back ? 0.62 : 1);
+      return grey(k);
+    }
+    // Ease-out: the first hits already show, half integrity reads clearly red.
+    let e = 1 - (1 - d) * (1 - d);
+    if (v.flash > 0) e += (1 - e) * 0.7 * v.flash;
+    let k = back ? 0.62 + 0.25 * e : 1;
+    if (p.integrity < CRITICAL_INTEGRITY && !p.wrecked && this.throbbing(p)) {
+      k *= 0.78 + 0.22 * Math.sin(this.time * 11 + p.id);
+    }
+    const r = 255 * k;
+    const g = 255 * k * (1 - 0.8 * e);
+    const b = 255 * k * (1 - 0.86 * e);
+    return ((r & 255) << 16) | ((g & 255) << 8) | (b & 255);
+  }
+
+  /** Critical parts throb only while their creature is still a threat. */
+  private throbbing(p: StructurePart): boolean {
+    const c = this.sim.creatures.creatureOf(p);
+    return !!c && c.active && p.joints.length > 0;
+  }
+
+  private updateAnimated(realDt: number): void {
+    const decay = realDt / HIT_FLASH_TIME;
+    for (let i = this.animated.length - 1; i >= 0; i--) {
+      const v = this.animated[i]!;
+      const p = v.entity;
+      if (v.flash > 0) v.flash = Math.max(0, v.flash - decay);
+      const keep = !p.removed && (v.flash > 0 || (p.integrity < CRITICAL_INTEGRITY && !p.wrecked && this.throbbing(p)));
+      if (!this.stressView) this.applyPartTint(v, false);
+      if (!keep) {
+        v.animated = false;
+        this.animated.splice(i, 1);
+      }
     }
   }
 

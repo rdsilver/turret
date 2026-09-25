@@ -38,7 +38,6 @@ const LEGEND: Array<[string, string]> = [
   ['MOUSE', 'aim'],
   ['CLICK', 'fire'],
   ['WHEEL · ↑/↓', 'power'],
-  ['S', 'stress scan'],
   ['Q/E', 'ammo'],
   ['R', 'restart'],
   ['ESC', 'menu'],

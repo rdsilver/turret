@@ -3,7 +3,7 @@
  *
  * Every upgrade is a data record: costs per level, an optional stat modifier
  * (`apply`, called once with the owned level, in catalogue order), an optional
- * ammo unlock, scanner charges and a prerequisite. `UpgradeSystem` turns owned
+ * ammo unlock and a prerequisite. `UpgradeSystem` turns owned
  * levels into WeaponStats; the workshop UI renders this list grouped by
  * `branch` (see UPGRADE_BRANCHES for display order / names).
  *
@@ -37,8 +37,6 @@ export interface UpgradeDef {
   apply?: (stats: WeaponStats, level: number) => void;
   /** Ammo id unlocked at level 1. */
   unlocksAmmo?: string;
-  /** Stress-scanner charges granted per level. */
-  scanChargesPerLevel?: number;
   /** Prerequisite. */
   requires?: { id: string; level: number };
   /** Primary stat shown in the "from → to" preview (stat upgrades only). */
@@ -137,16 +135,6 @@ export const UPGRADES: UpgradeDef[] = [
       s.previewTime += 0.7 * lvl;
     },
     view: { label: 'Trajectory preview', stat: 'previewTime', unit: 's', digits: 2 },
-  },
-  {
-    id: 'scanner',
-    name: 'Stress Scanner',
-    branch: 'precision',
-    description: 'Strain-gauge sweep: press S to show the stress heat map for 5 seconds. Find the joint carrying the load.',
-    maxLevel: 3,
-    costs: [100, 190, 320],
-    perLevel: '+1 scan charge per level',
-    scanChargesPerLevel: 1,
   },
 
   // ------------------------------------------------------------------ machine gun

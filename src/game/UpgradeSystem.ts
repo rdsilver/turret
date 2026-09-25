@@ -72,13 +72,6 @@ export class UpgradeSystem {
     return list;
   }
 
-  /** Stress-scanner charges available at the start of each level. */
-  scanCharges(owned: OwnedUpgrades): number {
-    let n = 0;
-    for (const d of this.defs) if (d.scanChargesPerLevel) n += d.scanChargesPerLevel * this.level(d.id, owned);
-    return n;
-  }
-
   isMaxed(id: string, owned: OwnedUpgrades): boolean {
     const d = this.byId.get(id);
     return !d || this.level(id, owned) >= d.maxLevel;
@@ -157,9 +150,6 @@ export class UpgradeSystem {
       const a = fmt(owned);
       const b = fmt(next);
       return make(v.label, a, b, v.unit, maxed);
-    }
-    if (d.scanChargesPerLevel) {
-      return make('Scan charges / level', String(this.scanCharges(owned)), String(this.scanCharges(next)), '', maxed);
     }
     if (d.unlocksAmmo) {
       const name = AMMO[d.unlocksAmmo]?.name ?? d.unlocksAmmo;

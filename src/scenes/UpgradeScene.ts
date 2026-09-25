@@ -466,12 +466,11 @@ export class UpgradeScene extends Phaser.Scene {
       ['spread', 'SPREAD'],
       ['cooling', 'COOLING'],
       ['muzzle', 'MUZZLE'],
-      ['scans', 'SCANS'],
     ];
     let cx = x;
     for (const [key, label] of items) {
       const l = mono(this, cx, y, label, SIZE.micro, THEME.textFaint, { weight: 600, spacing: 2, originY: 0.5 });
-      const v = mono(this, cx + 76, y, '', SIZE.sm, THEME.text, { weight: 600, originY: 0.5 });
+      const v = mono(this, cx + Math.max(76, l.width + 14), y, '', SIZE.sm, THEME.text, { weight: 600, originY: 0.5 });
       this.specTexts.push({ key, label: l, value: v, last: '', flash: 0 });
       cx += 214;
     }
@@ -480,10 +479,8 @@ export class UpgradeScene extends Phaser.Scene {
   private refreshSpec(): void {
     const gs = gameState();
     let stats: ReturnType<UpgradeSystem['weaponStats']>;
-    let scans = 0;
     try {
       stats = this.upg.weaponStats(gs.upgrades);
-      scans = this.upg.scanCharges(gs.upgrades);
     } catch {
       return;
     }
@@ -496,7 +493,6 @@ export class UpgradeScene extends Phaser.Scene {
       reload: `${stats.reloadTime.toFixed(2)} s`,
       spread: `${((stats.spread * 180) / Math.PI).toFixed(2)}°`,
       impact: `×${stats.impactMultiplier.toFixed(2)}`,
-      scans: String(scans),
     };
     for (const s of this.specTexts) {
       const v = val[s.key] ?? '';
