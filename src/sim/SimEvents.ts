@@ -10,6 +10,7 @@ import type { StructurePart } from './StructurePart';
 import type { BreakableJoint, BreakCause } from './BreakableJoint';
 import type { Projectile } from './weapons/Projectile';
 import type { MaterialId } from './Materials';
+import type { Creature, NeutralizeCause } from './creature/Creature';
 
 export interface ImpactEvent {
   entity: Entity;
@@ -86,6 +87,10 @@ export interface SimEvents {
   /** A structure part fell (dropped past the fallen threshold) — fires once per part. */
   partFallen: { part: StructurePart };
   partShattered: { part: StructurePart; fragments: StructurePart[]; x: number; y: number };
+  /** Weapon damage landed on a part (armor = fraction absorbed). */
+  partDamaged: { part: StructurePart; amount: number; integrity: number; x: number; y: number; armor: number };
+  /** Weapon damage wrecked a part (severed limb, torn-off plate, burst tank). */
+  partWrecked: { part: StructurePart; x: number; y: number };
   explosion: ExplosionEvent;
 
   /** Chain reaction bookkeeping (see ChainReactionTracker). */
@@ -96,6 +101,16 @@ export interface SimEvents {
   bigCollapse: { intensity: number; x: number; y: number };
 
   structureLoaded: { partCount: number; jointCount: number };
+
+  // ---- creatures ---------------------------------------------------------
+  creatureSpawned: { creature: Creature };
+  /** A creature can no longer advance (for good). */
+  creatureNeutralized: { creature: Creature; cause: NeutralizeCause; x: number; y: number };
+  creatureOverheated: { creature: Creature; x: number; y: number };
+  /** A creature used an ability (e.g. threw a rubber shield). */
+  creatureAbility: { creature: Creature; ability: string; x: number; y: number };
+  /** An active creature crossed the defense line. */
+  breach: { creature: Creature; x: number; y: number };
   /** Objective satisfied (structure counts as destroyed). */
   objectiveComplete: { description: string };
   /** Objective complete AND motion has settled enough to show results. */

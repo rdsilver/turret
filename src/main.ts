@@ -18,7 +18,8 @@ const game = new Phaser.Game({
   backgroundColor: '#121418',
   antialias: true,
   disableContextMenu: true,
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  // index.html's #game flexbox centres the canvas; CENTER_BOTH would add its margins on top.
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.NO_CENTER },
   scene: [BootScene, MenuScene, GameScene, UIScene, UpgradeScene],
 });
 

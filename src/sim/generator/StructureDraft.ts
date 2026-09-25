@@ -19,6 +19,8 @@ export interface PartOpts {
   densityScale?: number;
   friction?: number;
   restitution?: number;
+  /** Weapon-damage hit point multiplier. */
+  hpScale?: number;
 }
 
 export interface JointOpts {
@@ -55,6 +57,9 @@ export interface OverlapWeldOpts {
   minArea?: number;
   tags?: string[];
 }
+
+/** Far above any real structure (benchmarks use 2000). */
+const MAX_DRAFT_PARTS = 20000;
 
 export class StructureDraft {
   readonly parts: PartDef[] = [];
@@ -104,6 +109,8 @@ export class StructureDraft {
   }
 
   add(p: PartDef): number {
+    // A runaway module loop (e.g. a zero brick size) must fail loudly, not hang the tab.
+    if (this.parts.length >= MAX_DRAFT_PARTS) throw new Error(`StructureDraft: more than ${MAX_DRAFT_PARTS} parts (runaway module parameters?)`);
     this.parts.push(p);
     return this.parts.length - 1;
   }
@@ -141,15 +148,23 @@ export class StructureDraft {
     const idx = o.among ?? this.parts.map((_, i) => i);
     const tol = o.tol ?? 0.03;
     let made = 0;
+    // Existing joints as a pair set (same answers as hasJoint, but O(1): hasJoint per pair
+    // made big drafts such as the 2000-part debug benchmark take ~10 s).
+    const pairs = new Set<string>();
+    const key = (a: number, b: number | 'ground'): string => (b === 'ground' ? `${a}|g` : a < b ? `${a}|${b}` : `${b}|${a}`);
+    for (const j of this.joints) {
+      if (typeof j.a === 'number' && (typeof j.b === 'number' || j.b === 'ground')) pairs.add(key(j.a, j.b));
+    }
     for (let i = 0; i < idx.length; i++) {
       const a = idx[i]!;
       const pa = this.parts[a]!;
-      if (o.toGround !== false && !pa.fixed && !this.hasJoint(a, 'ground')) {
+      if (o.toGround !== false && !pa.fixed && !pairs.has(key(a, 'ground'))) {
         const s = seamBetween(pa, null, tol);
         // Rotated parts only weld to the ground when they really rest on it.
         if (s && (isAlignedBox(pa) || boundsOf(pa).minY <= tol * 0.5) && (!o.filter || o.filter(a, -1))) {
           const strength = o.strengthOf?.(a, -1) ?? o.strength;
           this.joints.push({ kind: 'weld', a, b: 'ground', at: [s.x, s.y], seam: s.length, strength, bond: o.bond });
+          pairs.add(key(a, 'ground'));
           made++;
         }
       }
@@ -157,7 +172,7 @@ export class StructureDraft {
         const b = idx[k]!;
         const pb = this.parts[b]!;
         if (pa.fixed && pb.fixed) continue;
-        if (this.hasJoint(a, b)) continue;
+        if (pairs.has(key(a, b))) continue;
         const s = seamBetween(pa, pb, tol);
         if (!s) continue;
         // Bounds-based seams are only exact for axis-aligned boxes: for rotated
@@ -166,6 +181,7 @@ export class StructureDraft {
         if (o.filter && !o.filter(a, b)) continue;
         const strength = o.strengthOf?.(a, b) ?? o.strength;
         this.joints.push({ kind: 'weld', a, b, at: [s.x, s.y], seam: s.length, strength, bond: o.bond });
+        pairs.add(key(a, b));
         made++;
       }
     }

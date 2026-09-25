@@ -10,9 +10,10 @@ import type * as Phaser from 'phaser';
 import type { LevelResult, ScoreLine } from '../game/Economy';
 import type { LevelDef } from '../game/LevelDefinition';
 import { THEME, SIZE, GRADE_COLOR, css } from './theme';
-import { display, mono } from './text';
+import { display, fitText, mono } from './text';
 import { money, signedMoney } from './format';
 import { Button } from './Button';
+import { onceEach } from './keys';
 import { AudioManager } from '../audio/AudioManager';
 
 export interface ResultsCallbacks {
@@ -26,6 +27,10 @@ export interface ResultsInfo {
   credited?: number;
   /** Small tag in the header, e.g. "LEVEL 03 / 10". */
   levelLabel?: string;
+  /** Header title (default "DEMOLITION REPORT"). */
+  report?: string;
+  /** Primary button label (default "CONTINUE"). */
+  continueLabel?: string;
 }
 
 type Text = Phaser.GameObjects.Text;
@@ -96,8 +101,11 @@ export class ResultsPanel {
   private cashPlayed = false;
   private gradePlayed = false;
 
-  private readonly onUpdate = (_time: number, deltaMs: number): void => this.tick(Math.min(0.1, deltaMs / 1000));
-  private readonly onKey = (e: KeyboardEvent): void => this.handleKey(e);
+  // Real frame time (like GameScene), not Phaser's smoothed delta, which lags far
+  // behind at low frame rates and stretches the count-up.
+  private readonly onUpdate = (): void => this.tick(Math.min(0.25, Math.max(0, this.scene.game.loop.rawDelta) / 1000));
+  // Phaser can deliver the same keydown more than once per frame (see keys.ts).
+  private readonly onKey = onceEach((e: KeyboardEvent): void => this.handleKey(e));
 
   constructor(readonly scene: Phaser.Scene) {
     this.W = scene.scale.width;
@@ -105,7 +113,7 @@ export class ResultsPanel {
     this.audio = new AudioManager(scene);
   }
 
-  show(result: LevelResult, level: LevelDef, cb: ResultsCallbacks, info: ResultsInfo = {}): void {
+  show(result: LevelResult, level: Pick<LevelDef, 'name' | 'subtitle' | 'lesson'>, cb: ResultsCallbacks, info: ResultsInfo = {}): void {
     this.clear();
     this.info = info;
     this.visible = true;
@@ -139,7 +147,7 @@ export class ResultsPanel {
 
   // ------------------------------------------------------------------ build
 
-  private build(result: LevelResult, level: LevelDef): void {
+  private build(result: LevelResult, level: Pick<LevelDef, 'name' | 'subtitle' | 'lesson'>): void {
     const s = this.scene;
     const W = this.W;
     const H = this.H;
@@ -196,9 +204,11 @@ export class ResultsPanel {
 
     // Header
     let y = py + 32;
-    put(mono(s, px + PAD, y, this.info.levelLabel ? `DEMOLITION REPORT · ${this.info.levelLabel}` : 'DEMOLITION REPORT', SIZE.micro, THEME.textDim, { weight: 600, spacing: 3 }));
-    put(display(s, px + PAD - 2, y + 26, level.name, SIZE.xxl - 8, THEME.text));
-    put(mono(s, px + PAD, y + 92, level.subtitle, SIZE.sm, THEME.textDim, { wrap: innerW - 200 }));
+    put(mono(s, px + PAD, y, this.info.levelLabel ? `${this.info.report ?? 'DEMOLITION REPORT'} · ${this.info.levelLabel}` : this.info.report ?? 'DEMOLITION REPORT', SIZE.micro, THEME.textDim, { weight: 600, spacing: 3 }));
+    // Long (procedural) names shrink / wrap instead of running through the grade box.
+    const title = put(display(s, px + PAD - 2, y + 26, level.name, SIZE.xxl - 8, THEME.text));
+    fitText(title, innerW - 200, SIZE.xxl - 8, SIZE.xl - 4);
+    put(mono(s, px + PAD, Math.max(y + 92, title.y + title.height + 6), level.subtitle, SIZE.sm, THEME.textDim, { wrap: innerW - 200 }));
 
     // Grade box (top-right)
     const gs = 150;
@@ -284,7 +294,7 @@ export class ResultsPanel {
     // Buttons (children of the panel so they ride its entrance)
     const by = py + panelH - 58;
     const retry = new Button(s, { x: px + PAD + 130, y: by, width: 260, height: 58, label: 'RETRY', hint: 'R', variant: 'secondary', audio: this.audio, onClick: () => this.cb?.onRetry() });
-    const cont = new Button(s, { x: px + PANEL_W - PAD - 170, y: by, width: 340, height: 58, label: 'CONTINUE', hint: 'ENTER', variant: 'primary', audio: this.audio, onClick: () => this.cb?.onContinue() });
+    const cont = new Button(s, { x: px + PANEL_W - PAD - 170, y: by, width: 340, height: 58, label: this.info.continueLabel ?? 'CONTINUE', hint: 'ENTER', variant: 'primary', audio: this.audio, onClick: () => this.cb?.onContinue() });
     c.add(retry.container);
     c.add(cont.container);
     this.buttons.push(retry, cont);

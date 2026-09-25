@@ -96,6 +96,9 @@ export class DebugMenu {
   private shown = { tool: '' as string, mat: '' as string, gravity: NaN, mass: NaN, seed: NaN };
   private closedSections = new Set<string>();
   private destroyed = false;
+  private setupPhase = true;
+  /** Window capture listener that blurs the seed field on clicks outside the panel. */
+  private offOutside: (() => void) | null = null;
 
   constructor(readonly api: DebugApi) {
     if (typeof document === 'undefined') return;
@@ -107,6 +110,11 @@ export class DebugMenu {
     }
     this.build();
     if (rememberedVisible) this.setVisible(true);
+    // Visibility set while the owning scene is still being created (sandbox forces the
+    // panel open) is setup, not the player's choice: don't carry it into later runs.
+    queueMicrotask(() => {
+      this.setupPhase = false;
+    });
   }
 
   toggle(): void {
@@ -116,7 +124,7 @@ export class DebugMenu {
   setVisible(v: boolean): void {
     const changed = v !== this.visible;
     this.visible = v;
-    rememberedVisible = v;
+    if (!this.setupPhase) rememberedVisible = v;
     if (!this.root) return;
     this.root.classList.toggle('tdbg-hidden', !v);
     if (v) {
@@ -189,6 +197,8 @@ export class DebugMenu {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.offOutside?.();
+    this.offOutside = null;
     if (this.root) {
       if (document.activeElement instanceof HTMLElement && this.root.contains(document.activeElement)) document.activeElement.blur();
       unmountFromDock(this.root);
@@ -223,9 +233,12 @@ export class DebugMenu {
     this.seedInput.placeholder = 'seed / text';
     this.seedInput.title = 'Base-36 seed (as shown in the level subtitle) or any text';
     this.button(row, 'Load', () => this.loadSeedFromInput());
-    row = h('div', 'tdbg-row', b);
-    this.button(row, 'Skip level ›', () => api.skipLevel(), 'tdbg-flex');
-    this.button(row, '+$1000', () => api.addMoney(1000), 'tdbg-flex');
+    // Campaign cheats write to the real save: dev builds only (the sandbox is player-facing).
+    if (import.meta.env.DEV) {
+      row = h('div', 'tdbg-row', b);
+      this.button(row, 'Skip level ›', () => api.skipLevel(), 'tdbg-flex');
+      this.button(row, '+$1000', () => api.addMoney(1000), 'tdbg-flex');
+    }
 
     // ---- Time
     b = this.section(root, 'time', 'TIME');
@@ -437,5 +450,12 @@ export class DebugMenu {
     };
     root.addEventListener('keydown', onKey);
     root.addEventListener('keyup', onKey);
+    // Phaser prevents the default of mousedown on the canvas, so clicking the game does
+    // not blur the seed field by itself; without this the game's keys keep typing into it.
+    const onOutside = (e: Event): void => {
+      if (document.activeElement === this.seedInput && !(e.target instanceof Node && root.contains(e.target))) this.seedInput.blur();
+    };
+    window.addEventListener('pointerdown', onOutside, true);
+    this.offOutside = () => window.removeEventListener('pointerdown', onOutside, true);
   }
 }

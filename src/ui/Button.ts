@@ -8,6 +8,7 @@
 import * as Phaser from 'phaser';
 import { THEME, SIZE, css } from './theme';
 import { mono, onUiFonts } from './text';
+import { onceEach } from './keys';
 import type { AudioManager } from '../audio/AudioManager';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
@@ -53,7 +54,8 @@ export class Button {
   private hover = false;
   private pressed = false;
   private offFonts: () => void = () => {};
-  private readonly onKey = (e: KeyboardEvent): void => this.handleKey(e);
+  // Phaser can deliver the same keydown more than once per frame (see keys.ts).
+  private readonly onKey = onceEach((e: KeyboardEvent): void => this.handleKey(e));
 
   constructor(
     readonly scene: Phaser.Scene,

@@ -18,6 +18,7 @@ import { SYNTH_PRIORITY, renderSound } from './recipes';
 
 export type SoundId =
   | 'cannon'
+  | 'gunshot'
   | 'reload'
   | 'impact_wood'
   | 'impact_stone'

@@ -2,12 +2,12 @@
  * Turns owned upgrade levels into weapon stats / unlocks. OWNER: meta agent.
  *
  * Stateless: every query takes the owned levels (usually `gameState().upgrades`).
- * Stats = BASE_WEAPON_STATS with each owned def's `apply` run once, in catalogue
+ * Stats = base weapon stats (machine gun unless given) with each owned def's `apply` run once, in catalogue
  * order. Levels read from a save are clamped to the catalogue's `maxLevel`, and
  * unknown ids are ignored, so old saves survive catalogue changes.
  */
 import { UPGRADES, type UpgradeDef } from '../data/upgrades';
-import { BASE_WEAPON_STATS, type WeaponStats } from '../sim/weapons/Weapon';
+import { BASE_MG_STATS, type WeaponStats } from '../sim/weapons/Weapon';
 import { AMMO } from '../data/ammo';
 
 export type OwnedUpgrades = Record<string, number>;
@@ -53,8 +53,9 @@ export class UpgradeSystem {
     return Math.max(0, Math.min(d.maxLevel, Math.floor(raw)));
   }
 
-  weaponStats(owned: OwnedUpgrades): WeaponStats {
-    const s: WeaponStats = { ...BASE_WEAPON_STATS };
+  /** Stats for the given base weapon (the machine gun by default; demolition mode passes the cannon). */
+  weaponStats(owned: OwnedUpgrades, base: Readonly<WeaponStats> = BASE_MG_STATS): WeaponStats {
+    const s: WeaponStats = { ...base };
     for (const d of this.defs) {
       const lvl = this.level(d.id, owned);
       if (lvl > 0 && d.apply) d.apply(s, lvl);
@@ -152,7 +153,7 @@ export class UpgradeSystem {
 
     if (d.view) {
       const v = d.view;
-      const fmt = (o: OwnedUpgrades): string => (this.weaponStats(o)[v.stat] * (v.scale ?? 1)).toFixed(v.digits);
+      const fmt = (o: OwnedUpgrades): string => (Number(this.weaponStats(o)[v.stat] ?? 0) * (v.scale ?? 1)).toFixed(v.digits);
       const a = fmt(owned);
       const b = fmt(next);
       return make(v.label, a, b, v.unit, maxed);

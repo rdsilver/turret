@@ -80,6 +80,7 @@ export class LevelSession {
       ammoCost: this.ammoCost,
       time: this.elapsed,
       destroyedFraction: s ? Math.min(1, s.fallenFraction) : 0,
+      belowLineFraction: s && s.lineMass > 0 ? Math.min(1, s.belowLineFraction) : undefined,
       chainJoints: chain?.joints ?? 0,
       chainParts: chain?.parts ?? 0,
       chainMass: chain?.mass ?? 0,

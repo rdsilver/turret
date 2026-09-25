@@ -11,7 +11,7 @@
 import type * as Phaser from 'phaser';
 import type { SimPhase } from '../sim/Simulation';
 import { THEME, SIZE } from './theme';
-import { display, mono, onUiFonts, setColorIfChanged, setTextIfChanged } from './text';
+import { display, fitText, mono, onUiFonts, setColorIfChanged, setTextIfChanged } from './text';
 import { money, pad2 } from './format';
 import { AMMO } from '../data/ammo';
 import { UpgradeSystem } from '../game/UpgradeSystem';
@@ -46,6 +46,11 @@ export interface HudState {
   sandbox: boolean;
   /** Optional: current ammo id (otherwise matched by name). */
   ammoId?: string;
+  /** Automatic weapons: barrel heat 0..1 (replaces the reload bar). */
+  heat?: number;
+  overheated?: boolean;
+  /** Assault levels: creatures stopped / total and the nearest one's distance to the line (m). */
+  assault?: { stopped: number; total: number; closest: number; field: number };
 }
 
 type Text = Phaser.GameObjects.Text;
@@ -55,6 +60,8 @@ const M = 48;
 const POWER_SEGS = 14;
 const POWER_MIN = 0.35;
 const MAX_AMMO_PIPS = 4;
+/** Level name width limit (same column as the subtitle / objective text). */
+const NAME_MAX_W = 560;
 
 const easeOutCubic = (t: number): number => 1 - (1 - t) * (1 - t) * (1 - t);
 const easeOutBack = (t: number): number => {
@@ -114,6 +121,7 @@ export class Hud {
   private readonly reloadFill: Rect;
   private readonly reloadText: Text;
   private readonly reloadW = 150;
+  private reloadLabel!: Text;
   private readonly powerSegs: Rect[] = [];
   private readonly powerText: Text;
   private readonly scanKey: Phaser.GameObjects.Graphics;
@@ -213,7 +221,7 @@ export class Hud {
 
     // RELOAD
     const rx = M + 352;
-    add(mono(scene, rx, sy, 'RELOAD', SIZE.micro, THEME.textFaint, { weight: 600, spacing: 1, originY: 0.5 }));
+    this.reloadLabel = add(mono(scene, rx, sy, 'RELOAD', SIZE.micro, THEME.textFaint, { weight: 600, spacing: 1, originY: 0.5 }));
     add(scene.add.rectangle(rx, vy, this.reloadW, 6, THEME.panelEdge).setOrigin(0, 0.5));
     this.reloadFill = add(scene.add.rectangle(rx, vy, this.reloadW, 6, THEME.goodNum).setOrigin(0, 0.5));
     this.reloadText = add(mono(scene, rx + this.reloadW + 12, vy, 'READY', SIZE.xs, THEME.good, { weight: 600, originY: 0.5 }));
@@ -221,7 +229,7 @@ export class Hud {
     // POWER
     const px = M + 612;
     add(mono(scene, px, sy, 'POWER', SIZE.micro, THEME.textFaint, { weight: 600, spacing: 1, originY: 0.5 }));
-    add(mono(scene, px + 196, sy, 'WHEEL · W/S', SIZE.micro - 2, THEME.textFaint, { originX: 1, originY: 0.5 }));
+    add(mono(scene, px + 196, sy, 'WHEEL · ↑/↓', SIZE.micro - 2, THEME.textFaint, { originX: 1, originY: 0.5 }));
     for (let i = 0; i < POWER_SEGS; i++) {
       const seg = add(scene.add.rectangle(px + i * 14, vy, 10, 14, THEME.panelEdge).setOrigin(0, 0.5));
       this.powerSegs.push(seg);
@@ -278,6 +286,13 @@ export class Hud {
     this.progFill.scaleX = 0;
     this.introT = 0;
     this.hint('');
+    // A reload mid-collapse must not leave "STRUCTURE COLLAPSED" / "CHAIN ×N" over the fresh structure.
+    this.bannerT = -1;
+    this.setBannerVisible(false);
+    for (const p of this.popups) {
+      p.active = false;
+      p.text.setVisible(false);
+    }
     // Unlocked ammo (for the loadout pips). Cheap: runs once per level load.
     try {
       this.ammoIds = new UpgradeSystem().unlockedAmmo(gameState().upgrades).filter((id) => !!AMMO[id]);
@@ -306,8 +321,32 @@ export class Hud {
       this.levelRule.scaleX = k;
     }
 
+    // Assault levels: stopped count + threat bar instead of shots/par + objective.
+    const as = state.assault;
+    if (as) {
+      const key = as.stopped * 1000 + as.total;
+      if (key !== L.shots) {
+        L.shots = key;
+        setTextIfChanged(this.shotsText, `STOPPED ${as.stopped} / ${as.total}`);
+        setColorIfChanged(this.shotsText, as.stopped >= as.total ? THEME.good : THEME.text);
+        if (as.stopped > 0) this.pulse(this.shotsText);
+      }
+      const threat = Number.isFinite(as.closest) ? clamp01(1 - as.closest / Math.max(1, as.field)) : 0;
+      this.progShown += (threat - this.progShown) * Math.min(1, dt * 6);
+      this.progFill.scaleX = this.progShown;
+      this.progFill.fillColor = threat > 0.7 ? THEME.badNum : THEME.accentNum;
+      const m = Number.isFinite(as.closest) ? Math.max(0, Math.round(as.closest)) : -1;
+      if (m !== L.pct) {
+        L.pct = m;
+        this.progPct.setText(m >= 0 ? `${m} m` : '—');
+        setColorIfChanged(this.progPct, threat > 0.7 ? THEME.bad : THEME.text);
+      }
+      setTextIfChanged(this.progLabel, 'THREAT');
+      setColorIfChanged(this.progLabel, threat > 0.7 ? THEME.bad : THEME.textDim);
+    }
+
     // Shots vs par
-    if (state.shots !== L.shots || state.par !== L.par || state.sandbox !== L.sandbox) {
+    if (!as && (state.shots !== L.shots || state.par !== L.par || state.sandbox !== L.sandbox)) {
       L.shots = state.shots;
       L.par = state.par;
       L.sandbox = state.sandbox;
@@ -318,7 +357,7 @@ export class Hud {
     }
 
     // Objective progress (smoothed)
-    const target = clamp01(state.progress);
+    const target = as ? this.progShown : clamp01(state.progress);
     const d = target - this.progShown;
     if (Math.abs(d) > 0.0005) {
       this.progShown += d * Math.min(1, dt * 8);
@@ -326,14 +365,14 @@ export class Hud {
       this.progFill.scaleX = this.progShown;
     }
     const pct = Math.floor(this.progShown * 100 + 0.0001);
-    if (pct !== L.pct) {
+    if (!as && pct !== L.pct) {
       L.pct = pct;
       this.progPct.setText(`${pct}%`);
       const done = pct >= 100;
       this.progFill.fillColor = done ? THEME.goodNum : THEME.accentNum;
       setColorIfChanged(this.progPct, done ? THEME.good : THEME.text);
     }
-    if (state.phase !== L.phase) {
+    if (!as && state.phase !== L.phase) {
       L.phase = state.phase;
       const label = state.phase === 'collapsing' ? 'COLLAPSING' : state.phase === 'settled' ? 'SETTLED' : 'OBJECTIVE';
       setTextIfChanged(this.progLabel, label);
@@ -392,8 +431,27 @@ export class Hud {
       if (sel >= 0) this.ammoPipRing.x = pipX + sel * 20;
     }
 
+    // Barrel heat (automatic weapons)
+    if (state.heat !== undefined) {
+      const h = clamp01(state.heat);
+      if (Math.abs(this.reloadFill.scaleX - h) > 0.002) this.reloadFill.scaleX = h;
+      const mode = state.overheated ? 2 : h > 0.7 ? 1 : 0;
+      if (mode + 10 !== L.reloadReady) {
+        L.reloadReady = mode + 10;
+        setTextIfChanged(this.reloadLabel, 'BARREL HEAT');
+        this.reloadText.setText(mode === 2 ? 'OVERHEATED' : mode === 1 ? 'HOT' : 'COOL');
+        setColorIfChanged(this.reloadText, mode === 2 ? THEME.bad : mode === 1 ? THEME.accent : THEME.good);
+        this.reloadFill.fillColor = mode === 2 ? THEME.badNum : mode === 1 ? THEME.accentNum : THEME.goodNum;
+      }
+      if (state.overheated) this.reloadText.alpha = 0.55 + 0.45 * Math.sin(this.scene.time.now * 0.02);
+      else if (this.reloadText.alpha !== 1) this.reloadText.alpha = 1;
+    }
+
     // Reload
     const r = clamp01(state.reload);
+    if (state.heat !== undefined) {
+      // (heat bar shown instead)
+    } else {
     if (Math.abs(this.reloadFill.scaleX - r) > 0.002) this.reloadFill.scaleX = r;
     const ready = r >= 0.999 ? 1 : 0;
     if (ready !== L.reloadReady) {
@@ -401,6 +459,7 @@ export class Hud {
       this.reloadText.setText(ready ? 'READY' : 'LOADING');
       setColorIfChanged(this.reloadText, ready ? THEME.good : THEME.textDim);
       this.reloadFill.fillColor = ready ? THEME.goodNum : THEME.textDimNum;
+    }
     }
 
     // Power
@@ -510,6 +569,8 @@ export class Hud {
 
   /** Stack the top-left block (name, subtitle, rule, objective) by measured heights. */
   private layoutLevel(): void {
+    // Long (procedural) names must not run into the top-centre OBJECTIVE bar.
+    fitText(this.levelName, NAME_MAX_W, SIZE.xl + 4, SIZE.lg);
     let y = 64 + this.levelName.height + 2;
     this.levelSub.y = y;
     y += this.levelSub.height + 14;

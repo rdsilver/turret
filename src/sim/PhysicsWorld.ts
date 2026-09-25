@@ -558,7 +558,10 @@ export class PhysicsWorld {
     if (j.b) j.b.wear = Math.max(j.b.wear, Math.min(1, j.damage));
     const s = j.a.structure;
     // Tethers are invisible slack safety cables on loose props: their failure is not an event.
-    const silent = cause === 'removed' || j.tags.includes('tether');
+    const tether = j.tags.includes('tether');
+    const silent = cause === 'removed' || tether;
+    // Still counted, so validation can tell a prop that slipped off while pre-settling.
+    if (tether && cause !== 'removed' && s) s.tetherBreaks++;
     if (!silent) {
       if (s) s.jointsBroken++;
       this.events.emit('jointBroken', {

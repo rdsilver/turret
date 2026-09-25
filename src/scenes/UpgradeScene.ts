@@ -14,10 +14,12 @@
  * the mouse wheel when a branch is taller than the screen.
  */
 import * as Phaser from 'phaser';
+import { ASSAULT_LEVELS } from '../data/assault/levels';
 import { THEME, SIZE, GRADE_COLOR, css } from '../ui/theme';
 import { display, loadUiFonts, mono, onUiFonts, setColorIfChanged, setTextIfChanged } from '../ui/text';
 import { money, pad2 } from '../ui/format';
 import { Button } from '../ui/Button';
+import { onceEach } from '../ui/keys';
 import { LabBackdrop } from '../ui/LabBackdrop';
 import { AudioManager } from '../audio/AudioManager';
 import { gameState } from '../game/GameState';
@@ -93,11 +95,21 @@ export class UpgradeScene extends Phaser.Scene {
   private moneyT = 1;
   private specTexts: Array<{ key: string; label: Text; value: Text; last: string; flash: number }> = [];
   private ammoDesc!: Text;
+  private investedText: Text | null = null;
+  /** Bottom edge of the SERVICE RECORD table (the NEXT DEPLOYMENT panel stays below it). */
+  private recordBottom = 0;
   private leaving = false;
   private offFonts: () => void = () => {};
 
   constructor() {
     super('Upgrade');
+  }
+
+  /** Which campaign the workshop deploys back into. */
+  private mode: 'assault' | 'campaign' = 'assault';
+
+  init(data: { mode?: 'assault' | 'campaign' }): void {
+    this.mode = data?.mode ?? 'assault';
   }
 
   create(): void {
@@ -107,6 +119,7 @@ export class UpgradeScene extends Phaser.Scene {
     this.ammoRows = [];
     this.buttons = [];
     this.specTexts = [];
+    this.investedText = null;
     this.leaving = false;
     this.scrollY = this.scrollTarget = 0;
     this.moneyT = 1;
@@ -150,7 +163,8 @@ export class UpgradeScene extends Phaser.Scene {
 
     // Keyboard
     const kb = this.input.keyboard;
-    kb?.on('keydown', (e: KeyboardEvent) => {
+    // onceEach: Phaser can deliver the same keydown more than once per frame (see ui/keys.ts).
+    kb?.on('keydown', onceEach((e: KeyboardEvent) => {
       if (e.repeat) return;
       if (e.code.startsWith('Digit')) {
         const row = this.ammoRows[Number(e.code.slice(5)) - 1];
@@ -160,7 +174,7 @@ export class UpgradeScene extends Phaser.Scene {
       } else if (e.code === 'ArrowUp' || e.code === 'PageUp') {
         this.scrollTarget = Phaser.Math.Clamp(this.scrollTarget - 240, 0, Math.max(0, this.contentH - CAT.h));
       }
-    });
+    }));
 
     this.refreshAll();
     this.isolateCatalogue();
@@ -447,11 +461,11 @@ export class UpgradeScene extends Phaser.Scene {
 
   private buildSpecStrip(x: number, y: number): void {
     const items: Array<[string, string]> = [
-      ['muzzle', 'MUZZLE'],
-      ['mass', 'SHELL'],
-      ['reload', 'RELOAD'],
+      ['rate', 'FIRE RATE'],
+      ['damage', 'DAMAGE'],
       ['spread', 'SPREAD'],
-      ['impact', 'IMPACT'],
+      ['cooling', 'COOLING'],
+      ['muzzle', 'MUZZLE'],
       ['scans', 'SCANS'],
     ];
     let cx = x;
@@ -474,6 +488,9 @@ export class UpgradeScene extends Phaser.Scene {
       return;
     }
     const val: Record<string, string> = {
+      rate: `${(1 / Math.max(0.01, stats.reloadTime)).toFixed(1)}/s`,
+      damage: `${(stats.damage ?? 1).toFixed(2)}`,
+      cooling: `${(stats.coolRate ?? 0).toFixed(2)}/s`,
       muzzle: `${stats.muzzleVelocity.toFixed(1)} m/s`,
       mass: `${Math.round(stats.projectileMass)} kg`,
       reload: `${stats.reloadTime.toFixed(2)} s`,
@@ -532,21 +549,22 @@ export class UpgradeScene extends Phaser.Scene {
     const w = SIDE.w;
     mono(this, x, y, 'SERVICE RECORD', SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
     this.add.rectangle(x, y + 18, w, 1, THEME.rule).setOrigin(0, 0.5);
-    const done = Object.values(gs.records).filter((r) => r?.completed).length;
-    let invested = 0;
-    for (const d of this.upg.defs) for (let i = 0; i < (gs.upgrades[d.id] ?? 0); i++) invested += d.costs[i] ?? 0;
+    // Campaign contracts only (endless / seed wins are stored as proc-<seed> records).
+    const done = levelManager.levels.filter((l) => gs.records[l.id]?.completed).length;
     const rows: Array<[string, string]> = [
       ['Contracts completed', `${done} / ${levelManager.count}`],
       ['Total earned', money(gs.totalEarned)],
-      ['Invested in workshop', money(invested)],
+      ['Invested in workshop', money(this.upg.invested(gs.upgrades))],
       ['Shots fired', String(gs.totalShots)],
       ['Joints broken', String(gs.totalJointsBroken)],
     ];
     rows.forEach(([k, v], i) => {
       const ry = y + 42 + i * 26;
       mono(this, x, ry, k, SIZE.micro, THEME.textFaint, { originY: 0.5 });
-      mono(this, x + w, ry, v, SIZE.xs, THEME.text, { weight: 600, originX: 1, originY: 0.5 });
+      const t = mono(this, x + w, ry, v, SIZE.xs, THEME.text, { weight: 600, originX: 1, originY: 0.5 });
+      if (k === 'Invested in workshop') this.investedText = t;
     });
+    this.recordBottom = y + 42 + (rows.length - 1) * 26 + 12;
   }
 
   private refreshAmmo(): void {
@@ -591,7 +609,17 @@ export class UpgradeScene extends Phaser.Scene {
     let body: string;
     let stats: string;
     let best: { grade: string } | null = null;
-    if (!done) {
+    if (this.mode === 'assault') {
+      const total = ASSAULT_LEVELS.length;
+      const i = Math.min(gs.assaultIndex, total - 1);
+      const lvl = ASSAULT_LEVELS[i]!;
+      tagRight = gs.assaultIndex >= total ? `ALL ${pad2(total)} CLEARED` : `LEVEL ${pad2(i + 1)} / ${pad2(total)}`;
+      title = lvl.name;
+      body = lvl.subtitle;
+      stats = `${lvl.waves.length} CREATURE${lvl.waves.length > 1 ? 'S' : ''}  ·  CONTRACT ${money(lvl.reward)}`;
+      const rec = gs.records[lvl.id];
+      if (rec?.completed) best = { grade: rec.bestGrade };
+    } else if (!done) {
       const lvl = levelManager.get(gs.levelIndex);
       tagRight = `LEVEL ${pad2(gs.levelIndex + 1)} / ${pad2(levelManager.count)}`;
       title = lvl.name;
@@ -603,7 +631,7 @@ export class UpgradeScene extends Phaser.Scene {
       const k = gs.levelIndex - levelManager.count;
       tagRight = `ENDLESS · ${pad2(k + 1)}`;
       title = 'Campaign complete';
-      body = 'Campaign complete — endless seeded structures. Every deployment is a new procedural build, a little harder than the last.';
+      body = 'Next: endless seeded structures.';
       stats = `STRUCTURE ${pad2(k + 1)}  ·  DIFFICULTY ${Math.round(Math.min(1, 0.55 + k * 0.05) * 100)}%`;
     }
     const head = mono(this, x + 20, 0, 'NEXT DEPLOYMENT', SIZE.micro, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
@@ -613,6 +641,12 @@ export class UpgradeScene extends Phaser.Scene {
     const st = mono(this, x + 20, 0, stats, SIZE.xs, THEME.text, { weight: 600, originY: 0.5 });
     const bestT = best ? mono(this, x + w - 20, 0, `BEST ${best.grade}`, SIZE.xs, css(GRADE_COLOR[best.grade] ?? THEME.textNum), { weight: 700, originX: 1, originY: 0.5 }) : null;
     const layout = (): void => {
+      // The panel grows up from the DEPLOY row: cut the body short rather than cover the service record.
+      const room = by - 32 - 22 - (this.recordBottom + 16);
+      sub.setText(body);
+      for (let lines = sub.getWrappedText(body).length - 1; lines >= 1 && 50 + name.height + 8 + sub.height + 50 > room; lines--) {
+        setEllipsized(sub, body, lines);
+      }
       const h = 50 + name.height + 8 + sub.height + 50;
       const y = by - 32 - 22 - h;
       head.y = y + 29;
@@ -658,6 +692,7 @@ export class UpgradeScene extends Phaser.Scene {
     for (const c of this.cards) this.refreshCard(c);
     this.refreshAmmo();
     this.refreshSpec();
+    if (this.investedText) setTextIfChanged(this.investedText, money(this.upg.invested(gameState().upgrades)));
   }
 
   /** The catalogue camera draws only the catalogue container. */
@@ -671,7 +706,7 @@ export class UpgradeScene extends Phaser.Scene {
     gameState().save();
     for (const c of this.cameras.cameras) c.fadeOut(220, 13, 15, 18);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      if (target === 'Game') this.scene.start('Game', { mode: 'campaign' });
+      if (target === 'Game') this.scene.start('Game', { mode: this.mode });
       else this.scene.start('Menu');
     });
   }

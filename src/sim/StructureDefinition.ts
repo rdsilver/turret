@@ -40,9 +40,28 @@ export interface PartDef {
   densityScale?: number;
   friction?: number;
   restitution?: number;
+  /** Multiplier on weapon-damage hit points (armoured organs, fragile weak spots). */
+  hpScale?: number;
 }
 
-export type JointKind = 'weld' | 'hinge' | 'cable';
+export type JointKind = 'weld' | 'hinge' | 'cable' | 'muscle';
+
+/**
+ * A powered joint (creatures). 'servo' drives the relative angle toward a
+ * target set every step by a controller (legs, arms); 'spin' drives angular
+ * velocity (wheels, rotors). Torque is capped: an overpowered muscle gives
+ * way, and bending far past its anatomical range snaps it.
+ */
+export interface MuscleDef {
+  /** Max torque at full power and health (N*m). */
+  torque: number;
+  mode?: 'servo' | 'spin';
+  /** Servo stiffness as a natural frequency (rad/s); lower = softer, more organic. Default 30. */
+  omega?: number;
+  /** Anatomical range relative to the rest pose (degrees). Default +-120. */
+  min?: number;
+  max?: number;
+}
 
 /** Reference to a part: its index in `parts`, its `id`, or the ground. */
 export type PartRef = number | string;
@@ -50,6 +69,10 @@ export const GROUND = 'ground' as const;
 
 export interface JointDef {
   kind: JointKind;
+  /** Optional name (creature controllers address muscles by name). */
+  id?: string;
+  /** Muscle parameters (kind 'muscle' only). */
+  muscle?: MuscleDef;
   a: PartRef;
   b: PartRef | typeof GROUND;
   /** Anchor point for weld/hinge (definition space). Defaults to the midpoint of both centers. */

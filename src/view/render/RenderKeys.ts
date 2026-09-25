@@ -1,7 +1,7 @@
 /**
- * Frame names private to the render modules. Everything except `hatch` is a
+ * Frame names private to the render modules. Everything except `hatch`/`grid` is a
  * FRAME in the shared misc atlas (render/MiscAtlas.ts) — look them up with
- * miscFrame(). `hatch` is a standalone texture key (TileSprite).
+ * miscFrame(). `hatch` and `grid` are standalone texture keys (TileSprites).
  * Drawn at TEXTURE_RES texels per world pixel unless noted.
  */
 export const RK = {
@@ -19,6 +19,8 @@ export const RK = {
   pdot: 'rk_pdot',
   /** Ground hatch tile (1x), 24x24. */
   hatch: 'rk_hatch',
+  /** Background measurement grid tile (1x), 5 m square. Standalone key, created by BackgroundRenderer. */
+  grid: 'rk_grid',
   /** Turret pedestal / mount (static art). */
   turretBase: 'rk_turret_base',
   /** Turret barrel, pointing +x, origin at the pivot. */

@@ -7,6 +7,7 @@
  * Start the game with: this.scene.start('Game', { mode: 'campaign' | 'sandbox' | 'seed', seed? }).
  */
 import * as Phaser from 'phaser';
+import { ASSAULT_LEVELS } from '../data/assault/levels';
 import { THEME, SIZE } from '../ui/theme';
 import { display, loadUiFonts, mono, onUiFonts, setTextIfChanged } from '../ui/text';
 import { money, pad2, todayKey } from '../ui/format';
@@ -36,7 +37,7 @@ export function dailySeed(d: Date = new Date()): number {
 const LEGEND: Array<[string, string]> = [
   ['MOUSE', 'aim'],
   ['CLICK', 'fire'],
-  ['WHEEL · W/S', 'power'],
+  ['WHEEL · ↑/↓', 'power'],
   ['S', 'stress scan'],
   ['Q/E', 'ammo'],
   ['R', 'restart'],
@@ -56,6 +57,8 @@ export class MenuScene extends Phaser.Scene {
   private statAcc = 0;
   private leaving = false;
   private confirmReset = 0;
+  /** Scene time when the NEW GAME confirm was armed. */
+  private confirmArmedAt = 0;
   private newGameBtn!: Button;
   private readonly vstats = { joints: 0, intact: 0, time: 0, name: '' };
 
@@ -79,7 +82,7 @@ export class MenuScene extends Phaser.Scene {
     this.add.rectangle(X, 166, 10, 10, THEME.accentNum).setOrigin(0, 0.5);
     mono(this, X + 22, 166, 'STRUCTURAL DEMOLITION LABORATORY', SIZE.xs, THEME.textDim, { weight: 600, spacing: 4, originY: 0.5 });
     display(this, X - 8, 186, 'TURRET', SIZE.hero, THEME.text, { spacing: 10 });
-    mono(this, X, 392, 'Structural analysis, applied at high velocity.', SIZE.lg - 4, THEME.textDim);
+    mono(this, X, 392, 'Stop them before they reach the line.', SIZE.lg - 4, THEME.textDim);
     this.add.rectangle(X, 446, 600, 1, THEME.rule).setOrigin(0, 0.5);
     this.add.rectangle(X, 446, 60, 3, THEME.accentNum).setOrigin(0, 0.5);
 
@@ -100,8 +103,16 @@ export class MenuScene extends Phaser.Scene {
       by += step;
       return b;
     };
-    mk(started ? 'CONTINUE' : 'PLAY', playSub, 'ENTER', ['Enter', 'NumpadEnter', 'Space'], () => this.go({ mode: 'campaign' }), 'primary');
-    this.newGameBtn = mk('NEW GAME', started || gs.money > 0 ? 'ERASES CAMPAIGN PROGRESS' : 'START THE CAMPAIGN FROM LEVEL 01', 'N', ['KeyN'], () => this.newGame());
+    // Creature campaign (main game).
+    const aTotal = ASSAULT_LEVELS.length;
+    const aStarted = gs.assaultIndex > 0;
+    const aSub =
+      gs.assaultIndex >= aTotal
+        ? `CREATURES · ALL ${pad2(aTotal)} CLEARED · REPLAY THE LAST`
+        : `CREATURES · LEVEL ${pad2(gs.assaultIndex + 1)} / ${pad2(aTotal)}${gs.money > 0 ? ` · ${money(gs.money)}` : ''}`;
+    mk(aStarted ? 'CONTINUE' : 'PLAY', aSub, 'ENTER', ['Enter', 'NumpadEnter', 'Space'], () => this.go({ mode: 'assault' }), 'primary');
+    mk('DEMOLITION', playSub, 'M', ['KeyM'], () => this.go({ mode: 'campaign' }));
+    this.newGameBtn = mk('NEW GAME', aStarted || started || gs.money > 0 ? 'ERASES ALL PROGRESS' : 'START FRESH', 'N', ['KeyN'], () => this.newGame());
     mk('SANDBOX', 'TESTBED · SPAWN, GRAB, BREAK · DEBUG TOOLS', 'B', ['KeyB'], () => this.go({ mode: 'sandbox' }));
     const daily = dailySeed();
     mk('DAILY SEED', `${todayKey()} · STRUCTURE ${daily.toString(36).toUpperCase()}`, 'D', ['KeyD'], () => this.go({ mode: 'seed', seed: daily }));
@@ -175,7 +186,7 @@ export class MenuScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ actions
 
-  private go(data: { mode: 'campaign' | 'sandbox' | 'seed'; seed?: number }): void {
+  private go(data: { mode: 'campaign' | 'sandbox' | 'seed' | 'assault'; seed?: number }): void {
     if (this.leaving) return;
     this.leaving = true;
     const cams = this.cameras.cameras;
@@ -188,16 +199,19 @@ export class MenuScene extends Phaser.Scene {
     const hasProgress = gs.levelIndex > 0 || gs.money > 0 || Object.keys(gs.upgrades).length > 0;
     if (hasProgress && this.confirmReset <= 0) {
       this.confirmReset = 3;
+      this.confirmArmedAt = this.time.now;
       this.newGameBtn.setLabel('CONFIRM: ERASE PROGRESS?').setSub('PRESS AGAIN WITHIN 3 S · ESC TO CANCEL');
       return;
     }
+    // The confirming press must be a separate, deliberate one (not the same frame).
+    if (hasProgress && this.time.now - this.confirmArmedAt < 200) return;
     resetGameState();
     this.go({ mode: 'campaign' });
   }
 
   private cancelConfirm(): void {
     this.confirmReset = 0;
-    this.newGameBtn?.setLabel('NEW GAME').setSub('ERASES CAMPAIGN PROGRESS');
+    this.newGameBtn?.setLabel('NEW GAME').setSub('ERASES ALL PROGRESS');
   }
 
   private promptSeed(): void {

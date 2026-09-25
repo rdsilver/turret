@@ -23,6 +23,8 @@ export class Projectile extends Entity {
   readonly data: Record<string, number> = {};
   /** Extra impulse multiplier applied on the first hit (weapon stat). */
   impactMultiplier = 1;
+  /** Damage points (small arms); read by the 'damage' behaviour. */
+  damage = 1;
 
   get speed(): number {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);

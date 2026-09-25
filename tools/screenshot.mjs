@@ -4,6 +4,9 @@
 //        [--wait 2500] [--fire "x,y[,arc]"] [--frames 6 --interval 400] [--eval "js"]
 // --fire aims (sim meters, y down => use negative heights) and fires via window.__turret.debugFireAt.
 // With --frames N it captures N screenshots (out-0.png ...) every --interval ms after firing.
+// A page reload after the first load (e.g. a Vite full reload because someone edited a file)
+// invalidates the run: it is reported and the tool exits with code 2. For long sessions on a
+// shared checkout prefer `vite preview` of a build or a dev server with server.hmr=false.
 import { chromium } from 'playwright';
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
 const url = arg('url', 'http://localhost:5173/?play=1');
@@ -19,7 +22,20 @@ const errors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(`[${m.type()}]`, m.text()); });
 page.on('pageerror', (e) => { errors.push(e.message); console.log('[pageerror]', e.message); });
 await page.goto(url);
+let reloaded = false;
+page.on('framenavigated', (f) => {
+  if (f !== page.mainFrame()) return;
+  reloaded = true;
+  console.log('[navigated] the page reloaded during the run (Vite HMR full reload?):', f.url());
+});
+const bail = async () => {
+  if (!reloaded) return;
+  console.log('ABORTED: page reloaded mid-run; screenshots/state would be from a fresh page.');
+  await browser.close();
+  process.exit(2);
+};
 await page.waitForTimeout(wait);
+await bail();
 if (evalJs) console.log('eval =>', JSON.stringify(await page.evaluate(evalJs)));
 if (fire) {
   const [x, y, arc] = fire.split(',').map(Number);
@@ -28,6 +44,7 @@ if (fire) {
 }
 for (let i = 0; i < frames; i++) {
   if (i > 0 || fire) await page.waitForTimeout(interval);
+  await bail();
   const path = frames > 1 ? out.replace(/\.png$/, `-${i}.png`) : out;
   await page.screenshot({ path });
   console.log('saved', path);

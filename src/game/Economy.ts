@@ -5,7 +5,8 @@
  * Every line scales with the level's `reward` (R) so the balance holds from
  * level 1 to endless mode; only ammunition is an absolute cost.
  *
- *   Demolition      R x destroyed fraction (floor 60%: the objective was met)
+ *   Demolition      R x destroyed fraction (whole structure, or the share brought
+ *                   below the destruction line if larger; floor 60%: objective met)
  *   Efficiency      0.9R at/under par (+0.15R per shot under par), halving
  *                   for every over-par shot (relative to par)
  *   One-shot        +0.4R when the first shot did it
@@ -30,6 +31,13 @@ export interface LevelOutcome {
   time: number;
   /** 0..1 of structure mass that fell. */
   destroyedFraction: number;
+  /**
+   * 0..1 of the mass that started above the destruction line that is now below
+   * it (levels with a line objective). The Demolition line and the grade use the
+   * larger of this and `destroyedFraction`, so a level whose base is meant to
+   * survive (level 5's ziggurat) is judged on what the objective asks for.
+   */
+  belowLineFraction?: number;
   /** Largest chain reaction. */
   chainJoints: number;
   chainParts: number;
@@ -135,7 +143,10 @@ export function scoreLevel(o: LevelOutcome): LevelResult {
   const R = Math.max(1, o.level.reward);
   const par = Math.max(1, Math.round(o.level.par));
   const shots = Math.max(0, o.shots);
-  const f = clamp01(o.destroyedFraction);
+  // Whole structure (salvage tonnage, TOTAL DEMOLITION) vs. as the objective measures it (payout, grade).
+  const fAll = clamp01(o.destroyedFraction);
+  const fLine = clamp01(o.belowLineFraction ?? 0);
+  const f = Math.max(fAll, fLine);
   const lines: ScoreLine[] = [];
   const titles: string[] = [];
   const add = (label: string, amount: number, kind: ScoreLineKind, detail?: string): void => {
@@ -143,7 +154,9 @@ export function scoreLevel(o: LevelOutcome): LevelResult {
   };
 
   // 1. Demolition: what came down.
-  add('Demolition', R * Math.max(E.demolitionFloor, f), 'base', `${pct(f)} of the structure down`);
+  const measured = fLine > fAll ? `${pct(f)} brought below the line` : `${pct(f)} of the structure down`;
+  const floored = f < E.demolitionFloor ? ` · objective met: paid at ${pct(E.demolitionFloor)}` : '';
+  add('Demolition', R * Math.max(E.demolitionFloor, f), 'base', measured + floored);
 
   // 2. Efficiency: shots vs par (always listed, so a brute-force run sees what it missed).
   // No shots (the structure failed on its own): nothing to be efficient about.
@@ -166,7 +179,7 @@ export function scoreLevel(o: LevelOutcome): LevelResult {
 
   // 5. Salvage: fallen material value.
   const salvage = Math.min(Math.max(0, o.salvage) * E.salvageScale, R * E.salvageCap);
-  if (salvage >= 1) add('Salvage', salvage, 'bonus', `${tonnes(f * o.totalMass)} of material recovered`);
+  if (salvage >= 1) add('Salvage', salvage, 'bonus', `${tonnes(fAll * o.totalMass)} of material recovered`);
 
   // 6. Speed.
   const zero = E.speedZero + E.speedPerPar * (par - 1);
@@ -189,9 +202,9 @@ export function scoreLevel(o: LevelOutcome): LevelResult {
   const brute = shots >= bruteForceShots(par);
   if (oneShot) titles.push('ONE SHOT');
   if (chainCount >= E.dominoCount && share >= E.dominoShare) titles.push('DOMINO EFFECT');
-  if (f >= E.totalDemolition) titles.push('TOTAL DEMOLITION');
+  if (fAll >= E.totalDemolition) titles.push('TOTAL DEMOLITION');
   if (!oneShot && shots > 0 && shots <= par) titles.push('SURGICAL');
-  if (brute) titles.push(f >= E.totalDemolition ? 'OVERKILL' : 'BRUTE FORCE');
+  if (brute) titles.push(fAll >= E.totalDemolition ? 'OVERKILL' : 'BRUTE FORCE');
 
   // A structure that failed without a shot earns a neutral grade.
   return { lines, total, grade: shots > 0 ? gradeFor(shots, par, f) : 'C', titles };

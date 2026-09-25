@@ -23,11 +23,16 @@
  */
 import { R, type RapierNS } from './RapierModule';
 import type { StructurePart } from './StructurePart';
-import type { JointKind } from './StructureDefinition';
+import type { JointKind, MuscleDef } from './StructureDefinition';
 import type { BondProps, MaterialId } from './Materials';
 import { wrapAngle } from '../core/math';
 
-export type BreakCause = 'tension' | 'bend' | 'explosion' | 'shatter' | 'debug' | 'removed';
+export type BreakCause = 'tension' | 'bend' | 'explosion' | 'shatter' | 'damage' | 'debug' | 'removed';
+
+/** How far past its anatomical range (rad) a muscle can be forced before it snaps. */
+export const MUSCLE_HYPEREXTENSION = 0.55;
+/** Fraction of muscle torque kept when a creature loses power (limbs go floppy, not limp). */
+export const MUSCLE_RESIDUAL = 0.12;
 
 /** Global joint stiffness: natural angular frequency (rad/s) of a joint about its reduced mass. */
 export const JOINT_OMEGA = 95;
@@ -52,6 +57,8 @@ export interface JointSpec {
   seam: number;
   strength: number;
   tags: readonly string[];
+  name?: string | null;
+  muscle?: MuscleDef;
 }
 
 let nextJointId = 1;
@@ -63,6 +70,7 @@ export class BreakableJoint {
   readonly b: StructurePart | null;
   readonly tags: readonly string[];
   readonly bondMaterial: MaterialId;
+  readonly name: string | null;
 
   joint: RapierNS.ImpulseJoint | null = null;
   handle = -1;
@@ -90,6 +98,19 @@ export class BreakableJoint {
   yieldDisp = 0;
   /** Elastic rotation at yield (rad). */
   yieldRot = 0;
+
+  // ---- muscle ------------------------------------------------------------
+  readonly muscle: MuscleDef | null;
+  muscleMin = 0;
+  muscleMax = 0;
+  kServo = 0;
+  cServo = 0;
+  /** Commanded angle relative to rest (servo) or angular velocity (spin). */
+  drive = 0;
+  /** 0..1 power supplied by the creature (engine/heart). */
+  power = 1;
+  /** Effective torque currently allowed (N*m). */
+  torqueNow = 0;
 
   // ---- live state -------------------------------------------------------
   /** Accumulated plastic rotation (signed, rad). */
@@ -128,6 +149,8 @@ export class BreakableJoint {
     this.b = spec.b;
     this.tags = spec.tags;
     this.bondMaterial = spec.bondMaterial;
+    this.name = spec.name ?? null;
+    this.muscle = spec.kind === 'muscle' ? (spec.muscle ?? { torque: 1000 }) : null;
     this.lax = spec.lax;
     this.lay = spec.lay;
     this.lbx = spec.lbx;
@@ -145,6 +168,44 @@ export class BreakableJoint {
     this.bendLimit = spec.bond.bendLimit;
     this.base = { yieldForce: this.yieldForce, yieldMoment: this.yieldMoment, stretchLimit: this.stretchLimit, bendLimit: this.bendLimit };
     this.computeStiffness(spec.bond.stiffness);
+    if (this.muscle) {
+      const m = this.muscle;
+      this.muscleMin = ((m.min ?? -120) * Math.PI) / 180;
+      this.muscleMax = ((m.max ?? 120) * Math.PI) / 180;
+      const iu = this.kAng / (JOINT_OMEGA * JOINT_OMEGA * spec.bond.stiffness);
+      const w = m.omega ?? 30;
+      this.kServo = iu * w * w;
+      this.cServo = 2 * 0.9 * Math.sqrt(this.kServo * iu);
+      this.torqueNow = m.torque;
+    }
+  }
+
+  get isMuscle(): boolean {
+    return this.muscle !== null;
+  }
+
+  /** Servo target (rad, relative to the rest pose). Cheap; call every step. */
+  setDrive(world: RapierNS.World, angle: number): void {
+    if (!this.muscle || this.broken) return;
+    this.drive = angle;
+    const raw = world.impulseJoints.raw;
+    if (this.muscle.mode === 'spin') raw.jointConfigureMotorVelocity(this.handle, R().JointAxis.AngX as number, angle, this.cServo * 4);
+    else raw.jointConfigureMotorPosition(this.handle, R().JointAxis.AngX as number, this.restAngle + angle, this.kServo, this.cServo);
+  }
+
+  /** Power 0..1 from the creature's engine/heart; scales available torque. */
+  setPower(world: RapierNS.World, power: number): void {
+    if (!this.muscle || this.broken) return;
+    if (Math.abs(power - this.power) < 0.01) return;
+    this.power = power;
+    this.applyMuscleTorque(world);
+  }
+
+  private applyMuscleTorque(world: RapierNS.World): void {
+    if (!this.muscle) return;
+    const p = Math.max(MUSCLE_RESIDUAL, this.power);
+    this.torqueNow = this.muscle.torque * p * this.strengthScale;
+    world.impulseJoints.raw.jointSetMotorMaxForce(this.handle, R().JointAxis.AngX as number, this.torqueNow);
   }
 
   /**
@@ -164,6 +225,7 @@ export class BreakableJoint {
     const raw = world.impulseJoints.raw;
     if (this.kind !== 'cable' || !this.slack) raw.jointSetMotorMaxForce(this.handle, RAP.JointAxis.LinX as number, this.yieldForce);
     if (this.kind === 'weld') raw.jointSetMotorMaxForce(this.handle, RAP.JointAxis.AngX as number, this.yieldMoment);
+    if (this.muscle) this.applyMuscleTorque(world);
     this.a.body.wakeUp();
   }
 
@@ -227,6 +289,12 @@ export class BreakableJoint {
       raw.jointConfigureMotorModel(this.handle, RAP.JointAxis.AngX as number, RAP.MotorModel.ForceBased as number);
       raw.jointConfigureMotorPosition(this.handle, RAP.JointAxis.AngX as number, this.restAngle, this.kAng, this.cAng);
       raw.jointSetMotorMaxForce(this.handle, RAP.JointAxis.AngX as number, this.yieldMoment);
+    }
+    if (this.muscle) {
+      raw.jointConfigureMotorModel(this.handle, RAP.JointAxis.AngX as number, RAP.MotorModel.ForceBased as number);
+      if (this.muscle.mode === 'spin') raw.jointConfigureMotorVelocity(this.handle, RAP.JointAxis.AngX as number, 0, this.cServo * 4);
+      else raw.jointConfigureMotorPosition(this.handle, RAP.JointAxis.AngX as number, this.restAngle, this.kServo, this.cServo);
+      raw.jointSetMotorMaxForce(this.handle, RAP.JointAxis.AngX as number, this.torqueNow);
     }
     // Keep contacts between welded neighbours: compression goes through contact (rigid),
     // tension / shear / bending through the joint (measured).
@@ -312,11 +380,21 @@ export class BreakableJoint {
         this.moment = mag * this.kAng;
       }
       bendDamage = Math.abs(this.plastic) / this.bendLimit;
+    } else if (this.muscle && this.muscle.mode !== 'spin') {
+      // Muscles don't take a plastic set: an overpowered muscle gives way, and
+      // forcing it far past its anatomical range snaps it.
+      const rel = wrapAngle(angB - a.angle - this.restAngle);
+      const err = Math.abs(rel - this.drive);
+      this.moment = Math.min(err * this.kServo, this.torqueNow);
+      const over = rel < this.muscleMin ? this.muscleMin - rel : rel > this.muscleMax ? rel - this.muscleMax : 0;
+      bendDamage = over / MUSCLE_HYPEREXTENSION;
+      if (over > 0) this.yielding = true;
     } else {
       this.moment = 0;
     }
 
-    this.stress = Math.max(this.force / this.yieldForce, this.yieldMoment > 0 ? this.moment / this.yieldMoment : 0);
+    const momentCap = this.muscle ? Math.max(1, this.torqueNow) : this.yieldMoment;
+    this.stress = Math.max(this.force / this.yieldForce, momentCap > 0 ? this.moment / momentCap : 0);
     if (linDamage < 0) linDamage = 0;
     this.damage = Math.max(linDamage, bendDamage);
     this.updateVis();

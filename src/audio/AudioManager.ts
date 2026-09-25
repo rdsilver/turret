@@ -22,7 +22,7 @@ import { StructurePart } from '../sim/StructurePart';
 import { PPM } from '../config/constants';
 import { SOUND_VARIANTS, setMasterMuffle, soundDuration, soundKey, type SoundId } from './SoundSynth';
 
-type Category = 'boom' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui';
+type Category = 'boom' | 'gun' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui';
 
 interface CategorySpec {
   max: number;
@@ -34,6 +34,7 @@ interface CategorySpec {
 
 const CATEGORIES: Record<Category, CategorySpec> = {
   boom: { max: 3, interval: 40, global: true },
+  gun: { max: 4, interval: 45, global: false },
   impact: { max: 5, interval: 35, global: true },
   ground: { max: 2, interval: 90, global: true },
   snap: { max: 4, interval: 45, global: true },
@@ -47,6 +48,12 @@ const CATEGORIES: Record<Category, CategorySpec> = {
 };
 
 const GLOBAL_CAP = 14;
+/**
+ * Real seconds after a hit-stop freeze during which the time scale is ignored:
+ * EffectsManager ramps back to full speed over 90 ms (HITSTOP_RECOVER), which
+ * would otherwise read as slow motion.
+ */
+const HITSTOP_HOLD = 0.12;
 
 interface SoundSpec {
   cat: Category;
@@ -58,6 +65,7 @@ interface SoundSpec {
 
 const SOUNDS: Record<SoundId, SoundSpec> = {
   cannon: { cat: 'boom', vol: 0.8, jitter: 0.04 },
+  gunshot: { cat: 'gun', vol: 0.42, jitter: 0.07 },
   reload: { cat: 'ui', vol: 0.3, jitter: 0.04 },
   impact_wood: { cat: 'impact', vol: 0.75, jitter: 0.08 },
   impact_stone: { cat: 'impact', vol: 0.8, jitter: 0.08 },
@@ -153,6 +161,8 @@ export class AudioManager {
   private lastPartFallen = -1e9;
   private firstSnapPending = false;
   private muffle = 0;
+  /** Real seconds since the time scale was last frozen by a hit-stop. */
+  private sinceFreeze = Infinity;
   private readonly cfg = { volume: 1, rate: 1, pan: 0 };
   /** Best-of-frame candidates per event category. */
   private readonly pending: Record<'impact' | 'ground' | 'snap' | 'creak', Pending[]> = {
@@ -207,12 +217,16 @@ export class AudioManager {
 
   /** Called every frame with the current sim time scale. */
   update(realDt: number, timeScale: number): void {
-    void realDt;
-    // Slow motion lowers pitch a little (hit-stop freezes are too short to matter).
-    const target = timeScale < 0.05 ? this.rateFactor : 0.72 + 0.28 * clamp01((timeScale - 0.2) / 0.8);
+    // Hit-stop (a freeze plus a short ramp back to speed) is too short to matter:
+    // hold pitch and muffle through it so only real slow motion bends the sound.
+    if (timeScale < 0.05) this.sinceFreeze = 0;
+    else this.sinceFreeze += realDt;
+    const hold = this.sinceFreeze < HITSTOP_HOLD;
+    // Slow motion lowers pitch a little...
+    const target = hold ? this.rateFactor : 0.72 + 0.28 * clamp01((timeScale - 0.2) / 0.8);
     this.rateFactor += (target - this.rateFactor) * 0.25;
     // ...and muffles the world (master low-pass), like the moment is holding its breath.
-    const muffle = timeScale < 0.05 ? this.muffle : clamp01((0.9 - timeScale) / 0.55);
+    const muffle = hold ? this.muffle : clamp01((0.9 - timeScale) / 0.55);
     if (this.sim && Math.abs(muffle - this.muffle) > 0.01) {
       this.muffle = muffle;
       setMasterMuffle(muffle * 0.85);
@@ -245,6 +259,10 @@ export class AudioManager {
   // ------------------------------------------------------------------ events
 
   private onFired(e: SimEvents['projectileFired']): void {
+    if (e.projectile.mass < 8) {
+      this.start('gunshot', 0.9, 1, this.panFor(e.x * PPM), false);
+      return;
+    }
     const rec = clamp(e.recoil, 0.3, 2);
     this.start('cannon', 0.75 + 0.25 * Math.min(1, rec), 1.05 - 0.08 * Math.min(1, rec - 0.5), this.panFor(e.x * PPM), false);
   }
@@ -253,11 +271,17 @@ export class AudioManager {
     const x = e.x * PPM;
     const m = clamp01(e.impulse / 4500);
     if (e.hitGround) {
-      this.queue(this.pending.ground, 'impact_ground', 2 + m, 0.55 + 0.45 * m, 0.95, x);
+      if (e.projectile.mass < 8) this.queue(this.pending.ground, 'impact_ground', 0.2, 0.12, 1.4, x);
+      else this.queue(this.pending.ground, 'impact_ground', 2 + m, 0.55 + 0.45 * m, 0.95, x);
       return;
     }
     const mat = e.target instanceof StructurePart ? e.target.material.id : null;
     if (!mat) return;
+    if (e.projectile.mass < 8) {
+      // Bullet hits: quiet, high ticks (armour pings), rate-limited by the impact category.
+      if (e.first) this.queue(this.pending.impact, impactSound(mat), 0.3, 0.22, 1.35, x);
+      return;
+    }
     if (e.first) {
       // Play immediately and loud: this is the moment everything hangs on.
       this.start(impactSound(mat), 0.7 + 0.3 * m, 0.9, this.panFor(x), false);

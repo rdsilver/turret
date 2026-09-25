@@ -118,8 +118,9 @@ export function buildStructure(physics: PhysicsWorld, def: StructureDef): Struct
     // Overlapping welded parts (e.g. a brace running into a column) must not fight
     // through contacts while the joint holds.
     if (b && joint.joint) {
-      const c = a.collider.contactCollider(b.collider, 0);
-      if (c && c.distance < -0.02) joint.joint.setContactsEnabled(false);
+      // Limbs meet at muscles: never let the two sides of a muscle collide.
+      const c = joint.isMuscle ? null : a.collider.contactCollider(b.collider, 0);
+      if (joint.isMuscle || (c && c.distance < -0.02)) joint.joint.setContactsEnabled(false);
     }
     structure.joints.push(joint);
   }
@@ -189,7 +190,7 @@ function createJointFromDef(physics: PhysicsWorld, def: StructureDef, jd: JointD
     lbx = tmp.x;
     lby = tmp.y;
   }
-  return physics.createJoint({ kind: jd.kind, a, b, lax, lay, lbx, lby, restLength: 0, bond, bondMaterial: bondMat, seam, strength, tags });
+  return physics.createJoint({ kind: jd.kind, a, b, lax, lay, lbx, lby, restLength: 0, bond, bondMaterial: bondMat, seam, strength, tags, name: jd.id ?? null, muscle: jd.muscle });
 }
 
 function toSim(def: StructureDef, p: readonly [number, number]): { x: number; y: number } {

@@ -98,3 +98,11 @@ export const SUBMUNITION = {
   lifetime: 1.5,
   behaviors: [{ id: 'explode', radius: 2.2, power: 0.45 }],
 };
+
+/** Small-arms damage: wears down the part it hits (see Damage.ts). amount = multiplier on the round's damage. */
+registerBehavior('damage', {
+  onImpact(p, spec, ctx, hit) {
+    const t = hit.target;
+    if (t instanceof StructurePart) ctx.damage.apply(t, p.damage * num(spec, 'amount', 1), hit.x, hit.y);
+  },
+});

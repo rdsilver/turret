@@ -39,6 +39,8 @@ export class GameState {
   money = 0;
   /** Index of the next campaign level to play. */
   levelIndex = 0;
+  /** Index of the next creature (assault) campaign level. */
+  assaultIndex = 0;
   upgrades: OwnedUpgrades = {};
   selectedAmmo = 'standard';
   records: Record<string, LevelRecord> = {};
@@ -85,6 +87,7 @@ export class GameState {
       savedAt: Date.now(),
       money: this.money,
       levelIndex: this.levelIndex,
+      assaultIndex: this.assaultIndex,
       upgrades: this.upgrades,
       selectedAmmo: this.selectedAmmo,
       records: this.records,
@@ -102,6 +105,7 @@ export class GameState {
     const d = migrate(data);
     gs.money = int(d.money, 0, 0);
     gs.levelIndex = int(d.levelIndex, 0, 0);
+    gs.assaultIndex = int(d.assaultIndex, 0, 0);
     gs.selectedAmmo = typeof d.selectedAmmo === 'string' && d.selectedAmmo ? d.selectedAmmo : 'standard';
     gs.totalShots = int(d.totalShots, 0, 0);
     gs.totalJointsBroken = int(d.totalJointsBroken, 0, 0);

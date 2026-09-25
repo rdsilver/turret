@@ -81,6 +81,8 @@ const DAMAGE_COLOR = 0xff5a2a;
 const WELD_GREY = 0x59616d;
 const DETACHED_STRESS_TINT = 0x5a6573;
 const CABLE_COLOR = 0xcfd6e0;
+/** Lowest y (world px) a sagging cable is drawn at: resting on the ground surface (y = 0). */
+const CABLE_FLOOR = -1;
 
 export class WorldRenderer {
   stressView = false;
@@ -161,12 +163,8 @@ export class WorldRenderer {
       const x = e.px + (e.x - e.px) * alpha;
       const y = e.py + (e.y - e.py) * alpha;
       const a = lerpAngle(e.pangle, e.angle, alpha);
-      if (v.kind === 0) {
-        this.placePart(v, x, y, a);
-        if (this.touchJoints(v)) cableTouched = true;
-      } else {
-        this.placeProjectile(v, x, y);
-      }
+      if (v.kind === 0) this.placePart(v, x, y, a);
+      else this.placeProjectile(v, x, y);
       cur.push(e);
     }
 
@@ -179,11 +177,23 @@ export class WorldRenderer {
       if (!v) continue;
       if (v.kind === 0) {
         this.placePart(v, e.x, e.y, e.angle);
-        if (this.touchJoints(v)) cableTouched = true;
       } else {
         v.img.x = e.x * PPM;
         v.img.y = e.y * PPM;
       }
+    }
+
+    // Joint markers follow part A's rendered pose, so place them only once
+    // every part of this frame is placed (A may come after B in the lists).
+    for (let i = 0; i < cur.length; i++) {
+      const v = cur[i]!.view as Vis | null;
+      if (v && v.kind === 0 && this.touchJoints(v)) cableTouched = true;
+    }
+    for (let i = 0; i < prev.length; i++) {
+      const e = prev[i]!;
+      if (e.activeStamp === step || e.removed) continue;
+      const v = e.view as Vis | null;
+      if (v && v.kind === 0 && this.touchJoints(v)) cableTouched = true;
     }
     this.syncPrev = cur;
     this.syncCur = prev;
@@ -214,8 +224,13 @@ export class WorldRenderer {
     if (!on && this.debugGfx) this.debugGfx.clear();
   }
 
-  /** Remove all display objects (level change). */
-  clear(): void {
+  /**
+   * Remove all display objects (level change). `trimTextures` drops the part
+   * atlas when it has grown large; destroy() skips it because the pooled
+   * images may already be destroyed by the scene shutdown (setTexture would
+   * throw) and the next level load trims anyway.
+   */
+  clear(trimTextures = true): void {
     for (const v of this.parts) this.releasePart(v, false);
     for (const v of this.projs) this.releaseProj(v);
     for (const jv of this.joints) this.releaseMarker(jv);
@@ -233,7 +248,7 @@ export class WorldRenderer {
     this.trailsDrawn = false;
     this.cablesDirty = true;
     // Keep texture memory bounded across many (procedural) levels.
-    if (this.textures.atlasPages > 6) {
+    if (trimTextures && this.textures.atlasPages > 6) {
       for (const pool of this.pools.values()) for (const img of pool) img.setTexture(TEX.pixel);
       this.textures.resetPartTextures();
     }
@@ -243,7 +258,7 @@ export class WorldRenderer {
 
   destroy(): void {
     if (this.destroyed) return;
-    this.clear();
+    this.clear(false);
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;
@@ -334,7 +349,8 @@ export class WorldRenderer {
 
   private createPart(p: StructurePart): void {
     const f = this.textures.partFrame(p);
-    const depth = p.isFragment ? DEPTH.debris : DEPTH.structure;
+    // Far-side creature limbs sit just behind the body.
+    const depth = p.isFragment ? DEPTH.debris : p.hasTag('back') ? DEPTH.structure - 0.4 : DEPTH.structure;
     const img = this.acquire(depth);
     img.setTexture(f.key, f.frame);
     img.setOrigin(f.originX, f.originY);
@@ -463,7 +479,9 @@ export class WorldRenderer {
       img.setTint(color);
     } else {
       const w = p.wear;
-      const k = w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1;
+      // Far-side limbs (2D side view) render darker so overlapping legs read apart.
+      const back = p.hasTag('back') ? 0.62 : 1;
+      const k = (w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1) * back;
       const color = grey(k);
       if (color === v.tintSig && !force) return;
       v.tintSig = color;
@@ -718,7 +736,11 @@ export class WorldRenderer {
         const n = 14;
         for (let k = 1; k <= n; k++) {
           const t = k / n;
-          g.lineTo(ax + dx * t, ay + dy * t + 4 * sag * t * (1 - t));
+          const ly = ay + dy * t;
+          let y = ly + 4 * sag * t * (1 - t);
+          // The rope lies on the ground instead of hanging through it.
+          if (y > CABLE_FLOOR) y = Math.max(ly, CABLE_FLOOR);
+          g.lineTo(ax + dx * t, y);
         }
         g.strokePath();
       } else {

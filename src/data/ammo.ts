@@ -6,6 +6,21 @@ import type { AmmoDef } from '../sim/weapons/Ammo';
 import '../sim/weapons/behaviors';
 
 export const AMMO: Record<string, AmmoDef> = {
+  bullet: {
+    id: 'bullet',
+    name: 'Rifle Round',
+    description: 'Machine-gun round. Weak alone; wears parts down until joints give way.',
+    radiusScale: 1,
+    massScale: 1,
+    speedScale: 1,
+    restitution: 0.3,
+    friction: 0.3,
+    color: 0xffd27a,
+    trailColor: 0xffe2a0,
+    cost: 0,
+    lifetime: 0.6,
+    behaviors: [{ id: 'damage', amount: 1 }],
+  },
   standard: {
     id: 'standard',
     name: 'Iron Shot',

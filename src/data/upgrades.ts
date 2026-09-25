@@ -113,7 +113,7 @@ export const UPGRADES: UpgradeDef[] = [
     id: 'stabilizer',
     name: 'Stabilizer',
     branch: 'core',
-    description: 'Gyro-damped mount. Tighter shot grouping and less recoil.',
+    description: 'Gyro-damped mount: tighter grouping, less recoil. Makes high lobs land where you aim them.',
     maxLevel: 4,
     costs: [70, 140, 240, 380],
     perLevel: '−35% spread, −12% recoil',
@@ -147,6 +147,35 @@ export const UPGRADES: UpgradeDef[] = [
     costs: [100, 190, 320],
     perLevel: '+1 scan charge per level',
     scanChargesPerLevel: 1,
+  },
+
+  // ------------------------------------------------------------------ machine gun
+  {
+    id: 'caliber',
+    name: 'Heavier Caliber',
+    branch: 'rapid',
+    description: 'Bigger rounds wear parts down faster: joints give way after fewer hits.',
+    maxLevel: 5,
+    costs: [80, 150, 250, 400, 600],
+    perLevel: '+25% damage per round',
+    apply: (s, lvl) => {
+      if (s.damage !== undefined) s.damage *= 1 + 0.25 * lvl;
+    },
+    view: { label: 'Damage per round', stat: 'damage', unit: '', digits: 2 },
+  },
+  {
+    id: 'cooling',
+    name: 'Barrel Cooling',
+    branch: 'rapid',
+    description: 'Fins and a water jacket: the barrel sheds heat faster and each shot heats it less.',
+    maxLevel: 4,
+    costs: [70, 140, 240, 380],
+    perLevel: '+25% cooling, -8% heat per shot',
+    apply: (s, lvl) => {
+      if (s.coolRate !== undefined) s.coolRate *= 1 + 0.25 * lvl;
+      if (s.heatPerShot !== undefined) s.heatPerShot *= 1 - 0.08 * lvl;
+    },
+    view: { label: 'Cooling', stat: 'coolRate', unit: '/s', digits: 2 },
   },
 
   // ------------------------------------------------------------------ demolition

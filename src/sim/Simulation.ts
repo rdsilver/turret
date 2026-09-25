@@ -15,6 +15,9 @@ import { FractureSystem } from './Fracture';
 import { StatusEffects } from './StatusEffects';
 import { ChainReactionTracker } from './ChainReactionTracker';
 import { DebrisManager } from './DebrisManager';
+import { DamageSystem } from './Damage';
+import { CreatureManager } from './creature/CreatureManager';
+import './creature';
 import { CollapseDetector, DEFAULT_OBJECTIVE, type ObjectiveDef } from './CollapseDetector';
 import { Weapon, BASE_WEAPON_STATS, type WeaponStats } from './weapons/Weapon';
 import type { AmmoDef } from './weapons/Ammo';
@@ -50,6 +53,8 @@ export class Simulation implements SimContext {
   readonly status: StatusEffects;
   readonly chains: ChainReactionTracker;
   readonly debris: DebrisManager;
+  readonly damage: DamageSystem;
+  readonly creatures: CreatureManager;
   readonly weapon: Weapon;
 
   structure: Structure | null = null;
@@ -60,6 +65,13 @@ export class Simulation implements SimContext {
   objectiveMetAt = -1;
   /** Bodies still awake when pre-settling ended (0 for a well-formed structure). */
   settleActive = 0;
+  /**
+   * Wall-clock cap (ms) on the synchronous pre-settle loop, so a structure that never
+   * comes to rest cannot freeze the page. Default: none (headless tools stay deterministic).
+   */
+  settleBudgetMs = Infinity;
+  /** Fade settled rubble once the objective's collapse has settled (off in the sandbox). */
+  autoCleanup = true;
   private lastFailureAt = 0;
 
   constructor(opts: SimulationOptions = {}) {
@@ -71,6 +83,8 @@ export class Simulation implements SimContext {
     this.status = new StatusEffects(this);
     this.chains = new ChainReactionTracker(this);
     this.debris = new DebrisManager(this);
+    this.damage = new DamageSystem(this);
+    this.creatures = new CreatureManager(this);
     this.weapon = new Weapon(this, opts.weaponStats ?? BASE_WEAPON_STATS, opts.ammo ?? DEFAULT_AMMO);
 
     // Turret base is solid: rubble can pile against it.
@@ -103,9 +117,12 @@ export class Simulation implements SimContext {
     this.chains.muted = true;
     const maxSteps = Math.round(settleSeconds / PHYSICS_DT);
     const minSteps = Math.round(0.5 / PHYSICS_DT);
+    const budget = this.settleBudgetMs;
+    const t0 = Number.isFinite(budget) ? performance.now() : 0;
     for (let i = 0; i < maxSteps; i++) {
       this.physics.step();
       if (i > minSteps && this.physics.stats.active === 0) break;
+      if ((i & 7) === 7 && Number.isFinite(budget) && performance.now() - t0 > budget) break;
     }
     this.settling = false;
     this.chains.muted = false;
@@ -168,7 +185,7 @@ export class Simulation implements SimContext {
       if ((since > SETTLE_MIN && quiet && calm) || since > SETTLE_MAX) {
         this.phase = 'settled';
         this.chains.finish();
-        this.debris.beginCleanup();
+        if (this.autoCleanup) this.debris.beginCleanup();
         this.events.emit('collapseSettled', {});
       }
     }

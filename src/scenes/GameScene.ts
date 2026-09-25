@@ -35,7 +35,10 @@ import { pad2 } from '../ui/format';
 import { DEFAULT_GRAVITY, TURRET } from '../config/constants';
 import { hashString } from '../core/Random';
 import { StructureDraft } from '../sim/generator/StructureDraft';
+import { sizeJoints, DEFAULT_SIZING } from '../sim/generator/modules/sizing';
 import { solveAim } from '../sim/ballistics';
+import { onceEach } from '../ui/keys';
+import { dailySeed } from './MenuScene';
 
 export type GameMode = 'campaign' | 'sandbox' | 'seed';
 
@@ -48,6 +51,8 @@ export interface GameSceneData {
 type Flow = 'aiming' | 'collapsing' | 'results';
 
 const SCAN_SECONDS = 5;
+/** Wall-clock cap on a level's synchronous pre-settle (real levels need < 100 ms). */
+const SETTLE_BUDGET_MS = 1500;
 
 export class GameScene extends Phaser.Scene implements DebugApi {
   private mode: GameMode = 'campaign';
@@ -55,6 +60,10 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   private level!: LevelDef;
   private levelIndex = 0;
   private structureSeed = 0;
+  /** Debug Randomize in the campaign: this procedural level replaces the campaign one (R retries it). */
+  private levelOverride: LevelDef | null = null;
+  /** Today's daily seed, fixed when the run starts (the only seed-mode structure that pays). */
+  private dailySeedValue = 0;
   private session!: LevelSession;
   private flow: Flow = 'aiming';
   private upgrades = new UpgradeSystem();
@@ -98,12 +107,19 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   init(data: GameSceneData): void {
     this.mode = data.mode ?? 'campaign';
     const gs = gameState();
-    this.levelIndex = data.levelIndex ?? gs.levelIndex;
+    const idx = data.levelIndex ?? gs.levelIndex;
+    this.levelIndex = Number.isFinite(idx) ? Math.max(0, Math.floor(idx)) : 0;
     this.structureSeed = data.seed ?? 0;
+    this.levelOverride = null;
+    this.dailySeedValue = dailySeed();
     this.flow = 'aiming';
     this.resultsDelay = -1;
     this.tool = 'fire';
     this.offs = [];
+    // Debug time/view state belongs to one run (like gravity and colliders, which are rebuilt).
+    this.debugSlowMo = false;
+    this.stressDebug = false;
+    this.massScale = 1;
   }
 
   create(): void {
@@ -113,6 +129,9 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     const ammo = this.unlockedAmmo.includes(gs.selectedAmmo) ? ammoById(gs.selectedAmmo) : AMMO.standard!;
 
     this.sim = new Simulation({ seed: 1234 + this.levelIndex, weaponStats: stats, ammo });
+    this.sim.settleBudgetMs = SETTLE_BUDGET_MS;
+    // The sandbox has no win: never fade out the blocks the player spawns after a collapse.
+    this.sim.autoCleanup = this.mode !== 'sandbox';
     this.textureFactory = new TextureFactory(this);
     this.cam = new CameraDirector(this);
     this.background = new BackgroundRenderer(this);
@@ -183,6 +202,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   // ------------------------------------------------------------------ levels
 
   private currentLevelDef(): LevelDef {
+    if (this.levelOverride) return this.levelOverride;
     if (this.mode === 'sandbox') return levelManager.procedural(this.structureSeed || hashString('sandbox'), 0.4);
     if (this.mode === 'seed') return levelManager.procedural(this.structureSeed, 0.6);
     if (this.levelIndex >= levelManager.count) {
@@ -194,6 +214,8 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   }
 
   private loadCurrentLevel(structureOverride?: StructureDef): void {
+    // Every load (Retry, seed Continue, debug Load / Randomize / Benchmark) starts on a clean screen.
+    this.results?.hide();
     this.level = this.currentLevelDef();
     this.effects.clear();
     this.world.clear();
@@ -206,6 +228,11 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.scanCharges = this.upgrades.scanCharges(gameState().upgrades);
     this.scanTimer = 0;
     this.world.setStressView(this.stressDebug);
+    // Debug time controls never outlive a reload unless the debug tools are in use.
+    if (!this.debugMenu.visible && this.mode !== 'sandbox') {
+      this.sim.physics.paused = false;
+      this.debugSlowMo = false;
+    }
 
     const s = this.sim.structure!;
     const bounds = this.frameBounds();
@@ -228,9 +255,9 @@ export class GameScene extends Phaser.Scene implements DebugApi {
 
   private pushHudLevel(): void {
     if (!this.hud || !this.level) return;
-    const campaign = this.mode === 'campaign' && this.levelIndex < levelManager.count;
+    const campaign = this.mode === 'campaign' && this.levelIndex < levelManager.count && !this.levelOverride;
     this.hud.setLevel({
-      mode: this.mode === 'campaign' && !campaign ? 'endless' : this.mode,
+      mode: this.levelOverride ? 'seed' : this.mode === 'campaign' && !campaign ? 'endless' : this.mode,
       index: campaign ? this.levelIndex + 1 : 0,
       total: campaign ? levelManager.count : 0,
       name: this.mode === 'sandbox' ? 'Sandbox' : this.level.name,
@@ -268,7 +295,8 @@ export class GameScene extends Phaser.Scene implements DebugApi {
 
   private bindInput(): void {
     const input = this.input;
-    input.mouse?.disableContextMenu();
+    // (The context menu is disabled once in the game config; calling disableContextMenu()
+    // here would add another canvas listener on every scene start.)
 
     input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.cam.toSim(p.x, p.y, this.pointerSim);
@@ -286,6 +314,8 @@ export class GameScene extends Phaser.Scene implements DebugApi {
       }
       switch (this.tool) {
         case 'fire':
+          // Touch taps have no pointermove before pointerdown: aim at the tap before firing.
+          this.sim.weapon.aimAt(x, y);
           this.tryFire();
           break;
         case 'block':
@@ -312,7 +342,9 @@ export class GameScene extends Phaser.Scene implements DebugApi {
 
     const kb = input.keyboard;
     if (!kb) return;
-    kb.on('keydown', (e: KeyboardEvent) => {
+    // Phaser can deliver the same keydown more than once per frame (see ui/keys.ts).
+    kb.on('keydown', onceEach((e: KeyboardEvent) => {
+      const debugKeys = this.debugMenu.visible || this.mode === 'sandbox';
       switch (e.code) {
         case 'Backquote':
           this.debugMenu.toggle();
@@ -333,15 +365,16 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         case 'Space':
           this.tryFire();
           break;
+        // Debug time keys: only with the debug tools open (like C / V).
         case 'KeyP':
-          this.setPaused(!this.isPaused());
+          if (debugKeys) this.setPaused(!this.isPaused());
           break;
         case 'Period':
         case 'KeyN':
-          this.stepOnce();
+          if (debugKeys) this.stepOnce();
           break;
         case 'KeyT':
-          this.setSlowMo(!this.debugSlowMo);
+          if (debugKeys) this.setSlowMo(!this.debugSlowMo);
           break;
         case 'KeyC':
           if (this.debugMenu.visible) this.setColliderDebug(!this.world.colliderDebug);
@@ -371,7 +404,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
           break;
         }
       }
-    });
+    }));
   }
 
   private tryFire(): void {
@@ -494,33 +527,44 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.flow = 'results';
     const gs = gameState();
     const result: LevelResult = scoreLevel(this.session.outcome());
-    const rec = gs.records[this.level.id];
-    // Replays only pay the improvement over the best previous payout (no farming).
-    const credited = rec?.completed ? Math.max(0, result.total - rec.bestPayout) : result.total;
-    gs.money += credited;
-    gs.totalEarned += credited;
     gs.totalJointsBroken += this.sim.structure?.jointsBroken ?? 0;
-    gs.records[this.level.id] = {
-      completed: true,
-      bestGrade: rec && gradeRank(rec.bestGrade) >= gradeRank(result.grade) ? rec.bestGrade : result.grade,
-      bestShots: rec ? Math.min(rec.bestShots, this.session.shots) : this.session.shots,
-      bestPayout: Math.max(rec?.bestPayout ?? 0, result.total),
-    };
-    if (this.mode === 'campaign' && this.levelIndex >= gs.levelIndex) gs.levelIndex = this.levelIndex + 1;
+    // Seed mode shares the campaign wallet: only today's daily seed pays (once, via its record).
+    // Other seeds (and debug-randomized structures) are unpaid practice: an endless seed+1
+    // chain would otherwise bypass the campaign economy. Practice leaves no record either.
+    const daily = this.mode === 'seed' && !this.levelOverride && this.structureSeed === this.dailySeedValue;
+    const practice = !!this.levelOverride || (this.mode === 'seed' && !daily);
+    let credited = 0;
+    if (!practice) {
+      const rec = gs.records[this.level.id];
+      // Replays only pay the improvement over the best previous payout (no farming).
+      credited = rec?.completed ? Math.max(0, result.total - rec.bestPayout) : result.total;
+      gs.money += credited;
+      gs.totalEarned += credited;
+      gs.records[this.level.id] = {
+        completed: true,
+        bestGrade: rec && gradeRank(rec.bestGrade) >= gradeRank(result.grade) ? rec.bestGrade : result.grade,
+        bestShots: rec ? Math.min(rec.bestShots, this.session.shots) : this.session.shots,
+        bestPayout: Math.max(rec?.bestPayout ?? 0, result.total),
+      };
+      if (this.mode === 'campaign' && this.levelIndex >= gs.levelIndex) gs.levelIndex = this.levelIndex + 1;
+    }
     gs.save();
-    const inCampaign = this.mode === 'campaign' && this.levelIndex < levelManager.count;
+    const inCampaign = this.mode === 'campaign' && this.levelIndex < levelManager.count && !practice;
     this.results?.show(result, this.level, {
       onContinue: () => {
         if (this.mode === 'campaign') this.scene.start('Upgrade');
         else this.loadSeed((this.structureSeed + 1) >>> 0);
       },
-      onRetry: () => {
-        this.results?.hide();
-        this.reloadLevel();
-      },
+      onRetry: () => this.reloadLevel(),
     }, {
-      credited,
-      levelLabel: inCampaign ? `LEVEL ${pad2(this.levelIndex + 1)} / ${pad2(levelManager.count)}` : undefined,
+      credited: practice ? undefined : credited,
+      levelLabel: inCampaign
+        ? `LEVEL ${pad2(this.levelIndex + 1)} / ${pad2(levelManager.count)}`
+        : practice
+          ? 'PRACTICE · NO PAYOUT'
+          : daily
+            ? 'DAILY SEED'
+            : undefined,
     });
   }
 
@@ -549,35 +593,18 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   // ------------------------------------------------------------------ DebugApi
 
   reloadLevel(): void {
-    this.results?.hide();
     this.loadCurrentLevel();
   }
 
   randomizeStructure(): void {
     this.structureSeed = (Math.random() * 0xffffffff) >>> 0;
     if (this.mode === 'campaign') {
+      // Kept as an override so R / Retry replay this structure (not the campaign blueprint
+      // with a random seed); it is unpaid practice and never advances the campaign.
       const difficulty = Math.min(1, 0.15 + this.levelIndex * 0.09);
-      const lvl = levelManager.procedural(this.structureSeed, difficulty);
-      this.level = lvl;
-      this.loadCurrentLevelWith(lvl);
-    } else this.loadCurrentLevel();
-  }
-
-  private loadCurrentLevelWith(lvl: LevelDef): void {
-    this.effects.clear();
-    this.world.clear();
-    this.sim.loadStructure(levelManager.build(lvl), lvl.objective);
-    this.level = lvl;
-    this.session?.dispose();
-    this.session = new LevelSession(this.sim, lvl);
-    this.flow = 'aiming';
-    this.resultsDelay = -1;
-    const s = this.sim.structure!;
-    const bounds = this.frameBounds();
-    this.cam.frame(bounds, true);
-    this.background.layout(bounds);
-    this.background.setDestructionLine(this.sim.detector?.lineHeight ?? null, s.minX0 - 2, s.maxX0 + 2);
-    this.pushHudLevel();
+      this.levelOverride = levelManager.procedural(this.structureSeed, difficulty);
+    }
+    this.loadCurrentLevel();
   }
 
   setPaused(p: boolean): void {
@@ -640,8 +667,14 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     return this.sim.weapon.unlimited;
   }
   benchmark(n: number): void {
-    const cols = Math.max(4, Math.round(Math.sqrt(n / 1.6)));
-    const rows = Math.max(4, Math.round(n / cols));
+    // Wide rather than tall (max 24 courses) and load-sized welds: a tall wall with default
+    // welds yields under its own weight, never sleeps and stalls the synchronous pre-settle.
+    let cols = Math.max(4, Math.round(Math.sqrt(n / 1.6)));
+    let rows = Math.max(4, Math.round(n / cols));
+    if (rows > 24) {
+      rows = 24;
+      cols = Math.max(4, Math.round(n / rows));
+    }
     const parts: StructureDef['parts'] = [];
     const bw = 0.8;
     const bh = 0.5;
@@ -652,6 +685,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     const d = new StructureDraft(this.sim.rng);
     for (const p of parts) d.add(p);
     d.autoWeld();
+    sizeJoints(d, DEFAULT_SIZING);
     this.loadCurrentLevel(d.toDef(42, `Benchmark ${parts.length}`));
   }
   clearDebris(): void {
@@ -676,6 +710,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   }
   loadSeed(seed: number): void {
     this.mode = this.mode === 'campaign' ? 'seed' : this.mode;
+    this.levelOverride = null;
     this.structureSeed = seed >>> 0;
     this.loadCurrentLevel();
   }

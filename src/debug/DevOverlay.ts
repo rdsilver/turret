@@ -51,7 +51,8 @@ interface Cell {
 }
 
 export class DevOverlay {
-  visible = true;
+  /** Off by default (F3 toggles it; the choice is saved in the 'turret.dev.overlay' pref). */
+  visible = false;
 
   private readonly root: HTMLDivElement | null = null;
   private readonly cells: Record<string, Cell> = {};

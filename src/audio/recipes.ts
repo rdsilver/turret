@@ -58,6 +58,19 @@ const cannon: Recipe = (r) => {
   return done(b);
 };
 
+/** Machine-gun report: a tight crack with a short body and a little room. */
+const gunshot: Recipe = (r) => {
+  const b = buffer(0.5);
+  const f = r.vary(0.1);
+  addNoise(b, r, { dur: 0.03, amp: 1, attack: 0.0003, decay: 0.006, type: 'highpass', freq: 1800 * f });
+  addNoise(b, r, { dur: 0.12, amp: 0.6, attack: 0.0006, decay: 0.022, type: 'bandpass', freq: 900 * f, q: 0.8 });
+  addTone(b, { f0: 160 * f, f1: 70 * f, glide: 0.03, amp: 0.55, attack: 0.001, decay: 0.05 });
+  addNoise(b, r, { dur: 0.4, amp: 0.2, attack: 0.002, decay: 0.08, color: 'pink', type: 'lowpass', freq: 2500, freqEnd: 500, glide: 0.1 });
+  saturate(b, 1.8);
+  reverb(b, 0.12, 0.7, 0.5, 0.5);
+  return done(b, 0.9);
+};
+
 const reload: Recipe = (r) => {
   const b = buffer(0.6);
   const t2 = 0.26 * r.vary(0.1);
@@ -405,6 +418,7 @@ const collapseSting: Recipe = (r) => {
 
 export const RECIPES: Record<SoundId, Recipe> = {
   cannon,
+  gunshot,
   reload,
   impact_wood: impactWood,
   impact_stone: impactStone,
@@ -433,6 +447,7 @@ export const RECIPES: Record<SoundId, Recipe> = {
 export const SYNTH_PRIORITY: SoundId[] = [
   'ui_click',
   'cannon',
+  'gunshot',
   'impact_wood',
   'impact_stone',
   'snap_wood',

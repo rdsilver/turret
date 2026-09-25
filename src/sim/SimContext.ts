@@ -11,6 +11,8 @@ import type { ExplosionSystem } from './Explosions';
 import type { ProjectileSystem } from './weapons/ProjectileSystem';
 import type { FractureSystem } from './Fracture';
 import type { StatusEffects } from './StatusEffects';
+import type { DamageSystem } from './Damage';
+import type { DebrisManager } from './DebrisManager';
 
 export interface SimContext {
   readonly physics: PhysicsWorld;
@@ -19,6 +21,8 @@ export interface SimContext {
   readonly projectiles: ProjectileSystem;
   readonly fracture: FractureSystem;
   readonly status: StatusEffects;
+  readonly damage: DamageSystem;
+  readonly debris: DebrisManager;
   /** Deterministic randomness for gameplay (spread, fracture patterns...). */
   readonly rng: Random;
 }

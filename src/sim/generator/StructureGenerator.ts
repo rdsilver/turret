@@ -119,10 +119,10 @@ export function hasModule(type: string): boolean {
   return modules.has(type);
 }
 
-/** Read a numeric param with default, optionally jittered by the seeded rng. */
+/** Read a numeric param with default (also for NaN / ±Infinity), optionally jittered by the seeded rng. */
 export function param(ctx: ModuleContext, key: string, fallback: number, jitter = 0): number {
   const v = ctx.spec[key];
-  const base = typeof v === 'number' ? v : fallback;
+  const base = typeof v === 'number' && Number.isFinite(v) ? v : fallback;
   return jitter > 0 ? base * (1 + (ctx.rng.next() * 2 - 1) * jitter) : base;
 }
 
@@ -161,7 +161,12 @@ export function generateStructure(blueprint: BlueprintDef, seed: number, originX
       prev,
       regions,
     };
+    const first = draft.count;
     const r = fn(ctx);
+    for (let i = first; i < draft.count; i++) {
+      const bad = invalidPart(draft.parts[i]!);
+      if (bad) throw new Error(`Structure module "${spec.type}" (#${index}) made an invalid part ${i}: ${bad} — check its parameters`);
+    }
     moduleParts.push(r.parts);
     seamStrength.push(typeof spec.seamStrength === 'number' ? spec.seamStrength : undefined);
     if (spec.loose === true) draft.markLoose(r.parts);
@@ -199,6 +204,17 @@ export function generateStructure(blueprint: BlueprintDef, seed: number, originX
   const warnings = findOverlaps(draft, owner, blueprint);
   def.meta = { ...def.meta, generator: 'blueprint', seed, ...(warnings.length ? { warnings } : {}) };
   return def;
+}
+
+/** Why a part cannot be built (non-finite transform, empty or non-finite shape), or null. */
+function invalidPart(p: StructureDef['parts'][number]): string | null {
+  const fin = Number.isFinite;
+  if (!fin(p.x) || !fin(p.y) || (p.angle !== undefined && !fin(p.angle))) return `position (${p.x}, ${p.y}) angle ${p.angle ?? 0}`;
+  const s = p.shape;
+  if (s.kind === 'box' && !(fin(s.w) && fin(s.h) && s.w > 0 && s.h > 0)) return `box ${s.w} x ${s.h}`;
+  if (s.kind === 'circle' && !(fin(s.r) && s.r > 0)) return `circle r=${s.r}`;
+  if (s.kind === 'poly' && (s.points.length < 3 || s.points.some(([x, y]) => !fin(x) || !fin(y)))) return `polygon with ${s.points.length} points`;
+  return null;
 }
 
 /**

@@ -69,11 +69,13 @@ const log = (s: string) => lines.push(s);
   out.maxIdleStress = +maxStress.toFixed(2);
   out.idleProgress = +sim.progress.toFixed(3);
   out.settleActive = sim.settleActive;
-  out.stable = settleBreaks === 0 && idleBreaks === 0 && drift < 0.08 && sim.progress < 0.05 && sim.settleActive === 0;
+  // Tether snaps are silent at runtime (no jointBroken event) but mean a loose prop slipped off.
+  out.tetherBreaks = s.settleTetherBreaks + s.tetherBreaks;
+  out.stable = settleBreaks === 0 && idleBreaks === 0 && out.tetherBreaks === 0 && drift < 0.08 && sim.progress < 0.05 && sim.settleActive === 0;
   log(`${level.name} [${id}] parts=${s.parts.length} joints=${s.joints.length} mass=${out.mass}kg height=${out.height}m line=${out.line === null ? '-' : (out.line as number).toFixed(2)}`);
   log(`  objective: ${sim.detector?.describe()}  par=${level.par}`);
   out.settleDrift = +s.settleDrift.toFixed(3);
-  log(`  settle: breaks=${settleBreaks} sag=${out.settleDrift}m activeAfter=${activeAfterSettle} | idle 10s: breaks=${idleBreaks} drift=${out.drift}m maxStress=${out.maxIdleStress} progress=${out.idleProgress} => ${out.stable ? 'STABLE' : 'UNSTABLE!'}`);
+  log(`  settle: breaks=${settleBreaks} tethers=${s.settleTetherBreaks} sag=${out.settleDrift}m activeAfter=${activeAfterSettle} | idle 10s: breaks=${idleBreaks} tethers=${s.tetherBreaks} drift=${out.drift}m maxStress=${out.maxIdleStress} progress=${out.idleProgress} => ${out.stable ? 'STABLE' : 'UNSTABLE!'}`);
   sim.destroy();
 }
 

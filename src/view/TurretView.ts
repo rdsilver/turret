@@ -67,6 +67,11 @@ export class TurretView {
   private readyFlash = 0;
   private previewVisible = true;
   private destroyed = false;
+  /** Inputs of the last cone rebuild (the cone is static while the aim is). */
+  private conePts = new Float32Array(0);
+  private coneN = -1;
+  private coneSpread = NaN;
+  private coneMaxT = NaN;
 
   constructor(
     readonly scene: Phaser.Scene,
@@ -225,48 +230,8 @@ export class TurretView {
     const spread = this.weapon.stats.spread;
     const m = PPM;
 
-    // Spread cone: quads along the path, half-width ~ 2 sigma * distance, fading out.
-    const cone = this.cone;
-    cone.clear();
-    const mx = pts[0]!;
-    const my = pts[1]!;
-    const tanS = Math.tan(Math.min(0.5, spread * 1.5));
-    let prevLx = mx;
-    let prevLy = my;
-    let prevRx = mx;
-    let prevRy = my;
-    for (let i = 1; i < n; i++) {
-      const t = i * SAMPLE_DT;
-      if (t - SAMPLE_DT > maxT) break;
-      const x = pts[i * 2]!;
-      const y = pts[i * 2 + 1]!;
-      const dx = x - pts[i * 2 - 2]!;
-      const dy = y - pts[i * 2 - 1]!;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const dist = Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my));
-      const hw = dist * tanS;
-      const nx = -dy / len;
-      const ny = dx / len;
-      const lx = x + nx * hw;
-      const ly = y + ny * hw;
-      const rx = x - nx * hw;
-      const ry = y - ny * hw;
-      const f = 1 - Math.min(1, t / maxT);
-      if (f > 0) {
-        cone.fillStyle(DOT_COLOR, 0.05 * f);
-        cone.beginPath();
-        cone.moveTo(prevLx * m, prevLy * m);
-        cone.lineTo(lx * m, ly * m);
-        cone.lineTo(rx * m, ry * m);
-        cone.lineTo(prevRx * m, prevRy * m);
-        cone.closePath();
-        cone.fillPath();
-      }
-      prevLx = lx;
-      prevLy = ly;
-      prevRx = rx;
-      prevRy = ry;
-    }
+    // Graphics are re-tessellated every frame anyway: only rebuild the cone when the path moved.
+    if (this.coneChanged(pts, n, spread, maxT)) this.drawCone(pts, n, spread, maxT);
 
     // Dots at fixed arc-length spacing, marching outward; alpha by flight time.
     let used = 0;
@@ -318,6 +283,72 @@ export class TurretView {
     } else r.setVisible(false);
   }
 
+  /** True (and remembers the inputs) when the cone's inputs differ from the last rebuild. */
+  private coneChanged(pts: Float32Array, n: number, spread: number, maxT: number): boolean {
+    const len = n * 2;
+    let c = this.conePts;
+    let changed = n !== this.coneN || spread !== this.coneSpread || maxT !== this.coneMaxT;
+    if (!changed) {
+      for (let i = 0; i < len; i++) {
+        if (c[i] !== pts[i]) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (!changed) return false;
+    if (c.length < len) c = this.conePts = new Float32Array(pts.length);
+    for (let i = 0; i < len; i++) c[i] = pts[i]!;
+    this.coneN = n;
+    this.coneSpread = spread;
+    this.coneMaxT = maxT;
+    return true;
+  }
+
+  /**
+   * Spread cone: quads along the path, half-width ~ 2 sigma * distance, fading
+   * out. Each quad is two plain triangles (no path objects, no tessellation).
+   */
+  private drawCone(pts: Float32Array, n: number, spread: number, maxT: number): void {
+    const cone = this.cone;
+    cone.clear();
+    const m = PPM;
+    const mx = pts[0]!;
+    const my = pts[1]!;
+    const tanS = Math.tan(Math.min(0.5, spread * 1.5));
+    let prevLx = mx * m;
+    let prevLy = my * m;
+    let prevRx = prevLx;
+    let prevRy = prevLy;
+    for (let i = 1; i < n; i++) {
+      const t = i * SAMPLE_DT;
+      if (t - SAMPLE_DT > maxT) break;
+      const x = pts[i * 2]!;
+      const y = pts[i * 2 + 1]!;
+      const dx = x - pts[i * 2 - 2]!;
+      const dy = y - pts[i * 2 - 1]!;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const dist = Math.sqrt((x - mx) * (x - mx) + (y - my) * (y - my));
+      const hw = dist * tanS;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const lx = (x + nx * hw) * m;
+      const ly = (y + ny * hw) * m;
+      const rx = (x - nx * hw) * m;
+      const ry = (y - ny * hw) * m;
+      const f = 1 - Math.min(1, t / maxT);
+      if (f > 0) {
+        cone.fillStyle(DOT_COLOR, 0.05 * f);
+        cone.fillTriangle(prevLx, prevLy, lx, ly, rx, ry);
+        cone.fillTriangle(prevLx, prevLy, rx, ry, prevRx, prevRy);
+      }
+      prevLx = lx;
+      prevLy = ly;
+      prevRx = rx;
+      prevRy = ry;
+    }
+  }
+
   private dot(i: number): Image {
     let d = this.dots[i];
     if (!d) {
@@ -332,6 +363,7 @@ export class TurretView {
   private hidePreview(): void {
     this.previewVisible = false;
     this.cone.clear();
+    this.coneN = -1;
     for (let i = 0; i < this.dotsUsed; i++) this.dots[i]!.setVisible(false);
     this.dotsUsed = 0;
     this.reticle.setVisible(false);

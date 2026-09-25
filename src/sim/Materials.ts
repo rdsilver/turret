@@ -24,7 +24,8 @@ export type MaterialId =
   | 'core'
   | 'cable'
   | 'ground'
-  | 'iron';
+  | 'iron'
+  | 'armor';
 
 export type SoundFamily = 'wood' | 'stone' | 'metal' | 'glass' | 'rubber' | 'crate';
 export type SurfacePattern = 'grain' | 'speckle' | 'plate' | 'glass' | 'rubber' | 'hazard' | 'core' | 'block' | 'none';
@@ -63,6 +64,18 @@ export interface MaterialDef {
   explosive?: { radius: number; power: number; triggerDv: number; fuse: number };
   /** Material value (salvage) per kg, feeds the economy. */
   salvage: number;
+  /**
+   * Hit points per part for weapon damage (bullets), before size scaling
+   * (see partMaxHp). Omitted = 10.
+   */
+  hp?: number;
+  /** Fraction of weapon damage absorbed (0 = none, 0.9 = heavy plate). */
+  armor?: number;
+}
+
+/** Hit points of a part: material hp scaled by size (bigger parts take more hits). */
+export function partMaxHp(mat: MaterialDef, area: number): number {
+  return (mat.hp ?? 10) * (0.35 + Math.sqrt(Math.max(0.01, area)));
 }
 
 const kN = 1000;
@@ -83,6 +96,7 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     // Weak-ish, ductile: sags and creaks visibly before it snaps.
     bond: { tension: 55 * kN, bend: 160 * kN, stretchLimit: 0.05, bendLimit: 0.16, stiffness: 1 },
     salvage: 0.02,
+    hp: 8,
   },
   concrete: {
     id: 'concrete',
@@ -115,6 +129,8 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     // Heavy, very strong, very ductile: bends a long way before letting go.
     bond: { tension: 900 * kN, bend: 2600 * kN, stretchLimit: 0.09, bendLimit: 0.45, stiffness: 2 },
     salvage: 0.02,
+    hp: 30,
+    armor: 0.55,
   },
   glass: {
     id: 'glass',
@@ -131,6 +147,7 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     bond: { tension: 30 * kN, bend: 70 * kN, stretchLimit: 0.01, bendLimit: 0.01, stiffness: 1 },
     shatter: { dv: 2.6, pieces: 5 },
     salvage: 0.03,
+    hp: 3,
   },
   rubber: {
     id: 'rubber',
@@ -146,6 +163,8 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     particleColor: 0xff8fb0,
     bond: { tension: 120 * kN, bend: 140 * kN, stretchLimit: 0.35, bendLimit: 1.2, stiffness: 0.12 },
     salvage: 0.015,
+    hp: 40,
+    armor: 0.8,
   },
   stone: {
     id: 'stone',
@@ -192,6 +211,7 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     particleColor: 0x9dffd9,
     bond: { tension: 400 * kN, bend: 900 * kN, stretchLimit: 0.05, bendLimit: 0.3, stiffness: 1.5 },
     salvage: 0.1,
+    hp: 14,
   },
   cable: {
     id: 'cable',
@@ -223,6 +243,23 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     particleColor: 0xffc36b,
     bond: { tension: 1e7, bend: 1e7, stretchLimit: 1, bendLimit: 1, stiffness: 1 },
     salvage: 0,
+  },
+  armor: {
+    id: 'armor',
+    name: 'Armor Plate',
+    density: 5200,
+    friction: 0.5,
+    restitution: 0.15,
+    color: 0x7d8794,
+    outline: 0x2c323a,
+    alpha: 1,
+    pattern: 'plate',
+    sound: 'metal',
+    particleColor: 0xffe08a,
+    bond: { tension: 500 * kN, bend: 1400 * kN, stretchLimit: 0.06, bendLimit: 0.3, stiffness: 1.6 },
+    salvage: 0.03,
+    hp: 40,
+    armor: 0.85,
   },
   ground: {
     id: 'ground',

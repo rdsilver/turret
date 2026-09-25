@@ -61,6 +61,8 @@ export const GROUP = {
   DEBRIS: 0x0008,
   GRAB: 0x0010,
   TURRET: 0x0020,
+  /** Creature parts: don't collide with other creature parts (legs cross in 2D). */
+  CREATURE: 0x0040,
 } as const;
 
 export function interactionGroups(membership: number, filter: number): number {

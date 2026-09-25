@@ -2,6 +2,7 @@
 // structure's weakest-looking point: its first non-foundation part), the
 // workshop and the sandbox; reports console errors and saves screenshots.
 //   node tools/smoke.mjs [--base http://localhost:4173] [--levels 1-10] [--out tools/out/smoke]
+// A page reload mid-visit (e.g. a Vite full reload after a file edit) is reported as a problem.
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
@@ -17,8 +18,9 @@ async function visit(name, url, fn) {
   page.on('pageerror', (e) => errs.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/ERR_CERT|fonts\.g/.test(m.text())) errs.push('console: ' + m.text()); });
   await page.goto(url);
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) errs.push('navigated: page reloaded mid-visit (Vite HMR?), results invalid'); });
   await page.waitForTimeout(3500);
-  const info = fn ? await fn(page) : null;
+  const info = fn ? await fn(page).catch((e) => { errs.push('evaluate: ' + e.message); return null; }) : null;
   await page.screenshot({ path: `${out}/${name}.png` });
   console.log(`${name}: ${errs.length ? 'ERRORS ' + errs.length : 'ok'}${info ? ' ' + JSON.stringify(info) : ''}`);
   for (const e of errs.slice(0, 5)) console.log('   ', e);

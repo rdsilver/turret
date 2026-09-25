@@ -26,6 +26,14 @@ export interface WeaponStats {
   impactMultiplier: number;
   /** Seconds of flight shown by the trajectory preview. */
   previewTime: number;
+  /** Hold-to-fire (machine gun). */
+  automatic?: boolean;
+  /** Barrel heat added per shot (0..1 scale; 1 = overheated). */
+  heatPerShot?: number;
+  /** Heat shed per second. */
+  coolRate?: number;
+  /** Damage points per round (small arms; see Damage.ts). */
+  damage?: number;
 }
 
 export const BASE_WEAPON_STATS: Readonly<WeaponStats> = {
@@ -37,6 +45,25 @@ export const BASE_WEAPON_STATS: Readonly<WeaponStats> = {
   recoil: 1,
   impactMultiplier: 1,
   previewTime: 1.25,
+};
+
+/**
+ * Starting machine gun: slow, weak, inaccurate. Hold to fire; the barrel heats
+ * up and locks when overheated until it cools to 35%.
+ */
+export const BASE_MG_STATS: Readonly<WeaponStats> = {
+  muzzleVelocity: 60,
+  projectileMass: 0.7,
+  projectileRadius: 0.07,
+  reloadTime: 1 / 3.5,
+  spread: 3 * DEG,
+  recoil: 0.2,
+  impactMultiplier: 1,
+  previewTime: 0.45,
+  automatic: true,
+  heatPerShot: 0.08,
+  coolRate: 0.24,
+  damage: 0.6,
 };
 
 export interface TrajectoryPrediction {
@@ -71,6 +98,12 @@ export class Weapon {
   kick = 0;
   /** Infinite ammo, no reload (debug). */
   unlimited = false;
+  /** 0..1 barrel heat (automatic weapons). */
+  heat = 0;
+  /** Locked out until heat drops below 0.35. */
+  overheated = false;
+  /** Trigger held (automatic weapons fire continuously while true). */
+  triggerHeld = false;
 
   private ray: RapierNS.Ray | null = null;
   private readonly m = { x: 0, y: 0 };
@@ -86,7 +119,7 @@ export class Weapon {
   }
 
   get ready(): boolean {
-    return this.reload <= 0 || this.unlimited;
+    return (this.reload <= 0 || this.unlimited) && !this.overheated;
   }
 
   /** 0 = just fired, 1 = loaded. */
@@ -139,8 +172,13 @@ export class Weapon {
       mass: s.projectileMass,
       shot: this.shotsFired,
       impactMultiplier: s.impactMultiplier,
+      damage: s.damage ?? 1,
     });
     this.reload = this.unlimited ? 0 : s.reloadTime;
+    if (s.heatPerShot && !this.unlimited) {
+      this.heat = Math.min(1, this.heat + s.heatPerShot);
+      if (this.heat >= 1) this.overheated = true;
+    }
     this.kick = 1;
     this.ctx.events.emit('projectileFired', {
       projectile: p,
@@ -154,6 +192,13 @@ export class Weapon {
   }
 
   update(dt: number): void {
+    const s = this.stats;
+    if (s.heatPerShot) {
+      this.heat = Math.max(0, this.heat - (s.coolRate ?? 0.3) * dt);
+      if (this.overheated && this.heat < 0.35) this.overheated = false;
+    }
+    // Automatic fire runs in sim time, so the fire rate is exact at any frame rate.
+    if (this.triggerHeld && s.automatic && this.ready) this.fire();
     if (this.reload > 0) this.reload = Math.max(0, this.reload - dt);
     this.kick = Math.max(0, this.kick - dt * 2.5);
   }

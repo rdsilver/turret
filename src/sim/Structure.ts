@@ -37,6 +37,10 @@ export class Structure {
   partsFallen = 0;
   /** Joints that broke while pre-settling (a valid level has 0). */
   settleJointsBroken = 0;
+  /** Silent tether cables (slack safety lines on loose props) that snapped. */
+  tetherBreaks = 0;
+  /** Of those, the ones that snapped while pre-settling (a valid level has 0). */
+  settleTetherBreaks = 0;
   /** Largest displacement of any part while pre-settling (m). */
   settleDrift = 0;
 
@@ -80,6 +84,8 @@ export class Structure {
   /** Reset spawn heights and failure counters to the current (settled) pose. */
   rebaseline(): void {
     this.settleJointsBroken += this.jointsBroken;
+    this.settleTetherBreaks += this.tetherBreaks;
+    this.tetherBreaks = 0;
     for (const p of this.parts) {
       if (!p.removed) this.settleDrift = Math.max(this.settleDrift, Math.hypot(p.x - p.x0, p.y - p.y0));
     }

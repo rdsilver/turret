@@ -409,7 +409,8 @@ registerModule('roof', (ctx): ModuleResult => {
 registerModule('pyramid', (ctx): ModuleResult => {
   const levels = Math.max(1, Math.round(param(ctx, 'levels', 5)));
   const w0 = param(ctx, 'w', Math.max(3, ctx.width));
-  const bw = param(ctx, 'blockW', 1);
+  // Divisors are clamped: a zero size would make the block count infinite.
+  const bw = Math.max(0.05, param(ctx, 'blockW', 1));
   const bh = param(ctx, 'blockH', 0.6);
   const step = param(ctx, 'step', bw / 2);
   const mat = matParam(ctx, 'material', 'stone');
@@ -443,9 +444,10 @@ registerModule('pyramid', (ctx): ModuleResult => {
  */
 registerModule('wall', (ctx): ModuleResult => {
   const w = param(ctx, 'w', ctx.width);
-  const bh = param(ctx, 'brickH', 0.4);
+  // Divisors are clamped: a zero size would make the brick / course count infinite.
+  const bh = Math.max(0.05, param(ctx, 'brickH', 0.4));
   const courses = Math.max(1, Math.round(param(ctx, 'h', 2.4) / bh));
-  const bwTarget = param(ctx, 'brickW', 0.8);
+  const bwTarget = Math.max(0.05, param(ctx, 'brickW', 0.8));
   const mat = matParam(ctx, 'material', 'stone');
   const mortar = param(ctx, 'mortar', 0.5);
   const running = paramStr<string>(ctx, 'bond', 'running') !== 'stack';

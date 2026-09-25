@@ -39,7 +39,8 @@ const LINE_CLOSE = 0xffb547;
 const LINE_DONE = 0x6fe3a1;
 
 export class BackgroundRenderer {
-  private readonly grid: Phaser.GameObjects.Graphics;
+  /** Measurement grid: one repeating 5 m tile (a Graphics would be re-tessellated every frame). */
+  private readonly grid: Phaser.GameObjects.TileSprite;
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly groundFill: Phaser.GameObjects.Rectangle;
   private readonly groundHatch: Phaser.GameObjects.TileSprite;
@@ -66,7 +67,8 @@ export class BackgroundRenderer {
     TextureFactory.generateCommon(scene);
     // The backdrop colour itself is the camera clear colour (#121418, game config);
     // no full-screen quad needed.
-    this.grid = scene.add.graphics().setDepth(DEPTH.grid);
+    ensureGridTile(scene.textures);
+    this.grid = scene.add.tileSprite(0, 0, 10, 10, RK.grid).setOrigin(0, 0).setDepth(DEPTH.grid);
     this.ruler = scene.add.graphics().setDepth(DEPTH.ruler);
     this.groundFill = scene.add.rectangle(0, 0, 10, 10, GROUND_FILL, 1).setOrigin(0, 0).setDepth(DEPTH.ground);
     this.groundHatch = scene.add.tileSprite(0, 0, 10, 10, RK.hatch).setOrigin(0, 0).setDepth(DEPTH.ground + 0.1);
@@ -90,18 +92,14 @@ export class BackgroundRenderer {
     const B = GROUND_DEPTH;
 
     // ---- measurement grid (sky only; the ground slab covers y > 0)
-    const g = this.grid;
-    g.clear();
-    for (let x = L; x <= R; x++) {
-      const major = x % 5 === 0;
-      g.lineStyle(major ? 1.5 : 1, major ? GRID_MAJOR : GRID_MINOR, major ? 0.075 : 0.035);
-      g.lineBetween(x * PPM, T * PPM, x * PPM, 0);
-    }
-    for (let y = 0; y >= T; y--) {
-      const major = y % 5 === 0;
-      g.lineStyle(major ? 1.5 : 1, major ? GRID_MAJOR : GRID_MINOR, major ? 0.075 : 0.035);
-      g.lineBetween(L * PPM, y * PPM, R * PPM, y * PPM);
-    }
+    // Tile phase anchored to world (0, 0) so major lines sit on multiples of 5 m.
+    this.grid.setPosition(L * PPM, T * PPM).setSize((R - L) * PPM, -T * PPM);
+    this.grid.tilePositionX = L * PPM;
+    this.grid.tilePositionY = T * PPM;
+
+    // Axis-aligned lines below are drawn as filled rects: Phaser replays a
+    // Graphics' commands every frame, and rects go straight to the batch while
+    // stroked paths allocate path objects and vertex arrays.
 
     // ---- ground slab
     this.groundFill.setPosition(L * PPM, 0).setSize((R - L) * PPM, B * PPM);
@@ -119,17 +117,17 @@ export class BackgroundRenderer {
     e.fillStyle(0x000000, 0.14);
     e.fillRect(L * PPM, 5, (R - L) * PPM, 8);
     // Crisp surface edge.
-    e.lineStyle(2, GROUND_EDGE, 1);
-    e.lineBetween(L * PPM, 1, R * PPM, 1);
-    e.lineStyle(1, 0xffffff, 0.1);
-    e.lineBetween(L * PPM, -0.5, R * PPM, -0.5);
+    e.fillStyle(GROUND_EDGE, 1);
+    e.fillRect(L * PPM, 0, (R - L) * PPM, 2);
+    e.fillStyle(0xffffff, 0.1);
+    e.fillRect(L * PPM, -1, (R - L) * PPM, 1);
     // Distance ticks along the ground (1 m / 5 m) with labels every 10 m.
     const x0 = Math.max(L, Math.floor(bounds.left));
     const x1 = Math.min(R, Math.ceil(bounds.right + 20));
     for (let x = x0; x <= x1; x++) {
       const major = x % 5 === 0;
-      e.lineStyle(1, RULER, major ? 0.55 : 0.22);
-      e.lineBetween(x * PPM, 2, x * PPM, major ? 10 : 5);
+      e.fillStyle(RULER, major ? 0.55 : 0.22);
+      e.fillRect(x * PPM - 0.5, 2, 1, major ? 8 : 3);
       if (x % 10 === 0 && x > 0) this.groundLabels.put(this, `${x} m`, x * PPM + 3, 12, 0, 0, 0.42);
     }
     this.groundLabels.end();
@@ -203,14 +201,15 @@ export class BackgroundRenderer {
     r.clear();
     const x = this.rulerX * PPM;
     const top = Math.floor(this.bounds.top + 1);
-    r.lineStyle(1.5, RULER, 0.28);
-    r.lineBetween(x, 0, x, top * PPM);
+    r.fillStyle(RULER, 0.28);
+    r.fillRect(x - 0.75, top * PPM, 1.5, -top * PPM);
     this.rulerLabels.begin();
     for (let m = 0; m >= top; m--) {
       const h = -m;
       const major = h % 5 === 0;
-      r.lineStyle(1, RULER, major ? 0.5 : 0.25);
-      r.lineBetween(x - (major ? 9 : 5), m * PPM, x, m * PPM);
+      const len = major ? 9 : 5;
+      r.fillStyle(RULER, major ? 0.5 : 0.25);
+      r.fillRect(x - len, m * PPM - 0.5, len, 1);
       if (major && h > 0) this.rulerLabels.put(this, `${h} m`, x - 12, m * PPM, 1, 0.5, 0.5);
     }
     this.rulerLabels.end();
@@ -235,20 +234,19 @@ export class BackgroundRenderer {
     // Marching dashes.
     const dashLen = 11;
     const period = 18;
-    g.lineStyle(2, color, alpha);
+    g.fillStyle(color, alpha);
     for (let x = x0 - period + this.dash; x < x1; x += period) {
       const a = Math.max(x0, x);
       const b = Math.min(x1, x + dashLen);
-      if (b > a) g.lineBetween(a, y, b, y);
+      if (b > a) g.fillRect(a, y - 1, b - a, 2);
     }
     // End caps.
-    g.lineStyle(2, color, alpha);
-    g.lineBetween(x0, y - 6, x0, y + 6);
-    g.lineBetween(x1, y - 6, x1, y + 6);
+    g.fillRect(x0 - 1, y - 6, 2, 12);
+    g.fillRect(x1 - 1, y - 6, 2, 12);
     // Progress fill along the line (how much of the objective is met).
     if (p > 0.001 && !done) {
-      g.lineStyle(3, color, 0.9);
-      g.lineBetween(x0, y + 5, x0 + (x1 - x0) * p, y + 5);
+      g.fillStyle(color, 0.9);
+      g.fillRect(x0, y + 3.5, (x1 - x0) * p, 3);
     }
     this.lineLabel.setPosition(x0 - 10, y - 1).setAlpha(0.75 + 0.25 * p);
     this.lineValue.setPosition(x0 - 10, y + 2).setAlpha(0.6 + 0.3 * p);
@@ -303,4 +301,33 @@ class LabelPool {
     for (const t of this.items) t.destroy();
     this.items.length = 0;
   }
+}
+
+/**
+ * 5 m x 5 m grid tile (1 texel per world px): 1 m minor lines, a major line on
+ * the tile edge. Lines cover the same pixels a stroked 1 px / 1.5 px line
+ * centred on the metre mark does (the major one wraps across the edge).
+ */
+function ensureGridTile(textures: Phaser.Textures.TextureManager): void {
+  if (textures.exists(RK.grid)) return;
+  const S = 5 * PPM;
+  const tex = textures.createCanvas(RK.grid, S, S);
+  if (!tex) return;
+  const c = tex.context;
+  c.clearRect(0, 0, S, S);
+  c.fillStyle = rgba(GRID_MINOR, 0.035);
+  for (let k = 1; k < 5; k++) {
+    c.fillRect(k * PPM - 1, 0, 1, S);
+    c.fillRect(0, k * PPM - 1, S, 1);
+  }
+  c.fillStyle = rgba(GRID_MAJOR, 0.075);
+  c.fillRect(0, 0, 1, S);
+  c.fillRect(S - 1, 0, 1, S);
+  c.fillRect(0, 0, S, 1);
+  c.fillRect(0, S - 1, S, 1);
+  tex.refresh();
+}
+
+function rgba(color: number, alpha: number): string {
+  return `rgba(${(color >> 16) & 255},${(color >> 8) & 255},${color & 255},${alpha})`;
 }

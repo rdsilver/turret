@@ -114,3 +114,15 @@ export function setTextIfChanged(t: Text, s: string): void {
 export function setColorIfChanged(t: Text, c: string): void {
   if (t.style.color !== c) t.setColor(c);
 }
+
+/**
+ * Fit a title into `maxWidth`: back to `size`, then shrink the font (not below
+ * `minSize`); if it is still too wide it wraps at `maxWidth`.
+ */
+export function fitText(t: Text, maxWidth: number, size: number, minSize: number): void {
+  t.setWordWrapWidth(null);
+  t.setFontSize(size);
+  if (t.width <= maxWidth) return;
+  t.setFontSize(Math.max(minSize, Math.floor((size * maxWidth) / t.width)));
+  if (t.width > maxWidth) t.setWordWrapWidth(maxWidth, true);
+}

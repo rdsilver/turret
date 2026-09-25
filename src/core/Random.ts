@@ -95,11 +95,16 @@ export function seedToString(seed: number): string {
   return (seed >>> 0).toString(36).toUpperCase().padStart(6, '0');
 }
 
+/**
+ * Inverse of seedToString for every 32-bit seed (up to 7 base-36 chars, case-insensitive);
+ * any other text is hashed (trimmed, lower-cased), so a word gives the same structure
+ * wherever it is entered (main menu or debug panel).
+ */
 export function parseSeed(text: string): number {
-  const clean = text.trim().toUpperCase();
-  if (/^[0-9A-Z]{1,6}$/.test(clean)) {
+  const clean = text.trim();
+  if (/^[0-9a-z]{1,7}$/i.test(clean)) {
     const n = parseInt(clean, 36);
-    if (Number.isFinite(n)) return n >>> 0;
+    if (n <= 0xffffffff) return n >>> 0;
   }
-  return hashString(clean);
+  return hashString(clean.toLowerCase());
 }

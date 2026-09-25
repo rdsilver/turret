@@ -63,6 +63,8 @@ interface Check {
   settleBreaks: number;
   settleSag: number;
   idleBreaks: number;
+  /** Silent tether snaps (loose prop slipped off) while settling + idling. */
+  tetherBreaks: number;
   drift: number;
   maxStress: number;
   progress: number;
@@ -105,6 +107,7 @@ function check(name: string, def: StructureDef, objective: ObjectiveDef): Check 
     settleBreaks: s.settleJointsBroken,
     settleSag: +s.settleDrift.toFixed(3),
     idleBreaks,
+    tetherBreaks: s.settleTetherBreaks + s.tetherBreaks,
     drift: +drift.toFixed(3),
     maxStress: +maxStress.toFixed(2),
     progress: +sim.progress.toFixed(3),
@@ -114,7 +117,7 @@ function check(name: string, def: StructureDef, objective: ObjectiveDef): Check 
     stable: false,
     ms: 0,
   };
-  r.stable = r.settleBreaks === 0 && r.idleBreaks === 0 && r.drift < 0.08 && r.progress < 0.05 && r.events === 0 && warnings.length === 0 && awakeAfterSettle === 0;
+  r.stable = r.settleBreaks === 0 && r.idleBreaks === 0 && r.tetherBreaks === 0 && r.drift < 0.08 && r.progress < 0.05 && r.events === 0 && warnings.length === 0 && awakeAfterSettle === 0;
   sim.destroy();
   r.ms = Math.round(performance.now() - t0);
   return r;
@@ -164,7 +167,7 @@ function bruteForce(def: StructureDef, objective: ObjectiveDef, trials: number):
 
 function fmt(c: Check): string {
   const flagStr = c.stable ? 'ok ' : 'BAD';
-  return `${flagStr} ${c.name.padEnd(26)} parts=${String(c.parts).padStart(3)} joints=${String(c.joints).padStart(3)} mass=${String(c.mass).padStart(6)} h=${String(c.height).padStart(4)} | settle brk=${c.settleBreaks} sag=${c.settleSag.toFixed(3)} | idle brk=${c.idleBreaks} drift=${c.drift.toFixed(3)} stress=${c.maxStress.toFixed(2)} prog=${c.progress.toFixed(2)}${c.events ? ` BOOM=${c.events}` : ''}${c.awakeAfterSettle ? ` AWAKE=${c.awakeAfterSettle}` : ''} (${c.ms}ms)${c.warnings.length ? '\n      ! ' + c.warnings.slice(0, 3).join('\n      ! ') : ''}`;
+  return `${flagStr} ${c.name.padEnd(26)} parts=${String(c.parts).padStart(3)} joints=${String(c.joints).padStart(3)} mass=${String(c.mass).padStart(6)} h=${String(c.height).padStart(4)} | settle brk=${c.settleBreaks} sag=${c.settleSag.toFixed(3)} | idle brk=${c.idleBreaks}${c.tetherBreaks ? ` TETHER=${c.tetherBreaks}` : ''} drift=${c.drift.toFixed(3)} stress=${c.maxStress.toFixed(2)} prog=${c.progress.toFixed(2)}${c.events ? ` BOOM=${c.events}` : ''}${c.awakeAfterSettle ? ` AWAKE=${c.awakeAfterSettle}` : ''} (${c.ms}ms)${c.warnings.length ? '\n      ! ' + c.warnings.slice(0, 3).join('\n      ! ') : ''}`;
 }
 
 // ------------------------------------------------------------ gallery helpers

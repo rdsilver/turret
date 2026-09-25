@@ -60,6 +60,7 @@ function family(id: MaterialId): Family {
     case 'iron':
     case 'cable':
     case 'core':
+    case 'armor':
       return 'metal';
     case 'glass':
       return 'glass';
@@ -119,6 +120,7 @@ export class EffectsManager {
 
   // Rate limiting / load.
   private impactTokens = 14;
+  private smallShots = 0;
   private stressTokens = 6;
   private snapLoad = 0;
   private density = 1;
@@ -313,6 +315,62 @@ export class EffectsManager {
     this.on('bigCollapse', this.onBigCollapse);
     this.on('objectiveComplete', this.onObjectiveComplete);
     this.on('chainStarted', this.onChainStarted);
+    this.on('partDamaged', this.onPartDamaged);
+    this.on('partWrecked', this.onPartWrecked);
+    this.on('creatureOverheated', this.onOverheated);
+    this.on('creatureNeutralized', this.onNeutralized);
+    this.on('creatureAbility', this.onAbility);
+    this.on('breach', this.onBreach);
+  }
+
+  // ---- creatures -----------------------------------------------------------
+
+  private onPartDamaged(e: SimEvents['partDamaged']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    if (e.armor >= 0.5) {
+      // Armour: bright ricochet sparks, the round glances off.
+      if (this.takeImpactToken(0.4)) this.sparkBurst(x, y, 4, 260, Math.PI, 1.6);
+    } else if (e.integrity < 0.35 && this.takeImpactToken(0.4)) {
+      // Nearly broken parts shed more (a visible warning).
+      this.materialBurst(e.part.material.id, x, y, 0.3, Math.PI, 1.4);
+    }
+  }
+
+  private onPartWrecked(e: SimEvents['partWrecked']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    const mat = e.part.material.id;
+    this.flash(x, y, 26, 0xffffff, 70, 0.7);
+    this.materialBurst(mat, x, y, 0.8, Math.PI, 1.8);
+    this.puff(x, y, 4, this.dustColor[mat] ?? GROUND_DUST, 14, 0.3);
+    if (family(mat) === 'metal') this.sparkBurst(x, y, 12, 420, 0, Math.PI);
+    this.camera.addTrauma(0.12, 0.4);
+  }
+
+  private onOverheated(e: SimEvents['creatureOverheated']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    this.flash(x, y, 30, 0xffa040, 160, 0.8);
+    this.sparkBurst(x, y, 10, 260, -Math.PI / 2, 1.2);
+    this.puff(x, y, 6, 0x2b2d31, 18, 0.45, 2);
+  }
+
+  private onNeutralized(e: SimEvents['creatureNeutralized']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    this.puff(x, y, 5, GROUND_DUST, 20, 0.28, 1.4);
+    this.camera.addTrauma(0.15, 0.5);
+  }
+
+  private onAbility(e: SimEvents['creatureAbility']): void {
+    this.puff(e.x * PPM, e.y * PPM, 2, 0xc9ced6, 10, 0.25);
+  }
+
+  private onBreach(): void {
+    this.overlay.flash(0.35, 0xff3b30, 2.5);
+    this.overlay.pulse(0xff3b30, 1, 1.6);
+    this.camera.addTrauma(0.6);
   }
 
   /** Subscribe a handler; events are ignored while the level pre-settles. */
@@ -335,6 +393,29 @@ export class EffectsManager {
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     const rec = Math.max(0.3, Math.min(2, e.recoil));
+
+    if (e.projectile.mass < 8) {
+      // Small arms: a quick muzzle blink, a couple of sparks, a wisp every few shots.
+      this.smallShots++;
+      this.flash(x + ca * 8, y + sa * 8, 16, 0xfff1cf, 45, 0.9);
+      const sb = resetBurst();
+      sb.tint = 0xfff0c0;
+      sb.tintEnd = 0xff7a2a;
+      sb.angle = a;
+      sb.spread = 0.25;
+      sb.speedMin = 300;
+      sb.speedMax = 700;
+      sb.lifeMin = 50;
+      sb.lifeMax = 120;
+      sb.scaleMin = 0.35;
+      sb.scaleMax = 0.6;
+      sb.stretch = 0.004;
+      sb.drag = 2;
+      this.emit(this.sparks, x, y, 2);
+      if (this.smallShots % 3 === 0) this.puff(x + ca * 10, y + sa * 10, 1, 0xb4b9c2, 8, 0.18);
+      this.camera.addTrauma(0.035 * rec, 0.25);
+      return;
+    }
 
     // Muzzle flash: hot core + a forward tongue.
     this.flash(x + ca * 8, y + sa * 8, 34 + 12 * rec, 0xfff1cf, 85, 0.95);
@@ -393,6 +474,13 @@ export class EffectsManager {
     // Debris sprays back towards the shooter / off the surface.
     const back = Math.atan2(-p.preVy, -p.preVx);
     const mat: MaterialId | null = e.target instanceof StructurePart ? e.target.material.id : e.hitGround ? 'ground' : null;
+    if (p.mass < 8) {
+      // Bullets: small puff of material + ricochet sparks off armour; no hit-stop.
+      if (!e.first || !mat || !this.takeImpactToken(0.5)) return;
+      if (e.hitGround) this.groundDust(x, 0.12, GROUND_DUST);
+      else this.materialBurst(mat, x, y, 0.18, back, 1.1);
+      return;
+    }
     if (!e.first) {
       if (e.speed > 6 && mat) {
         const m = clamp01((e.speed - 6) / 20) * 0.5;

@@ -3,7 +3,7 @@
  * Gameplay data lives here; the Rapier body is owned via Entity.
  */
 import { Entity } from './Entity';
-import type { MaterialDef } from './Materials';
+import { partMaxHp, type MaterialDef } from './Materials';
 import type { PartDef } from './StructureDefinition';
 import type { BreakableJoint } from './BreakableJoint';
 import type { Structure } from './Structure';
@@ -60,6 +60,14 @@ export class StructurePart extends Entity {
   detachedAt = -1;
   /** Detonation already scheduled/done. */
   armed = false;
+  /** 0..1 weapon-damage integrity (1 = pristine). */
+  integrity = 1;
+  /** Hit points at integrity 1 (see partMaxHp). */
+  maxHp = 10;
+  /** Weapon damage broke it apart (limb severed / plate knocked off). */
+  wrecked = false;
+  /** 0..1+ heat (engines overheat when shot). */
+  heat = 0;
 
   constructor(def: PartDef, material: MaterialDef, shape: PartShape) {
     super();
@@ -95,6 +103,7 @@ export class StructurePart extends Entity {
         break;
       }
     }
+    this.maxHp = partMaxHp(material, this.area) * (def.hpScale ?? 1);
   }
 
   get isCore(): boolean {
