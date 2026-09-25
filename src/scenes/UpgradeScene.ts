@@ -31,6 +31,11 @@ import { AMMO } from '../data/ammo';
 type Text = Phaser.GameObjects.Text;
 
 const BRANCH_ORDER: UpgradeBranch[] = ['core', 'heavy', 'rapid', 'precision', 'demolition', 'experimental'];
+/** Branch names in creature (assault) mode, where the turret is a machine gun. */
+const ASSAULT_BRANCH_LABEL: Record<string, string> = {
+  core: 'GUN',
+  rapid: 'ROUNDS · BARREL',
+};
 const BRANCH_LABEL: Record<string, string> = {
   core: 'CANNON',
   heavy: 'HEAVY ORDNANCE',
@@ -94,7 +99,7 @@ export class UpgradeScene extends Phaser.Scene {
   private moneyFrom = 0;
   private moneyT = 1;
   private specTexts: Array<{ key: string; label: Text; value: Text; last: string; flash: number }> = [];
-  private ammoDesc!: Text;
+  private ammoDesc: Text | null = null;
   private investedText: Text | null = null;
   /** Bottom edge of the SERVICE RECORD table (the NEXT DEPLOYMENT panel stays below it). */
   private recordBottom = 0;
@@ -110,6 +115,7 @@ export class UpgradeScene extends Phaser.Scene {
 
   init(data: { mode?: 'assault' | 'campaign' }): void {
     this.mode = data?.mode ?? 'assault';
+    this.ammoDesc = null;
   }
 
   create(): void {
@@ -138,7 +144,7 @@ export class UpgradeScene extends Phaser.Scene {
 
     // Weapon spec readout
     this.add.rectangle(CAT.x, 140, W - 144, 1, THEME.panelEdge).setOrigin(0, 0.5);
-    mono(this, CAT.x, 140, 'CANNON SPEC ', SIZE.micro - 1, THEME.textFaint, { weight: 700, spacing: 3, originY: 0.5 }).setBackgroundColor(css(THEME.bg));
+    mono(this, CAT.x, 140, this.mode === 'assault' ? 'MACHINE GUN SPEC ' : 'CANNON SPEC ', SIZE.micro - 1, THEME.textFaint, { weight: 700, spacing: 3, originY: 0.5 }).setBackgroundColor(css(THEME.bg));
     this.buildSpecStrip(CAT.x, 166);
 
     // ------------------------------------------------------------ catalogue
@@ -158,7 +164,9 @@ export class UpgradeScene extends Phaser.Scene {
     });
 
     // ------------------------------------------------------------ sidebar
-    this.buildAmmo();
+    // Creature mode fires one kind of round: no shell loadout, just the record.
+    if (this.mode === 'assault') this.buildRecord(SIDE.x, CAT.y + 10);
+    else this.buildAmmo();
     this.buildNext();
 
     // Keyboard
@@ -228,7 +236,7 @@ export class UpgradeScene extends Phaser.Scene {
   // ------------------------------------------------------------------ catalogue
 
   private buildCatalogue(): void {
-    const defs = this.upg.defs;
+    const defs = this.upg.defs.filter((d) => !d.modes || d.modes.includes(this.mode));
     const branches = BRANCH_ORDER.filter((b) => defs.some((d) => d.branch === b));
     // Branches not in our order list (future data) go last.
     for (const d of defs) if (!branches.includes(d.branch)) branches.push(d.branch);
@@ -253,7 +261,8 @@ export class UpgradeScene extends Phaser.Scene {
       const x = col * (colW + COL_GAP);
       const list = defs.filter((d) => d.branch === branch);
       // Column header
-      const head = mono(this, x, bandY + 10, BRANCH_LABEL[branch] ?? branch.toUpperCase(), SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
+      const label = (this.mode === 'assault' ? ASSAULT_BRANCH_LABEL[branch] : undefined) ?? BRANCH_LABEL[branch] ?? branch.toUpperCase();
+      const head = mono(this, x, bandY + 10, label, SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
       const count = mono(this, x + colW, bandY + 10, `${list.length} ${list.length === 1 ? 'SYSTEM' : 'SYSTEMS'}`, SIZE.micro, THEME.textFaint, { originX: 1, originY: 0.5 });
       const rule = this.add.rectangle(x, bandY + 28, colW, 1, THEME.rule).setOrigin(0, 0.5);
       const tick = this.add.rectangle(x, bandY + 28, 28, 3, THEME.accentNum).setOrigin(0, 0.5);
@@ -277,7 +286,7 @@ export class UpgradeScene extends Phaser.Scene {
     const pips = this.add.graphics({ x: 18, y: 47 });
     const lvl = mono(this, 18, 47, '', SIZE.micro - 1, THEME.textDim, { weight: 600, originY: 0.5 });
     const desc = mono(this, 18, 60, '', SIZE.micro, THEME.textDim, { wrap: w - 36, lineSpacing: 2 });
-    setEllipsized(desc, def.description, 3);
+    setEllipsized(desc, (this.mode === 'assault' && def.assaultDescription) || def.description, 3);
     const pvLabel = mono(this, 18, 114, '', SIZE.micro - 1, THEME.textFaint, { weight: 600 });
     const pvFrom = mono(this, 18, 130, '', SIZE.sm, THEME.textDim, { weight: 600 });
     const pvArrow = mono(this, 0, 130, '→', SIZE.sm, THEME.textFaint, { weight: 600 });
@@ -547,13 +556,20 @@ export class UpgradeScene extends Phaser.Scene {
     this.add.rectangle(x, y + 18, w, 1, THEME.rule).setOrigin(0, 0.5);
     // Campaign contracts only (endless / seed wins are stored as proc-<seed> records).
     const done = levelManager.levels.filter((l) => gs.records[l.id]?.completed).length;
-    const rows: Array<[string, string]> = [
-      ['Contracts completed', `${done} / ${levelManager.count}`],
-      ['Total earned', money(gs.totalEarned)],
-      ['Invested in workshop', money(this.upg.invested(gs.upgrades))],
-      ['Shots fired', String(gs.totalShots)],
-      ['Joints broken', String(gs.totalJointsBroken)],
-    ];
+    const rows: Array<[string, string]> =
+      this.mode === 'assault'
+        ? [
+            ['Lines held', `${Math.min(gs.assaultIndex, ASSAULT_LEVELS.length)} / ${ASSAULT_LEVELS.length}`],
+            ['Total earned', money(gs.totalEarned)],
+            ['Invested in workshop', money(this.upg.invested(gs.upgrades))],
+          ]
+        : [
+            ['Contracts completed', `${done} / ${levelManager.count}`],
+            ['Total earned', money(gs.totalEarned)],
+            ['Invested in workshop', money(this.upg.invested(gs.upgrades))],
+            ['Shots fired', String(gs.totalShots)],
+            ['Joints broken', String(gs.totalJointsBroken)],
+          ];
     rows.forEach(([k, v], i) => {
       const ry = y + 42 + i * 26;
       mono(this, x, ry, k, SIZE.micro, THEME.textFaint, { originY: 0.5 });
@@ -564,6 +580,7 @@ export class UpgradeScene extends Phaser.Scene {
   }
 
   private refreshAmmo(): void {
+    if (!this.ammoDesc) return;
     const gs = gameState();
     let unlocked: string[] = ['standard'];
     try {

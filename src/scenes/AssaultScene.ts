@@ -13,6 +13,7 @@ import type { MaterialId } from '../sim/Materials';
 import { StructurePart } from '../sim/StructurePart';
 import { AMMO } from '../data/ammo';
 import { ASSAULT_LEVELS } from '../data/assault/levels';
+import { creatureIds } from '../sim/creature/CreatureTypes';
 import { AssaultSession } from '../game/AssaultSession';
 import { scoreAssault } from '../game/AssaultScoring';
 import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef } from '../game/AssaultLevel';
@@ -43,22 +44,36 @@ export interface AssaultSceneData {
 
 type Flow = 'playing' | 'ending' | 'results';
 
-/** Endless waves after the campaign: more, faster, mixed creatures. */
+/** Base walking speed (m/s) of each creature in endless waves. */
+const ENDLESS_ROSTER: Array<[string, number]> = [
+  ['stickman', 1.0],
+  ['hound', 1.5],
+  ['thrower', 1.1],
+  ['engine', 0.8],
+  ['beetle', 0.55],
+  ['shield', 0.75],
+  ['hound', 1.5],
+  ['centipede', 0.9],
+];
+
+/** Endless waves after the campaign: more, faster, mixed creatures (the strider every fifth wave). */
 export function endlessAssault(k: number): AssaultLevelDef {
   const n = 3 + Math.floor(k * 0.8);
-  const kinds = ['stickman', 'thrower', 'stickman'];
-  const waves = [];
+  const faster = 1 + Math.min(0.5, k * 0.05);
+  const waves: AssaultLevelDef['waves'] = [];
   for (let i = 0; i < n; i++) {
-    waves.push({ creature: kinds[(i + k) % kinds.length]!, at: 1 + i * Math.max(3, 7 - k * 0.3), params: { speed: 1.3 + Math.min(0.9, k * 0.08) } });
+    const [creature, speed] = ENDLESS_ROSTER[(i * 3 + k) % ENDLESS_ROSTER.length]!;
+    waves.push({ creature, at: 1 + i * Math.max(4, 9 - k * 0.3), params: { speed: speed * faster } });
   }
+  if (k % 5 === 4) waves.push({ creature: 'strider', at: 2, params: { speed: 0.45 * faster } });
   return {
     id: `assault-endless-${k}`,
     name: `Endless Wave ${pad2(k + 1)}`,
-    subtitle: `${n} creatures. They keep coming.`,
-    lesson: 'Prioritise: the closest threat first, throwers before walkers.',
+    subtitle: `${waves.length} creatures. They keep coming.`,
+    lesson: 'Prioritise: the fastest threat first, then whatever is closest to the line.',
     hint: 'Short bursts. Cool the barrel between targets.',
     seed: hashString(`assault-endless-${k}`),
-    reward: 180 + k * 40,
+    reward: 300 + k * 60,
     waves,
   };
 }
@@ -481,7 +496,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   }
   randomizeStructure(): void {
     // Spawn an extra random creature at the entry point.
-    const kinds = ['stickman', 'thrower', 'hound'];
+    const kinds = creatureIds();
     this.sim.creatures.spawn(kinds[Math.floor(Math.random() * kinds.length)]!, SPAWN_X, {}, (Math.random() * 1e9) | 0);
   }
   setPaused(p: boolean): void {

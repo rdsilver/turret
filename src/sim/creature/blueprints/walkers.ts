@@ -3,64 +3,7 @@
  * Positive muscle angles swing a limb forward (toward the turret).
  */
 import { registerCreature, type CreatureSpec, type MuscleGait } from '../CreatureTypes';
-import type { StructureDraft } from '../../generator/StructureDraft';
-import type { MaterialId } from '../../Materials';
-
-const G = 12;
-
-interface LegBuild {
-  hip: string;
-  knee: string;
-  thigh: string;
-  shin: string;
-  foot: string;
-}
-
-/** Thigh + shin + foot hanging from a hip point; returns part/joint ids. */
-function buildLeg(
-  d: StructureDraft,
-  side: string,
-  hipX: number,
-  hipY: number,
-  o: { thigh: number; shin: number; w: number; mat: MaterialId; density: number; hipTorque: number; kneeTorque: number; hp?: number; footW?: number },
-  body: string,
-): LegBuild {
-  const footH = 0.12;
-  const kneeY = footH + o.shin;
-  const ids = { thigh: `thigh${side}`, shin: `shin${side}`, foot: `foot${side}`, hip: `hip${side}`, knee: `knee${side}` };
-  // Far-side limbs (names ending in R) are drawn darker in the side view.
-  const far = side.endsWith('R') ? ['back'] : [];
-  d.box(hipX, kneeY + (hipY - kneeY) / 2, o.w, hipY - kneeY + 0.08, o.mat, { id: ids.thigh, densityScale: o.density, tags: ['limb', ...far], hpScale: o.hp });
-  d.box(hipX, footH + o.shin / 2, o.w * 0.88, o.shin + 0.06, o.mat, { id: ids.shin, densityScale: o.density, tags: ['limb', ...far], hpScale: o.hp });
-  d.box(hipX - 0.1, footH / 2, o.footW ?? 0.46, footH, o.mat, { id: ids.foot, densityScale: o.density, friction: 1.2, tags: ['limb', 'foot', ...far] });
-  d.joints.push({ kind: 'muscle', id: ids.hip, a: body, b: ids.thigh, at: [hipX, hipY], seam: o.w, strength: 2.5, muscle: { torque: o.hipTorque, min: -65, max: 80, omega: 42 } });
-  d.joints.push({ kind: 'muscle', id: ids.knee, a: ids.thigh, b: ids.shin, at: [hipX, kneeY], seam: o.w, strength: 2.5, muscle: { torque: o.kneeTorque, min: -140, max: 6, omega: 42 } });
-  d.weld(ids.foot, ids.shin, { at: [hipX, footH], seam: o.w * 0.8, strength: 3 });
-  return ids;
-}
-
-function walkerGait(amp: number): Record<string, MuscleGait> {
-  return {
-    hipL: { shape: 'sin', amp, bias: 0.04, phase: 0 },
-    hipR: { shape: 'sin', amp, bias: 0.04, phase: 0.5 },
-    kneeL: { shape: 'swing', amp: -0.95, bias: -0.06, phase: 0.25 },
-    kneeR: { shape: 'swing', amp: -0.95, bias: -0.06, phase: 0.75 },
-    shoulderL: { shape: 'sin', amp: 0.35, bias: 0, phase: 0.5 },
-    shoulderR: { shape: 'sin', amp: 0.35, bias: 0, phase: 0 },
-  };
-}
-
-/** Approximate mass of everything drafted so far (kg) — used to size muscles. */
-function draftMass(d: StructureDraft): number {
-  let m = 0;
-  for (const p of d.parts) {
-    const s = p.shape;
-    const area = s.kind === 'box' ? s.w * s.h : s.kind === 'circle' ? Math.PI * s.r * s.r : 0.1;
-    const dens = { wood: 520, steel: 7000, armor: 5200, rubber: 1100, core: 1500, iron: 7800, concrete: 2100, glass: 2400, stone: 2500, explosive: 700, cable: 3000, ground: 0 }[p.material] ?? 1000;
-    m += area * dens * (p.densityScale ?? 1);
-  }
-  return m;
-}
+import { G, buildLeg, draftMass, walkerGait } from './kit';
 
 /**
  * STICK WALKER — level 1. A tall wooden stick figure. Knees are the obvious
@@ -157,11 +100,12 @@ registerCreature('thrower', (d, _rng, params) => {
  * coming on three legs; take out a front pair and it goes down on its nose.
  */
 registerCreature('hound', (d, _rng, params) => {
-  const density = 0.5;
-  const legLen = 0.62;
+  const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
+  const density = P('density', 0.5);
+  const legLen = P('legLen', 0.62);
   const hipY = 0.12 + legLen * 2;
   const bodyW = 2.5;
-  const speed = typeof params.speed === 'number' ? params.speed : 2.2;
+  const speed = P('speed', 1.6);
   d.box(0, hipY + 0.28, bodyW, 0.56, 'wood', { id: 'body', densityScale: density, tags: ['core'], hpScale: 2.2 });
   d.box(-bodyW / 2 - 0.35, hipY + 0.62, 0.7, 0.45, 'wood', { id: 'head', densityScale: density * 0.8, hpScale: 1.4 });
   d.weld('head', 'body', { at: [-bodyW / 2, hipY + 0.5], seam: 0.4, strength: 3 });
@@ -176,23 +120,29 @@ registerCreature('hound', (d, _rng, params) => {
     ['BR', bodyW / 2 - 0.3],
   ];
   for (const [side, x] of hips) {
-    buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * 1.3, kneeTorque: tref * 1.2, hp: 1.1 }, 'body');
+    buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * P('hipK', 2.5), kneeTorque: tref * P('kneeK', 3), hp: P('legHp', 0.8), omega: P('omega', 90) }, 'body');
   }
-  const amp = 0.45;
+  const amp = P('amp', 0.6);
   const gait: Record<string, MuscleGait> = {};
   // Trot: FL+BR together, FR+BL half a cycle later.
   const phase: Record<string, number> = { FL: 0, BR: 0, FR: 0.5, BL: 0.5 };
   for (const [side] of hips) {
-    gait[`hip${side}`] = { shape: 'sin', amp, bias: 0.02, phase: phase[side]! };
-    gait[`knee${side}`] = { shape: 'swing', amp: -0.9, bias: -0.08, phase: phase[side]! + 0.25 };
+    gait[`hip${side}`] = { shape: 'sin', amp, bias: P('hipBias', 0.02), phase: phase[side]! };
+    gait[`knee${side}`] = { shape: 'swing', amp: P('kneeAmp', -0.9), bias: P('kneeBias', -0.08), phase: phase[side]! + P('kneePhase', 0.25) };
   }
   return {
     name: 'Hound',
     core: 'body',
     legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
-    gait: { speed, stride: 1.9, muscles: gait },
+    gait: { speed, stride: P('stride', 3), muscles: gait },
+    legGroups: [
+      ['FL', 'FR'],
+      ['BL', 'BR'],
+    ],
+    downedTilt: 35,
     lean: 0,
-    footLift: 1.6,
+    footLift: P('lift', 1.6),
+    drive: P('drive', 1),
     vitals: ['body', 'head'],
     bounty: 70,
   } satisfies CreatureSpec;

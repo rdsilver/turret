@@ -39,6 +39,8 @@ export class AssaultSession {
   private stopX = new Map<Creature, number>();
   closest = Infinity;
   breachedBy: Creature | null = null;
+  /** Creatures that came from splits (a cut centipede's back half). */
+  private extra = 0;
   endedAt = -1;
   private offs: Array<() => void> = [];
 
@@ -55,8 +57,13 @@ export class AssaultSession {
       ev.on('partWrecked', ({ part }) => {
         if (this.state === 'running' && part.hasTag('limb')) this.limbsSevered++;
       }),
+      ev.on('creatureSplit', ({ creature, parent }) => {
+        if (this.state !== 'running' || !this.creatures.includes(parent)) return;
+        this.creatures.push(creature);
+        this.extra++;
+      }),
       ev.on('creatureNeutralized', ({ creature, x }) => {
-        if (!this.stopX.has(creature)) this.stopX.set(creature, x);
+        if (this.state === 'running' && !this.stopX.has(creature)) this.stopX.set(creature, x);
       }),
     );
   }
@@ -66,7 +73,7 @@ export class AssaultSession {
   }
 
   get total(): number {
-    return this.level.waves.length;
+    return this.level.waves.length + this.extra;
   }
 
   get stopped(): number {
@@ -93,7 +100,8 @@ export class AssaultSession {
       if (!c.active || c.core.removed) continue;
       const d = c.x - DEFENSE_LINE_X;
       if (d < this.closest) this.closest = d;
-      if (d < 0) {
+      // Only a creature still on the move breaches (one toppling over the line after it was stopped doesn't).
+      if (d < 0 && (c.state === 'walking' || c.state === 'crippled')) {
         this.state = 'lost';
         this.breachedBy = c;
         this.endedAt = this.sim.physics.simTime;

@@ -104,6 +104,8 @@ export interface SimEvents {
 
   // ---- creatures ---------------------------------------------------------
   creatureSpawned: { creature: Creature };
+  /** A cut-off piece of `parent` became a creature of its own (also emits creatureSpawned). */
+  creatureSplit: { creature: Creature; parent: Creature };
   /** A creature can no longer advance (for good). */
   creatureNeutralized: { creature: Creature; cause: NeutralizeCause; x: number; y: number };
   creatureOverheated: { creature: Creature; x: number; y: number };

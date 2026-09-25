@@ -34,6 +34,8 @@ export interface WeaponStats {
   coolRate?: number;
   /** Damage points per round (small arms; see Damage.ts). */
   damage?: number;
+  /** Fraction (0..1) of a target's armour the rounds ignore. */
+  armorPierce?: number;
 }
 
 export const BASE_WEAPON_STATS: Readonly<WeaponStats> = {
@@ -173,6 +175,7 @@ export class Weapon {
       shot: this.shotsFired,
       impactMultiplier: s.impactMultiplier,
       damage: s.damage ?? 1,
+      pierce: s.armorPierce ?? 0,
     });
     this.reload = this.unlimited ? 0 : s.reloadTime;
     if (s.heatPerShot && !this.unlimited) {

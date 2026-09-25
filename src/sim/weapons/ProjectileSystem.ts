@@ -22,6 +22,8 @@ export interface SpawnProjectileOptions {
   impactMultiplier?: number;
   /** Weapon damage points delivered by a 'damage' behaviour. */
   damage?: number;
+  /** Fraction of armour ignored. */
+  pierce?: number;
 }
 
 /** Rounds that never hit anything expire after this long. */
@@ -93,6 +95,7 @@ export class ProjectileSystem {
     p.shot = o.shot;
     p.impactMultiplier = o.impactMultiplier ?? 1;
     p.damage = o.damage ?? 1;
+    p.pierce = o.pierce ?? 0;
     p.preVx = o.vx;
     p.preVy = o.vy;
     p.vx = o.vx;

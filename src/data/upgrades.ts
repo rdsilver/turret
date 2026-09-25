@@ -39,6 +39,10 @@ export interface UpgradeDef {
   unlocksAmmo?: string;
   /** Prerequisite. */
   requires?: { id: string; level: number };
+  /** Workshop text in creature (assault) mode, when the cannon wording doesn't fit. */
+  assaultDescription?: string;
+  /** Game modes whose workshop lists it (default: both). */
+  modes?: Array<'assault' | 'campaign'>;
   /** Primary stat shown in the "from → to" preview (stat upgrades only). */
   view?: UpgradeStatView;
   /** Short per-level effect summary for cards, e.g. "+8% muzzle velocity / level". */
@@ -77,6 +81,7 @@ export const UPGRADES: UpgradeDef[] = [
       s.muzzleVelocity *= 1 + 0.08 * lvl;
     },
     view: { label: 'Muzzle velocity', stat: 'muzzleVelocity', unit: 'm/s', digits: 1 },
+    assaultDescription: 'Longer barrel, hotter charge. Flatter trajectories: less lead on distant targets, and rounds arrive sooner.',
   },
   {
     id: 'mass',
@@ -93,6 +98,7 @@ export const UPGRADES: UpgradeDef[] = [
       s.projectileRadius *= Math.pow(k, 0.25);
     },
     view: { label: 'Shell mass', stat: 'projectileMass', unit: 'kg', digits: 0 },
+    modes: ['campaign'],
   },
   {
     id: 'autoloader',
@@ -106,6 +112,7 @@ export const UPGRADES: UpgradeDef[] = [
       s.reloadTime *= Math.pow(0.85, lvl);
     },
     view: { label: 'Reload', stat: 'reloadTime', unit: 's', digits: 2 },
+    assaultDescription: 'Belt feed and a faster bolt. More rounds per second (and more heat per second).',
   },
   {
     id: 'stabilizer',
@@ -120,6 +127,7 @@ export const UPGRADES: UpgradeDef[] = [
       s.recoil *= Math.pow(0.88, lvl);
     },
     view: { label: 'Spread (1σ)', stat: 'spread', unit: '°', scale: 1 / DEG, digits: 2 },
+    assaultDescription: 'Gyro-damped mount: tighter grouping. Hit the knee you aimed at, not the thigh next to it.',
   },
 
   // ------------------------------------------------------------------ precision
@@ -135,6 +143,7 @@ export const UPGRADES: UpgradeDef[] = [
       s.previewTime += 0.7 * lvl;
     },
     view: { label: 'Trajectory preview', stat: 'previewTime', unit: 's', digits: 2 },
+    assaultDescription: 'Solves the flight path further ahead. The tracer line extends toward the impact point.',
   },
 
   // ------------------------------------------------------------------ machine gun
@@ -150,6 +159,21 @@ export const UPGRADES: UpgradeDef[] = [
       if (s.damage !== undefined) s.damage *= 1 + 0.25 * lvl;
     },
     view: { label: 'Damage per round', stat: 'damage', unit: '', digits: 2 },
+    modes: ['assault'],
+  },
+  {
+    id: 'piercing',
+    name: 'Armour-Piercing Rounds',
+    branch: 'rapid',
+    description: 'Hardened penetrator cores. Rounds punch through steel and armour plate instead of sparking off it.',
+    maxLevel: 3,
+    costs: [180, 320, 520],
+    perLevel: 'ignores more armour',
+    apply: (s, lvl) => {
+      s.armorPierce = 1 - Math.pow(0.6, lvl);
+    },
+    view: { label: 'Armour ignored', stat: 'armorPierce', unit: '%', scale: 100, digits: 0 },
+    modes: ['assault'],
   },
   {
     id: 'cooling',
@@ -164,6 +188,7 @@ export const UPGRADES: UpgradeDef[] = [
       if (s.heatPerShot !== undefined) s.heatPerShot *= 1 - 0.08 * lvl;
     },
     view: { label: 'Cooling', stat: 'coolRate', unit: '/s', digits: 2 },
+    modes: ['assault'],
   },
 
   // ------------------------------------------------------------------ demolition
@@ -175,6 +200,7 @@ export const UPGRADES: UpgradeDef[] = [
     maxLevel: 1,
     costs: [340],
     unlocksAmmo: 'explosive',
+    modes: ['campaign'],
   },
   {
     id: 'cluster',
@@ -185,6 +211,7 @@ export const UPGRADES: UpgradeDef[] = [
     costs: [620],
     unlocksAmmo: 'cluster',
     requires: { id: 'he', level: 1 },
+    modes: ['campaign'],
   },
 
   // ------------------------------------------------------------------ experimental
@@ -196,6 +223,7 @@ export const UPGRADES: UpgradeDef[] = [
     maxLevel: 1,
     costs: [460],
     unlocksAmmo: 'freeze',
+    modes: ['campaign'],
   },
 ];
 

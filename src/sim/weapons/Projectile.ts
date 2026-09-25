@@ -25,6 +25,8 @@ export class Projectile extends Entity {
   impactMultiplier = 1;
   /** Damage points (small arms); read by the 'damage' behaviour. */
   damage = 1;
+  /** Fraction of armour ignored (armour-piercing rounds). */
+  pierce = 0;
 
   get speed(): number {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);

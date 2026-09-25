@@ -148,7 +148,7 @@ console.log(`  catalogue total: $${total}`);
   const all: Record<string, number> = {};
   for (const d of UPGRADES) all[d.id] = d.maxLevel;
   const st = us.weaponStats(all);
-  console.log(`  fully upgraded: v=${st.muzzleVelocity.toFixed(1)} m=${st.projectileMass.toFixed(0)} r=${st.projectileRadius.toFixed(3)} reload=${st.reloadTime.toFixed(2)} spread=${((st.spread * 180) / Math.PI).toFixed(2)}° recoil=${st.recoil.toFixed(2)} preview=${st.previewTime.toFixed(2)} scans=${us.scanCharges(all)} ammo=${us.unlockedAmmo(all).join(',')}`);
+  console.log(`  fully upgraded: v=${st.muzzleVelocity.toFixed(1)} m=${st.projectileMass.toFixed(0)} r=${st.projectileRadius.toFixed(3)} reload=${st.reloadTime.toFixed(2)} spread=${((st.spread * 180) / Math.PI).toFixed(2)}° recoil=${st.recoil.toFixed(2)} preview=${st.previewTime.toFixed(2)} ammo=${us.unlockedAmmo(all).join(',')}`);
   console.log(`  clamp check (velocity: 99 in save): level=${us.level('velocity', { velocity: 99 })}, unknown id ignored: ${JSON.stringify(us.weaponStats({ bogus: 3 }).muzzleVelocity)}`);
 }
 {

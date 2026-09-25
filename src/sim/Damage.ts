@@ -18,15 +18,19 @@ export class DamageSystem {
 
   constructor(private readonly ctx: SimContext) {}
 
-  /** Apply `amount` damage points to a part at (x, y). Returns damage actually dealt. */
-  apply(part: StructurePart, amount: number, x: number, y: number): number {
+  /**
+   * Apply `amount` damage points to a part at (x, y); `pierce` is the fraction
+   * of its armour the round ignores. Returns damage actually dealt.
+   */
+  apply(part: StructurePart, amount: number, x: number, y: number, pierce = 0): number {
     if (part.removed || part.fixed || part.wrecked || amount <= 0) return 0;
-    const armor = part.material.armor ?? 0;
+    const armor = (part.material.armor ?? 0) * (1 - Math.min(1, Math.max(0, pierce)));
     const dealt = amount * this.scale * (1 - armor);
     const before = part.integrity;
     part.integrity = Math.max(0, part.integrity - dealt / part.maxHp);
     part.wear = Math.max(part.wear, 1 - part.integrity);
-    if (part.hasTag('engine')) part.heat += dealt * 0.12;
+    // Engines run hot: a few hits overheat one long before it is destroyed.
+    if (part.hasTag('engine')) part.heat = Math.min(1.6, part.heat + (dealt / part.maxHp) * 5);
     const jointScale = MIN_JOINT_SCALE + (1 - MIN_JOINT_SCALE) * part.integrity;
     const world = this.ctx.physics.world;
     for (let i = part.joints.length - 1; i >= 0; i--) {

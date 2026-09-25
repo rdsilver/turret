@@ -103,6 +103,6 @@ export const SUBMUNITION = {
 registerBehavior('damage', {
   onImpact(p, spec, ctx, hit) {
     const t = hit.target;
-    if (t instanceof StructurePart) ctx.damage.apply(t, p.damage * num(spec, 'amount', 1), hit.x, hit.y);
+    if (t instanceof StructurePart) ctx.damage.apply(t, p.damage * num(spec, 'amount', 1), hit.x, hit.y, p.pierce);
   },
 });

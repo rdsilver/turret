@@ -55,6 +55,13 @@ export interface CreatureSpec {
     stride: number;
     muscles: Record<string, MuscleGait>;
   };
+  /**
+   * Leg groups (by leg name) that each need at least one working leg, e.g. a
+   * quadruped's front and back pairs: lose a whole group and it can't walk.
+   */
+  legGroups?: string[][];
+  /** Body tilt (degrees from its upright angle) that counts as downed (default 60). */
+  downedTilt?: number;
   /** Upright body angle (degrees, CCW positive in definition space; small forward lean = positive). */
   lean?: number;
   /** Balance assist strength (multiplier; 1 = default). */
@@ -70,6 +77,11 @@ export interface CreatureSpec {
   abilities?: AbilitySpec[];
   /** Base payout for stopping it. */
   bounty?: number;
+  /**
+   * Cut in two, a piece with at least `min` parts tagged `tag` (and legs) walks
+   * on as a creature of its own, led by its front-most tagged part.
+   */
+  split?: { tag: string; min: number };
 }
 
 export interface CreatureParams {
