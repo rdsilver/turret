@@ -113,6 +113,26 @@ export class TextureAtlas {
     return f;
   }
 
+  /** Clear a frame's region and paint it again (e.g. glyphs once web fonts load). */
+  repaint(name: string, paint: (ctx: CanvasRenderingContext2D) => void): boolean {
+    const f = this.frames.get(name);
+    if (!f) return false;
+    const page = this.pages.find((p) => p.key === f.key);
+    const fr = page?.tex.get(name);
+    if (!page || !fr) return false;
+    const ctx = page.ctx;
+    ctx.save();
+    ctx.clearRect(fr.cutX, fr.cutY, f.width, f.height);
+    ctx.beginPath();
+    ctx.rect(fr.cutX, fr.cutY, f.width, f.height);
+    ctx.clip();
+    ctx.translate(fr.cutX, fr.cutY);
+    paint(ctx);
+    ctx.restore();
+    page.dirty = true;
+    return true;
+  }
+
   /** Upload pages painted since the last flush. */
   flush(): void {
     for (let i = 0; i < this.pages.length; i++) {

@@ -11,7 +11,12 @@ import { TEX } from '../TextureKeys';
 export const FX_TEX = {
   vignette: 'fx_vignette',
   white: 'fx_white',
+  /** 128x128 thin ring (radius ~60 px, 3 px stroke + faint halo): shock rings stay crisp when scaled. */
+  ring: 'fx_ring',
 } as const;
+
+/** Radius in px of the ring drawn in FX_TEX.ring. */
+export const FX_RING_RADIUS = 60;
 
 type Painter = { w: number; h: number; paint: (g: CanvasRenderingContext2D, w: number, h: number) => void };
 
@@ -108,6 +113,23 @@ const PAINTERS: Record<string, Painter> = {
     },
   },
   [FX_TEX.white]: { w: 4, h: 4, paint: (g, w, h) => fill(g, w, h) },
+  [FX_TEX.ring]: {
+    w: 128,
+    h: 128,
+    paint: (g, w) => {
+      const c = w / 2;
+      g.strokeStyle = 'rgba(255,255,255,0.12)';
+      g.lineWidth = 9;
+      g.beginPath();
+      g.arc(c, c, FX_RING_RADIUS - 2, 0, Math.PI * 2);
+      g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,1)';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.arc(c, c, FX_RING_RADIUS, 0, Math.PI * 2);
+      g.stroke();
+    },
+  },
   [FX_TEX.vignette]: {
     w: 256,
     h: 256,
@@ -167,7 +189,7 @@ export function resolveTexture(scene: Phaser.Scene, key: string): string {
 
 /** Create the effect-only textures if needed. */
 export function ensureFxTextures(scene: Phaser.Scene): void {
-  for (const key of [FX_TEX.white, FX_TEX.vignette]) {
+  for (const key of [FX_TEX.white, FX_TEX.vignette, FX_TEX.ring]) {
     if (!usable(scene, key)) paint(scene, key, PAINTERS[key]!);
   }
 }

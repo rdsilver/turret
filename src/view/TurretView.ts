@@ -17,11 +17,13 @@
  */
 import type * as Phaser from 'phaser';
 import type { Weapon, TrajectoryPrediction } from '../sim/weapons/Weapon';
+import type { AmmoDef } from '../sim/weapons/Ammo';
 import { PPM } from '../config/constants';
 import { DEPTH } from './depths';
 import { RK } from './render/RenderKeys';
 import { TEXTURE_RES, TextureFactory } from './TextureFactory';
 import { generateTurretArt, regionOrigin, TURRET_GEOM as G } from './render/TurretArt';
+import { miscFrame } from './render/MiscAtlas';
 import { lerpColor, luminance } from './render/color';
 
 type Image = Phaser.GameObjects.Image;
@@ -60,7 +62,7 @@ export class TurretView {
 
   private time = 0;
   private lastPower = -1;
-  private lastAccent = -1;
+  private lastAmmo: AmmoDef | null = null;
   private lastReload = -1;
   private readyFlash = 0;
   private previewVisible = true;
@@ -76,18 +78,23 @@ export class TurretView {
     const py = weapon.pivotY * PPM;
     const inv = 1 / TEXTURE_RES;
 
+    // All turret art lives in the shared misc atlas (one texture with the rest of the world).
+    const img = (name: string): Image => {
+      const f = miscFrame(scene.textures, name);
+      return scene.add.image(px, py, f.key, f.frame);
+    };
     const ob = regionOrigin(G.baseRegion);
-    this.base = scene.add.image(px, py, RK.turretBase).setOrigin(ob.x, ob.y).setScale(inv).setDepth(DEPTH.turret);
+    this.base = img(RK.turretBase).setOrigin(ob.x, ob.y).setScale(inv).setDepth(DEPTH.turret);
     const ol = regionOrigin(G.barrelRegion);
-    this.barrel = scene.add.image(px, py, RK.turretBarrel).setOrigin(ol.x, ol.y).setScale(inv).setDepth(DEPTH.turret + 0.1);
+    this.barrel = img(RK.turretBarrel).setOrigin(ol.x, ol.y).setScale(inv).setDepth(DEPTH.turret + 0.1);
     this.barrelFx = scene.add.graphics().setDepth(DEPTH.turret + 0.2);
     const oh = regionOrigin(G.hubRegion);
-    this.hub = scene.add.image(px, py, RK.turretHub).setOrigin(oh.x, oh.y).setScale(inv).setDepth(DEPTH.turret + 0.3);
+    this.hub = img(RK.turretHub).setOrigin(oh.x, oh.y).setScale(inv).setDepth(DEPTH.turret + 0.3);
     this.hubFx = scene.add.graphics().setDepth(DEPTH.turret + 0.4);
     this.hubFx.setPosition(px, py);
 
     this.cone = scene.add.graphics().setDepth(DEPTH.trajectory - 0.5);
-    this.reticle = scene.add.image(0, 0, RK.reticle).setDepth(DEPTH.trajectory + 0.1).setScale(inv).setTint(RETICLE_COLOR);
+    this.reticle = img(RK.reticle).setDepth(DEPTH.trajectory + 0.1).setScale(inv).setTint(RETICLE_COLOR);
     this.reticle.setVisible(false);
   }
 
@@ -111,11 +118,13 @@ export class TurretView {
     this.hub.setRotation(a);
 
     // ---- power slot + ammo accent (redrawn only on change)
-    const accent = accentColor(w.ammo.color, w.ammo.trailColor);
+    const ammo = w.ammo;
+    const accent = accentColor(ammo.color, ammo.trailColor);
     const power = Math.round(w.power * 100);
-    if (power !== this.lastPower || accent !== this.lastAccent) {
+    const ammoChanged = ammo !== this.lastAmmo;
+    this.lastAmmo = ammo;
+    if (power !== this.lastPower || ammoChanged) {
       this.lastPower = power;
-      this.lastAccent = accent;
       this.drawBarrelFx(w.power, accent);
     }
 
@@ -124,10 +133,9 @@ export class TurretView {
     if (rp >= 1 && this.lastReload >= 0 && this.lastReload < 1) this.readyFlash = 1;
     const flashing = this.readyFlash > 0;
     if (flashing) this.readyFlash = Math.max(0, this.readyFlash - realDt * 2.6);
-    if (rp !== this.lastReload || flashing || accent !== this.lastAccentHub) {
+    if (rp !== this.lastReload || flashing || ammoChanged) {
       this.lastReload = rp;
-      this.lastAccentHub = accent;
-      this.drawHubFx(rp, accent, w.ammo.color);
+      this.drawHubFx(rp, accent, ammo.color);
     }
 
     // ---- trajectory preview
@@ -151,8 +159,6 @@ export class TurretView {
   }
 
   // ------------------------------------------------------------------ cannon overlays
-
-  private lastAccentHub = -1;
 
   private drawBarrelFx(power: number, accent: number): void {
     const g = this.barrelFx;
@@ -315,7 +321,8 @@ export class TurretView {
   private dot(i: number): Image {
     let d = this.dots[i];
     if (!d) {
-      d = this.scene.add.image(0, 0, RK.pdot).setDepth(DEPTH.trajectory).setTint(DOT_COLOR);
+      const f = miscFrame(this.scene.textures, RK.pdot);
+      d = this.scene.add.image(0, 0, f.key, f.frame).setDepth(DEPTH.trajectory).setTint(DOT_COLOR);
       this.dots.push(d);
     }
     if (!d.visible) d.setVisible(true);

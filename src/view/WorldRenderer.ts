@@ -33,7 +33,7 @@ import { TextureFactory, TEXTURE_RES } from './TextureFactory';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
-import { grey, lerpColor, scaleColor, stressColor } from './render/color';
+import { grey, lerpColor, stressColor } from './render/color';
 
 type Image = Phaser.GameObjects.Image;
 
@@ -56,27 +56,29 @@ interface PartVis {
   tintSig: number;
   tintStamp: number;
   depth: number;
+  /** Showing the neutral (heat-map) texture variant. */
+  neutral: boolean;
 }
 
 interface ProjVis {
   kind: 1;
   entity: Projectile;
   img: Image;
-  /** Ring buffer of recent rendered positions: x, y, time. */
-  trail: Float32Array;
-  head: number;
-  count: number;
 }
 
 type Vis = PartVis | ProjVis;
 
-const MARKER_SCALE_WELD = 0.42;
+const MARKER_SCALE_WELD = 0.36;
+/** Undamaged weld bolts stay quiet so dense walls don't turn into dot patterns. */
+const WELD_ALPHA = 0.62;
 const MARKER_SCALE_HINGE = 0.5;
 const MARKER_SCALE_NODE = 0.5;
-const TRAIL_N = 18;
-const TRAIL_TIME = 0.075;
+/** Trail = the ballistic path over the last TRAIL_TIME seconds (frame-rate independent). */
+const TRAIL_TIME = 0.07;
+const TRAIL_SEGMENTS = 6;
 const TRAIL_MIN_SPEED = 9;
 const DAMAGE_COLOR = 0xff5a2a;
+const WELD_GREY = 0x59616d;
 const DETACHED_STRESS_TINT = 0x5a6573;
 const CABLE_COLOR = 0xcfd6e0;
 
@@ -86,11 +88,12 @@ export class WorldRenderer {
 
   private readonly offs: Array<() => void> = [];
   private readonly parts = new Set<PartVis>();
-  private readonly projs = new Set<ProjVis>();
+  /** Small lists iterated every frame: arrays (no iterator allocations). */
+  private readonly projs: ProjVis[] = [];
   private readonly joints = new Set<JointVis>();
   private readonly cables: JointVis[] = [];
   private readonly cores: PartVis[] = [];
-  private readonly fading = new Set<Entity>();
+  private readonly fading: Entity[] = [];
 
   /** Entities positioned last frame / this frame (final sync when they fall asleep). */
   private syncPrev: Entity[] = [];
@@ -123,7 +126,7 @@ export class WorldRenderer {
       ev.on('entityAdded', ({ entity }) => this.onAdded(entity)),
       ev.on('entityRemoved', ({ entity }) => this.onRemoved(entity)),
       ev.on('entityFading', ({ entity }) => {
-        if (entity.view) this.fading.add(entity);
+        if (entity.view && !this.fading.includes(entity)) this.fading.push(entity);
       }),
       ev.on('jointBroken', ({ joint }) => this.onJointBroken(joint)),
       ev.on('partDetached', ({ part }) => {
@@ -185,9 +188,9 @@ export class WorldRenderer {
     this.syncPrev = cur;
     this.syncCur = prev;
 
-    if (this.fading.size) this.updateFading();
+    if (this.fading.length) this.updateFading();
     if (this.cores.length) this.updateCores();
-    if (this.projs.size || this.trailsDrawn) this.drawTrails();
+    if (this.projs.length || this.trailsDrawn) this.drawTrails();
     if (this.cables.length && (cableTouched || this.cablesDirty)) this.drawCables();
     else if (!this.cables.length && this.cablesDirty) {
       this.cableGfx.clear();
@@ -217,11 +220,11 @@ export class WorldRenderer {
     for (const v of this.projs) this.releaseProj(v);
     for (const jv of this.joints) this.releaseMarker(jv);
     this.parts.clear();
-    this.projs.clear();
+    this.projs.length = 0;
     this.joints.clear();
     this.cables.length = 0;
     this.cores.length = 0;
-    this.fading.clear();
+    this.fading.length = 0;
     this.syncPrev.length = 0;
     this.syncCur.length = 0;
     this.trailGfx.clear();
@@ -274,14 +277,16 @@ export class WorldRenderer {
 
   private dropView(e: Entity): void {
     const v = e.view as Vis | null;
-    this.fading.delete(e);
+    const fi = this.fading.indexOf(e);
+    if (fi >= 0) this.fading.splice(fi, 1);
     if (!v) return;
     if (v.kind === 0) {
       this.releasePart(v, true);
       this.parts.delete(v);
     } else {
       this.releaseProj(v);
-      this.projs.delete(v);
+      const pi = this.projs.indexOf(v);
+      if (pi >= 0) this.projs.splice(pi, 1);
     }
   }
 
@@ -339,10 +344,11 @@ export class WorldRenderer {
     img.x = p.x * PPM;
     img.y = p.y * PPM;
     img.rotation = p.angle;
-    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth };
+    const v: PartVis = { kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false };
     if (p.material.id === 'core' || p.isCore) {
-      const g = this.glowPool.pop() ?? this.scene.add.image(0, 0, TEX.glow);
-      g.setTexture(TEX.glow);
+      const gf = this.textures.miscFrame(RK.glow);
+      const g = this.glowPool.pop() ?? this.scene.add.image(0, 0, gf.key, gf.frame);
+      g.setTexture(gf.key, gf.frame);
       g.setBlendMode(Phaser.BlendModes.ADD);
       g.setDepth(DEPTH.structure - 0.2);
       g.setTint(p.material.color);
@@ -414,14 +420,26 @@ export class WorldRenderer {
   }
 
   /**
-   * Normal view: wear darkening (multiply). Stress view: heat colour via the
-   * two-colour tint (keeps outline + pattern readable), pulsing when yielding.
+   * Normal view: wear darkening (multiply). Stress view: the part swaps to its
+   * neutral light-grey texture variant multiplied by the heat colour (keeps
+   * outline + pattern readable), pulsing when yielding.
+   *
+   * Only the MULTIPLY tint mode is used on purpose: Phaser decodes other tint
+   * modes with an exact float compare on an interpolated varying, which drops
+   * the tint on individual triangles on some rasterisers.
    */
   private applyPartTint(v: PartVis, force: boolean): void {
     if (!force && v.tintStamp === this.frame) return;
     v.tintStamp = this.frame;
     const p = v.entity;
     const img = v.img;
+    if (v.neutral !== this.stressView) {
+      v.neutral = this.stressView;
+      const f = this.textures.partFrame(p, v.neutral);
+      img.setTexture(f.key, f.frame);
+      img.setOrigin(f.originX, f.originY);
+      force = true;
+    }
     if (this.stressView) {
       let color: number;
       if (p.joints.length === 0) color = DETACHED_STRESS_TINT;
@@ -442,9 +460,7 @@ export class WorldRenderer {
       const sig = color | 0x1000000;
       if (sig === v.tintSig && !force) return;
       v.tintSig = sig;
-      img.setTintMode(Phaser.TintModes.MULTIPLY_TWO);
       img.setTint(color);
-      img.setTint2(scaleColor(color, 0.18));
     } else {
       const w = p.wear;
       const k = w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1;
@@ -452,19 +468,20 @@ export class WorldRenderer {
       if (color === v.tintSig && !force) return;
       v.tintSig = color;
       if (k >= 1) img.clearTint();
-      else {
-        img.setTintMode(Phaser.TintModes.MULTIPLY);
-        img.setTint(color);
-      }
+      else img.setTint(color);
     }
   }
 
   private updateCores(): void {
     const t = this.time;
+    const show = !this.stressView;
     for (let i = 0; i < this.cores.length; i++) {
       const v = this.cores[i]!;
       const g = v.glow;
       if (!g) continue;
+      // The glow would muddy the heat colours: hide it in stress view.
+      if (g.visible !== show) g.setVisible(show);
+      if (!show) continue;
       g.x = v.img.x;
       g.y = v.img.y;
       const pulse = 0.26 + 0.1 * Math.sin(t * 2.6 + v.entity.id);
@@ -475,9 +492,9 @@ export class WorldRenderer {
   // ------------------------------------------------------------------ projectiles
 
   private createProj(p: Projectile): void {
-    const key = this.textures.projectileKey(p.radius * PPM, p.ammo.color);
+    const f = this.textures.projectileFrame(p.radius * PPM, p.ammo.color);
     const img = this.acquire(DEPTH.projectiles);
-    img.setTexture(key);
+    img.setTexture(f.key, f.frame);
     img.setOrigin(0.5, 0.5);
     img.setScale(1 / TEXTURE_RES);
     img.setAlpha(1);
@@ -485,61 +502,50 @@ export class WorldRenderer {
     img.rotation = 0;
     img.x = p.x * PPM;
     img.y = p.y * PPM;
-    const v: ProjVis = { kind: 1, entity: p, img, trail: new Float32Array(TRAIL_N * 3), head: 0, count: 0 };
+    const v: ProjVis = { kind: 1, entity: p, img };
     p.view = v;
-    this.projs.add(v);
+    this.projs.push(v);
   }
 
   private releaseProj(v: ProjVis): void {
     this.release(v.img, DEPTH.projectiles);
-    v.count = 0;
     if (v.entity.view === v) v.entity.view = null;
   }
 
   private placeProjectile(v: ProjVis, x: number, y: number): void {
-    const px = x * PPM;
-    const py = y * PPM;
-    v.img.x = px;
-    v.img.y = py;
-    // Trail sample (rendered positions, real time).
-    const t = v.trail;
-    const i = v.head * 3;
-    t[i] = px;
-    t[i + 1] = py;
-    t[i + 2] = this.time;
-    v.head = (v.head + 1) % TRAIL_N;
-    if (v.count < TRAIL_N) v.count++;
+    v.img.x = x * PPM;
+    v.img.y = y * PPM;
   }
 
   private drawTrails(): void {
     const g = this.trailGfx;
     g.clear();
     let drew = false;
-    const now = this.time;
-    for (const v of this.projs) {
+    const grav = this.sim.physics.gravity;
+    for (let i = 0; i < this.projs.length; i++) {
+      const v = this.projs[i]!;
       const p = v.entity;
-      if (v.count < 2 || p.fading > 0) continue;
+      if (p.state !== 'flying' || p.fading > 0 || p.removed) continue;
       const sp2 = p.vx * p.vx + p.vy * p.vy;
       if (sp2 < TRAIL_MIN_SPEED * TRAIL_MIN_SPEED) continue;
       const color = p.ammo.trailColor;
       const r = p.radius * PPM;
-      let idx = (v.head - 1 + TRAIL_N) % TRAIL_N;
-      let x0 = v.img.x;
-      let y0 = v.img.y;
-      for (let k = 1; k < v.count; k++) {
-        idx = (idx - 1 + TRAIL_N) % TRAIL_N;
-        const b = idx * 3;
-        const age = now - v.trail[b + 2]!;
-        if (age > TRAIL_TIME) break;
-        const x1 = v.trail[b]!;
-        const y1 = v.trail[b + 1]!;
-        const f = 1 - age / TRAIL_TIME;
-        g.lineStyle(Math.max(1, r * 1.5 * f), color, 0.42 * f);
+      const hx = v.img.x;
+      const hy = v.img.y;
+      let x0 = hx;
+      let y0 = hy;
+      // Walk back along the ballistic path: p(t - tau) = p - v*tau + g*tau^2/2.
+      for (let k = 1; k <= TRAIL_SEGMENTS; k++) {
+        const tau = (TRAIL_TIME * k) / TRAIL_SEGMENTS;
+        const x1 = hx - p.vx * tau * PPM;
+        const y1 = hy - (p.vy * tau - 0.5 * grav * tau * tau) * PPM;
+        const f = 1 - (k - 0.5) / TRAIL_SEGMENTS;
+        g.lineStyle(Math.max(1, r * 1.5 * f), color, 0.4 * f);
         g.lineBetween(x0, y0, x1, y1);
         x0 = x1;
         y0 = y1;
-        drew = true;
       }
+      drew = true;
     }
     this.trailsDrawn = drew;
   }
@@ -548,12 +554,14 @@ export class WorldRenderer {
 
   private buildJoints(list: readonly BreakableJoint[]): void {
     for (const j of list) {
-      if (j.broken) continue;
+      // Tethers are invisible slack safety cables on loose props (see StructureGenerator).
+      if (j.broken || j.tags.includes('tether')) continue;
       const a = j.a.view as PartVis | null;
       if (!a || a.kind !== 0) continue;
       const jv: JointVis = { joint: j, marker: null, stamp: -1, sig: -1 };
       if (j.kind !== 'cable') {
-        const m = this.markerPool.pop() ?? this.scene.add.image(0, 0, RK.weld).setDepth(DEPTH.joints);
+        const wf = this.textures.miscFrame(RK.weld);
+        const m = this.markerPool.pop() ?? this.scene.add.image(0, 0, wf.key, wf.frame).setDepth(DEPTH.joints);
         m.setVisible(true).setActive(true);
         m.setAlpha(1);
         m.rotation = 0;
@@ -610,7 +618,12 @@ export class WorldRenderer {
     const ly = j.lay * PPM;
     m.x = img.x + c * lx - s * ly;
     m.y = img.y + s * lx + c * ly;
-    m.alpha = img.alpha;
+    m.alpha = img.alpha * this.markerAlpha(jv);
+  }
+
+  private markerAlpha(jv: JointVis): number {
+    if (this.stressView || jv.joint.kind !== 'weld') return 1;
+    return jv.joint.damage > 1 / 32 ? 1 : WELD_ALPHA;
   }
 
   private styleJoint(jv: JointVis, force: boolean): void {
@@ -624,10 +637,10 @@ export class WorldRenderer {
       const sig = (color & 0xffffff) + Math.round(dmg * 20) * 0x1000000 + 0x40000000;
       if (sig === jv.sig && !force) return;
       jv.sig = sig;
-      m.setTexture(RK.node);
+      this.setMisc(m, RK.node);
       m.setScale(MARKER_SCALE_NODE * (0.85 + dmg * 1.1));
-      m.setTintMode(Phaser.TintModes.MULTIPLY);
       m.setTint(color);
+      m.alpha = 1;
     } else {
       const dmg = Math.min(1, j.damage);
       const q = Math.round(dmg * 16);
@@ -635,18 +648,21 @@ export class WorldRenderer {
       if (sig === jv.sig && !force) return;
       jv.sig = sig;
       if (j.kind === 'hinge') {
-        m.setTexture(RK.hinge);
+        this.setMisc(m, RK.hinge);
         m.setScale(MARKER_SCALE_HINGE);
+        if (q === 0) m.clearTint();
+        else m.setTint(lerpColor(0xffffff, DAMAGE_COLOR, Math.min(1, dmg * 1.3)));
+      } else if (q === 0) {
+        this.setMisc(m, RK.weld);
+        m.setScale(MARKER_SCALE_WELD);
+        m.clearTint();
+        m.alpha = WELD_ALPHA * ((j.a.view as PartVis | null)?.img.alpha ?? 1);
       } else {
-        m.setTexture(RK.weld);
-        m.setScale(MARKER_SCALE_WELD * (1 + dmg * 0.35));
-      }
-      if (q === 0) m.clearTint();
-      else {
-        // Dark bolt heats up toward orange as the weld accumulates plastic damage.
-        m.setTintMode(Phaser.TintModes.MULTIPLY_TWO);
-        m.setTint(0xffffff);
-        m.setTint2(lerpColor(0x000000, DAMAGE_COLOR, Math.min(1, dmg * 1.3)));
+        // The dark bolt heats up toward orange as the weld accumulates plastic damage.
+        this.setMisc(m, RK.node);
+        m.setScale(MARKER_SCALE_WELD * (14 / 16) * (1 + dmg * 0.4));
+        m.setTint(lerpColor(WELD_GREY, DAMAGE_COLOR, Math.min(1, 0.25 + dmg * 1.1)));
+        m.alpha = ((j.a.view as PartVis | null)?.img.alpha ?? 1);
       }
     }
   }
@@ -721,18 +737,19 @@ export class WorldRenderer {
   // ------------------------------------------------------------------ fading / debug
 
   private updateFading(): void {
-    for (const e of this.fading) {
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const e = this.fading[i]!;
       const v = e.view as Vis | null;
       if (!v || e.removed) {
-        this.fading.delete(e);
+        this.fading.splice(i, 1);
         continue;
       }
       const a = e.fadeDuration > 0 ? Math.max(0, Math.min(1, e.fading / e.fadeDuration)) : 1;
       v.img.alpha = a;
       if (v.kind === 0) {
         for (let k = 0; k < v.joints.length; k++) {
-          const m = v.joints[k]!.marker;
-          if (m) m.alpha = a;
+          const jv = v.joints[k]!;
+          if (jv.marker) jv.marker.alpha = a * this.markerAlpha(jv);
         }
       }
     }
@@ -760,6 +777,11 @@ export class WorldRenderer {
   }
 
   // ------------------------------------------------------------------ pooling
+
+  private setMisc(img: Image, name: string): void {
+    const f = this.textures.miscFrame(name);
+    img.setTexture(f.key, f.frame);
+  }
 
   private acquire(depth: number): Image {
     let pool = this.pools.get(depth);

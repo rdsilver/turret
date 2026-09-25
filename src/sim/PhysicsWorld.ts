@@ -249,6 +249,7 @@ export class PhysicsWorld {
 
     this.stats.active = this.passActiveCount;
     for (let i = 0; i < this.fallenBuf.length; i++) this.events.emit('partFallen', { part: this.fallenBuf[i]! });
+    this.processSleepCandidates();
     // Remove escaped entities (outside of the Rapier iteration).
     for (let i = active.length - 1; i >= 0; i--) {
       const e = active[i]!;
@@ -307,26 +308,57 @@ export class PhysicsWorld {
       // Emitted after the Rapier iteration (listeners may mutate the world).
       if (e.structure && !e.isFragment && e.structure.onPartMoved(e, prevH)) this.fallenBuf.push(e);
       // Aggressive sleeping for loose rubble.
-      if (e.joints.length === 0) this.quietCheck(e, body);
+      if (e.joints.length === 0) this.quietCheck(e);
     } else {
       if (e.y > ARENA.killY || e.x < ARENA.left - 20 || e.x > ARENA.right + 20) e.fading = -1;
-      this.quietCheck(e, body);
+      this.quietCheck(e);
     }
   
   };
 
   private quietSteps = new Map<number, number>();
-  private quietCheck(e: Entity, body: RapierNS.RigidBody): void {
+  /** Loose bodies that have been quiet long enough; put to sleep after the Rapier iteration. */
+  private readonly sleepCandidates: Entity[] = [];
+  private readonly sleepCandidateSet = new Set<Entity>();
+
+  /**
+   * Aggressive sleeping for rubble: only debris that broke loose during play
+   * (fragments, detached parts, spent rounds) — never props that are part of a
+   * standing structure — and only once everything it touches is at rest too
+   * (forcing a body to sleep on top of a moving structure lets it sink through).
+   */
+  private quietCheck(e: Entity): void {
+    if (e instanceof StructurePart && !e.isFragment && e.detachedAt < 0) return;
     const lin2 = e.vx * e.vx + e.vy * e.vy;
     if (lin2 < QUIET_LIN2 && Math.abs(e.av) < QUIET_ANG) {
       const n = (this.quietSteps.get(e.id) ?? 0) + 1;
       if (n >= DEBRIS_QUIET_STEPS) {
-        body.sleep();
+        this.sleepCandidates.push(e);
+        this.sleepCandidateSet.add(e);
         this.quietSteps.delete(e.id);
       } else this.quietSteps.set(e.id, n);
     } else if (this.quietSteps.size && this.quietSteps.has(e.id)) {
       this.quietSteps.delete(e.id);
     }
+  }
+
+  private processSleepCandidates(): void {
+    const list = this.sleepCandidates;
+    if (list.length === 0) return;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i]!;
+      if (e.removed) continue;
+      let ok = true;
+      this.world.contactPairsWith(e.collider, (other) => {
+        if (!ok) return;
+        const owner = this.colliderOwner.get(other.handle);
+        if (!owner || this.sleepCandidateSet.has(owner)) return; // ground/static or also resting
+        if (owner.body.isDynamic() && !owner.body.isSleeping()) ok = false;
+      });
+      if (ok) e.body.sleep();
+    }
+    list.length = 0;
+    this.sleepCandidateSet.clear();
   }
 
   private noteHardImpact(e: Entity, dv: number): void {
@@ -525,7 +557,9 @@ export class PhysicsWorld {
     j.a.wear = Math.max(j.a.wear, Math.min(1, j.damage));
     if (j.b) j.b.wear = Math.max(j.b.wear, Math.min(1, j.damage));
     const s = j.a.structure;
-    if (cause !== 'removed') {
+    // Tethers are invisible slack safety cables on loose props: their failure is not an event.
+    const silent = cause === 'removed' || j.tags.includes('tether');
+    if (!silent) {
       if (s) s.jointsBroken++;
       this.events.emit('jointBroken', {
         joint: j,

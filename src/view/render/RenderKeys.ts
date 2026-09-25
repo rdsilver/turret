@@ -1,7 +1,8 @@
 /**
- * Texture keys private to the render modules (generated alongside the shared
- * TEX keys by TextureFactory.generateCommon). Drawn at TEXTURE_RES texels per
- * world pixel unless noted.
+ * Frame names private to the render modules. Everything except `hatch` is a
+ * FRAME in the shared misc atlas (render/MiscAtlas.ts) — look them up with
+ * miscFrame(). `hatch` is a standalone texture key (TileSprite).
+ * Drawn at TEXTURE_RES texels per world pixel unless noted.
  */
 export const RK = {
   /** Dark weld bolt (joint marker), 14x14. */
@@ -12,6 +13,8 @@ export const RK = {
   hinge: 'rk_hinge',
   /** Impact reticle for the trajectory preview, 64x64 (world 32 px). */
   reticle: 'rk_reticle',
+  /** Radial glow (core parts), 64x64. */
+  glow: 'rk_glow',
   /** Soft trajectory dot, 12x12. */
   pdot: 'rk_pdot',
   /** Ground hatch tile (1x), 24x24. */

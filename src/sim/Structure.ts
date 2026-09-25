@@ -61,9 +61,11 @@ export class Structure {
     this.comSum = 0;
     for (const p of this.parts) {
       if (p.removed || p.destroyed) continue;
-      top = Math.max(top, p.h0 + p.extent);
-      minX = Math.min(minX, p.x0 - p.extent);
-      maxX = Math.max(maxX, p.x0 + p.extent);
+      const hh = p.halfHeightNow;
+      const hw = p.halfWidthNow;
+      top = Math.max(top, p.h0 + hh);
+      minX = Math.min(minX, p.x0 - hw);
+      maxX = Math.max(maxX, p.x0 + hw);
       if (!p.isFoundation) {
         this.trackedMass += p.mass;
         this.comSum += p.mass * p.h0;

@@ -29,6 +29,9 @@ import { ResultsPanel } from '../ui/ResultsPanel';
 import { DevOverlay } from '../debug/DevOverlay';
 import { DebugMenu, type DebugApi, type DebugTool } from '../debug/DebugMenu';
 import { MouseGrabber } from '../debug/MouseGrabber';
+import { GrabberView } from '../debug/GrabberView';
+import type { DevStats } from '../debug/DevOverlay';
+import { pad2 } from '../ui/format';
 import { DEFAULT_GRAVITY, TURRET } from '../config/constants';
 import { hashString } from '../core/Random';
 import { StructureDraft } from '../sim/generator/StructureDraft';
@@ -68,6 +71,11 @@ export class GameScene extends Phaser.Scene implements DebugApi {
   private devOverlay!: DevOverlay;
   private debugMenu!: DebugMenu;
   private grabber!: MouseGrabber;
+  private grabView!: GrabberView;
+  private readonly devStats: DevStats = {
+    fps: 0, stepMs: 0, stepMsMax: 0, postMs: 0, stepsPerFrame: 0, bodies: 0, dynamicBodies: 0,
+    active: 0, sleeping: 0, joints: 0, projectiles: 0, debris: 0, timeScale: 1, paused: false,
+  };
   private prediction: TrajectoryPrediction = createPrediction();
 
   private pointerSim = { x: 30, y: -5 };
@@ -114,8 +122,16 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.audio = new AudioManager(this);
     this.audio.bind(this.sim);
     this.grabber = new MouseGrabber(this.sim);
+    this.grabView = new GrabberView(this, this.grabber);
     this.devOverlay = new DevOverlay();
     this.debugMenu = new DebugMenu(this);
+    // Re-frame so the right-docked debug panel never hides the structure.
+    this.debugMenu.onVisibilityChange = () => {
+      if (!this.sim.structure) return;
+      const b = this.frameBounds();
+      this.cam.frame(b, false);
+      this.background.layout(b);
+    };
 
     this.bindSimEvents();
     this.bindInput();
@@ -202,15 +218,19 @@ export class GameScene extends Phaser.Scene implements DebugApi {
 
   private frameBounds(): SimRect {
     const s = this.sim.structure;
-    const right = Math.max(this.level.camera?.right ?? 0, (s ? s.maxX0 : 40) + 7);
+    let right = Math.max(this.level.camera?.right ?? 0, (s ? s.maxX0 : 40) + 7);
+    const left = TURRET.x - 5;
+    const cover = this.debugMenu?.coverFraction() ?? 0;
+    if (cover > 0) right += ((right - left) * cover) / (1 - cover);
     const top = -Math.max(this.level.camera?.top ?? 0, (s ? s.height0 : 10) + 5, 12);
-    return { left: TURRET.x - 5, right, top, bottom: 3.5 };
+    return { left, right, top, bottom: 3.5 };
   }
 
   private pushHudLevel(): void {
     if (!this.hud || !this.level) return;
     const campaign = this.mode === 'campaign' && this.levelIndex < levelManager.count;
     this.hud.setLevel({
+      mode: this.mode === 'campaign' && !campaign ? 'endless' : this.mode,
       index: campaign ? this.levelIndex + 1 : 0,
       total: campaign ? levelManager.count : 0,
       name: this.mode === 'sandbox' ? 'Sandbox' : this.level.name,
@@ -233,7 +253,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         this.hud?.banner('STRUCTURE COLLAPSED', this.session.shots === 1 ? 'ONE SHOT' : `${this.session.shots} shots`);
       }),
       ev.on('collapseSettled', () => {
-        if (this.flow === 'collapsing') this.resultsDelay = 1.2;
+        if (this.flow === 'collapsing') this.resultsDelay = 1.8;
       }),
       ev.on('chainUpdated', (c) => {
         const n = c.joints + c.parts;
@@ -280,9 +300,11 @@ export class GameScene extends Phaser.Scene implements DebugApi {
       }
     });
 
-    input.on('pointerup', () => {
+    const release = () => {
       if (this.grabber.active) this.grabber.release();
-    });
+    };
+    input.on('pointerup', release);
+    input.on('pointerupoutside', release);
 
     input.on('wheel', (_p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       this.sim.weapon.setPower(this.sim.weapon.power - dy * 0.0006);
@@ -393,8 +415,10 @@ export class GameScene extends Phaser.Scene implements DebugApi {
 
   // ------------------------------------------------------------------ frame
 
-  update(_time: number, deltaMs: number): void {
-    const dt = Math.min(0.1, deltaMs / 1000);
+  update(_time: number, _deltaMs: number): void {
+    // Real frame time, not Phaser's smoothed delta: the smoother clamps to 1/60 s
+    // whenever the page is unfocused, which would put the whole game in slow motion.
+    const dt = Math.min(0.1, Math.max(0, this.game.loop.rawDelta) / 1000);
     const physics = this.sim.physics;
 
     if (!this.grabber.active && this.tool === 'fire' && !this.results?.visible) this.sim.weapon.aimAt(this.pointerSim.x, this.pointerSim.y);
@@ -412,10 +436,12 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.turret.showPreview = this.flow === 'aiming' || this.mode === 'sandbox';
     this.turret.update(dt, this.prediction);
     this.world.update(physics.alpha, dt);
+    this.grabView.update();
     this.background.setProgress(this.sim.progress);
     this.background.update(dt);
     this.cam.update(dt);
-    this.audio.update(dt, physics.timeScale);
+    // Debug slow-mo shouldn't muffle audio; only gameplay slow-mo does.
+    this.audio.update(dt, this.effects.timeScale);
 
     if (this.resultsDelay > 0) {
       this.resultsDelay -= dt;
@@ -431,6 +457,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         reload: this.sim.weapon.reloadProgress,
         power: this.sim.weapon.power,
         ammoName: this.sim.weapon.ammo.name,
+        ammoId: this.sim.weapon.ammo.id,
         ammoCost: this.sim.weapon.ammo.cost,
         scanCharges: this.scanCharges,
         scanActive: this.scanTimer > 0,
@@ -440,26 +467,25 @@ export class GameScene extends Phaser.Scene implements DebugApi {
       dt,
     );
 
-    const st = physics.stats;
-    this.devOverlay.update(
-      {
-        fps: this.game.loop.actualFps,
-        stepMs: st.stepMs,
-        stepMsMax: st.stepMsMax,
-        postMs: st.postMs,
-        stepsPerFrame: st.stepsLastFrame,
-        bodies: st.bodies,
-        dynamicBodies: st.dynamicBodies,
-        active: st.active,
-        sleeping: st.sleeping,
-        joints: st.joints,
-        projectiles: this.sim.projectiles.count,
-        debris: this.sim.debris.candidateCount,
-        timeScale: physics.timeScale,
-        paused: physics.paused,
-      },
-      dt,
-    );
+    if (this.devOverlay.visible) {
+      const st = physics.stats;
+      const d = this.devStats;
+      d.fps = this.game.loop.actualFps;
+      d.stepMs = st.stepMs;
+      d.stepMsMax = st.stepMsMax;
+      d.postMs = st.postMs;
+      d.stepsPerFrame = st.stepsLastFrame;
+      d.bodies = st.bodies;
+      d.dynamicBodies = st.dynamicBodies;
+      d.active = st.active;
+      d.sleeping = st.sleeping;
+      d.joints = st.joints;
+      d.projectiles = this.sim.projectiles.count;
+      d.debris = this.sim.debris.candidateCount;
+      d.timeScale = physics.timeScale;
+      d.paused = physics.paused;
+      this.devOverlay.update(d, dt);
+    }
     if (this.debugMenu.visible) this.debugMenu.refresh();
   }
 
@@ -482,6 +508,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     };
     if (this.mode === 'campaign' && this.levelIndex >= gs.levelIndex) gs.levelIndex = this.levelIndex + 1;
     gs.save();
+    const inCampaign = this.mode === 'campaign' && this.levelIndex < levelManager.count;
     this.results?.show(result, this.level, {
       onContinue: () => {
         if (this.mode === 'campaign') this.scene.start('Upgrade');
@@ -491,6 +518,9 @@ export class GameScene extends Phaser.Scene implements DebugApi {
         this.results?.hide();
         this.reloadLevel();
       },
+    }, {
+      credited,
+      levelLabel: inCampaign ? `LEVEL ${pad2(this.levelIndex + 1)} / ${pad2(levelManager.count)}` : undefined,
     });
   }
 
@@ -541,6 +571,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.session?.dispose();
     this.session = new LevelSession(this.sim, lvl);
     this.flow = 'aiming';
+    this.resultsDelay = -1;
     const s = this.sim.structure!;
     const bounds = this.frameBounds();
     this.cam.frame(bounds, true);
@@ -660,6 +691,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.world.destroy();
     this.turret.destroy();
     this.background.destroy();
+    this.grabView.destroy();
     this.grabber.destroy();
     this.devOverlay.destroy();
     this.debugMenu.destroy();

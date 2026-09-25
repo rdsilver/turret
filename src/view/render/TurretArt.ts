@@ -1,13 +1,14 @@
 /**
  * Static turret art (pedestal + mount, barrel, breech hub) painted once into
- * canvas textures at TEXTURE_RES. All geometry is in meters relative to the
+ * frames of the shared misc atlas at TEXTURE_RES. All geometry is in meters relative to the
  * barrel pivot (sim y down); `TURRET_GEOM` exposes the numbers TurretView
  * needs to place dynamic overlays (power slot, accent band, reload ring).
  */
 import type * as Phaser from 'phaser';
 import { PPM, TURRET } from '../../config/constants';
-import { TEXTURE_RES } from '../TextureFactory';
+import { TEXTURE_RES } from './res';
 import { RK } from './RenderKeys';
+import { miscAtlas } from './MiscAtlas';
 
 const S = PPM * TEXTURE_RES;
 const PAD = 3;
@@ -40,20 +41,16 @@ export const TURRET_GEOM = {
 type Region = { x0: number; y0: number; x1: number; y1: number };
 
 function regionCanvas(textures: Phaser.Textures.TextureManager, key: string, r: Region, draw: (c: CanvasRenderingContext2D) => void): void {
-  if (textures.exists(key)) return;
+  const atlas = miscAtlas(textures);
+  if (atlas.get(key)) return;
   const w = Math.ceil((r.x1 - r.x0) * S + PAD * 2);
   const h = Math.ceil((r.y1 - r.y0) * S + PAD * 2);
-  const tex = textures.createCanvas(key, w, h);
-  if (!tex) return;
-  const c = tex.context;
-  c.clearRect(0, 0, w, h);
-  c.save();
-  // Work in meters with the pivot at the origin.
-  c.translate(PAD - r.x0 * S, PAD - r.y0 * S);
-  c.scale(S, S);
-  draw(c);
-  c.restore();
-  tex.refresh();
+  atlas.add(key, w, h, (c) => {
+    // Work in meters with the pivot at the origin.
+    c.translate(PAD - r.x0 * S, PAD - r.y0 * S);
+    c.scale(S, S);
+    draw(c);
+  });
 }
 
 /** Normalised origin of a region texture (the pivot). */

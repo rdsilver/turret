@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { TextureFactory } from '../view/TextureFactory';
 import { registerSynthSounds } from '../audio/SoundSynth';
+import { loadUiFonts } from '../ui/text';
 
 /** Generates procedural textures and sounds, then shows the menu. */
 export class BootScene extends Phaser.Scene {
@@ -8,7 +9,9 @@ export class BootScene extends Phaser.Scene {
     super('Boot');
   }
 
-  create(): void {
+  async create(): Promise<void> {
+    // The glyph atlas and UI text are drawn with the web fonts; wait for them (max ~4 s).
+    await loadUiFonts();
     TextureFactory.generateCommon(this);
     try {
       registerSynthSounds(this);

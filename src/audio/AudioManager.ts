@@ -20,9 +20,9 @@ import type { SimEvents } from '../sim/SimEvents';
 import { MATERIALS, type MaterialId } from '../sim/Materials';
 import { StructurePart } from '../sim/StructurePart';
 import { PPM } from '../config/constants';
-import { SOUND_VARIANTS, soundDuration, soundKey, type SoundId } from './SoundSynth';
+import { SOUND_VARIANTS, setMasterMuffle, soundDuration, soundKey, type SoundId } from './SoundSynth';
 
-type Category = 'boom' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'ui';
+type Category = 'boom' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui';
 
 interface CategorySpec {
   max: number;
@@ -39,7 +39,10 @@ const CATEGORIES: Record<Category, CategorySpec> = {
   snap: { max: 4, interval: 45, global: true },
   creak: { max: 2, interval: 170, global: true },
   shatter: { max: 2, interval: 90, global: true },
-  ambient: { max: 2, interval: 450, global: true },
+  ambient: { max: 2, interval: 400, global: true },
+  rattle: { max: 2, interval: 250, global: true },
+  air: { max: 1, interval: 500, global: true },
+  sting: { max: 1, interval: 1500, global: false },
   ui: { max: 4, interval: 25, global: false },
 };
 
@@ -65,18 +68,18 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   snap_wood: { cat: 'snap', vol: 0.85, jitter: 0.1 },
   snap_stone: { cat: 'snap', vol: 0.85, jitter: 0.08 },
   snap_metal: { cat: 'snap', vol: 0.6, jitter: 0.06 },
-  creak_wood: { cat: 'creak', vol: 0.55, jitter: 0.12 },
+  creak_wood: { cat: 'creak', vol: 0.6, jitter: 0.12 },
   groan_metal: { cat: 'creak', vol: 0.45, jitter: 0.08 },
   shatter: { cat: 'shatter', vol: 0.65, jitter: 0.08 },
   explosion: { cat: 'boom', vol: 0.95, jitter: 0.05 },
   rumble: { cat: 'ambient', vol: 0.6, jitter: 0.05 },
-  debris: { cat: 'ambient', vol: 0.45, jitter: 0.1 },
-  whoosh: { cat: 'ambient', vol: 0.35, jitter: 0.1 },
+  debris: { cat: 'rattle', vol: 0.45, jitter: 0.1 },
+  whoosh: { cat: 'air', vol: 0.35, jitter: 0.1 },
   ui_click: { cat: 'ui', vol: 0.45, jitter: 0.03 },
   ui_buy: { cat: 'ui', vol: 0.55, jitter: 0.02 },
   ui_deny: { cat: 'ui', vol: 0.5, jitter: 0.02 },
   cash: { cat: 'ui', vol: 0.55, jitter: 0.02 },
-  collapse_sting: { cat: 'ambient', vol: 0.5, jitter: 0.01 },
+  collapse_sting: { cat: 'sting', vol: 0.5, jitter: 0.01 },
 };
 
 /** Voice bookkeeping shared by every AudioManager (the sound manager is global). */
@@ -148,6 +151,8 @@ export class AudioManager {
   private rateFactor = 1;
   private wasReady = true;
   private lastPartFallen = -1e9;
+  private firstSnapPending = false;
+  private muffle = 0;
   private readonly cfg = { volume: 1, rate: 1, pan: 0 };
   /** Best-of-frame candidates per event category. */
   private readonly pending: Record<'impact' | 'ground' | 'snap' | 'creak', Pending[]> = {
@@ -180,11 +185,14 @@ export class AudioManager {
     on('bigCollapse', this.onBigCollapse);
     on('objectiveComplete', this.onObjective);
     on('partFallen', this.onPartFallen);
+    on('chainStarted', this.onChainStarted);
   }
 
   unbind(): void {
     for (const off of this.offs) off();
     this.offs = [];
+    if (this.sim && this.muffle > 0) setMasterMuffle(0);
+    this.muffle = 0;
     this.sim = null;
     for (const list of Object.values(this.pending)) for (const p of list) p.id = null;
   }
@@ -203,6 +211,12 @@ export class AudioManager {
     // Slow motion lowers pitch a little (hit-stop freezes are too short to matter).
     const target = timeScale < 0.05 ? this.rateFactor : 0.72 + 0.28 * clamp01((timeScale - 0.2) / 0.8);
     this.rateFactor += (target - this.rateFactor) * 0.25;
+    // ...and muffles the world (master low-pass), like the moment is holding its breath.
+    const muffle = timeScale < 0.05 ? this.muffle : clamp01((0.9 - timeScale) / 0.55);
+    if (this.sim && Math.abs(muffle - this.muffle) > 0.01) {
+      this.muffle = muffle;
+      setMasterMuffle(muffle * 0.85);
+    }
 
     const sim = this.sim;
     if (!sim) return;
@@ -221,8 +235,11 @@ export class AudioManager {
     this.wasReady = ready;
   }
 
+  /** Mute this manager's new sounds and (globally) everything already playing. */
   setMuted(m: boolean): void {
     this.muted = m;
+    const sm = this.scene.sound as unknown as { mute?: boolean } | null;
+    if (sm && 'mute' in sm) sm.mute = m;
   }
 
   // ------------------------------------------------------------------ events
@@ -277,14 +294,23 @@ export class AudioManager {
   }
 
   private onBroken(e: SimEvents['jointBroken']): void {
-    if (e.cause === 'removed') return;
+    if (e.cause === 'removed' || e.cause === 'shatter') return;
     const r = ratingScale(e.rating);
     // The weaker side of the bond is what snapped.
     const a = MATERIALS[e.materialA];
     const b = MATERIALS[e.materialB];
     const weak = b && e.materialB !== 'ground' && b.bond.tension < a.bond.tension ? e.materialB : e.materialA;
     const vol = (0.45 + 0.55 * r) * (e.cause === 'explosion' ? 0.6 : 1);
+    if (this.firstSnapPending && e.cause !== 'explosion') {
+      // The first failure of a chain is THE moment: play it now, a touch louder.
+      this.firstSnapPending = false;
+      if (this.start(snapSound(weak), Math.min(1.2, vol * 1.2), 1.1 - 0.3 * r, this.panFor(e.x * PPM), false)) return;
+    }
     this.queue(this.pending.snap, snapSound(weak), 1 + r, vol, 1.15 - 0.3 * r, e.x * PPM);
+  }
+
+  private onChainStarted(): void {
+    this.firstSnapPending = true;
   }
 
   private onShattered(e: SimEvents['partShattered']): void {
@@ -304,6 +330,8 @@ export class AudioManager {
     const x = e.x * PPM;
     this.start('rumble', 0.55 + 0.35 * k, 1, this.panFor(x) * 0.5, false);
     this.start('debris', 0.5 + 0.3 * k, 0.95, this.panFor(x), false);
+    // Air rushing as the mass goes (ambient category; skipped if both voices are busy).
+    this.start('whoosh', 0.35 + 0.25 * k, 0.7, this.panFor(x), false);
   }
 
   private onObjective(): void {

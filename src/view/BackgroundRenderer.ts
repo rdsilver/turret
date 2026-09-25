@@ -14,7 +14,7 @@ import { DEPTH } from './depths';
 import { RK } from './render/RenderKeys';
 import { TextureFactory } from './TextureFactory';
 import { lerpColor } from './render/color';
-import { THEME } from '../ui/theme';
+import { GlyphText } from './render/GlyphText';
 
 export interface BackgroundBounds {
   left: number;
@@ -28,26 +28,25 @@ const MARGIN_X = 60;
 const MARGIN_TOP = 45;
 const GROUND_DEPTH = 60;
 
-const BG = 0x121418;
 const GRID_MINOR = 0x8fa0b8;
 const GRID_MAJOR = 0x9fb2cc;
 const GROUND_FILL = 0x1a1d23;
 const GROUND_EDGE = 0x6b7587;
 const RULER = 0x8b95a5;
+const LABEL_COLOR = 0x8b95a5;
 const LINE_IDLE = 0xff5a3c;
 const LINE_CLOSE = 0xffb547;
 const LINE_DONE = 0x6fe3a1;
 
 export class BackgroundRenderer {
-  private readonly backdrop: Phaser.GameObjects.Rectangle;
   private readonly grid: Phaser.GameObjects.Graphics;
   private readonly ruler: Phaser.GameObjects.Graphics;
   private readonly groundFill: Phaser.GameObjects.Rectangle;
   private readonly groundHatch: Phaser.GameObjects.TileSprite;
   private readonly groundEdge: Phaser.GameObjects.Graphics;
   private readonly line: Phaser.GameObjects.Graphics;
-  private readonly lineLabel: Phaser.GameObjects.Text;
-  private readonly lineValue: Phaser.GameObjects.Text;
+  private readonly lineLabel: GlyphText;
+  private readonly lineValue: GlyphText;
   private readonly groundLabels = new LabelPool(DEPTH.ground + 0.3);
   private readonly rulerLabels = new LabelPool(DEPTH.ruler);
 
@@ -58,14 +57,15 @@ export class BackgroundRenderer {
   private progress = 0;
   private shownProgress = 0;
   private dash = 0;
-  private time = 0;
   private rulerX = 45;
   private lineDirty = true;
   private labelColor = -1;
+  private valueKey = -1;
 
   constructor(readonly scene: Phaser.Scene) {
     TextureFactory.generateCommon(scene);
-    this.backdrop = scene.add.rectangle(0, 0, 10, 10, BG, 1).setOrigin(0, 0).setDepth(DEPTH.background);
+    // The backdrop colour itself is the camera clear colour (#121418, game config);
+    // no full-screen quad needed.
     this.grid = scene.add.graphics().setDepth(DEPTH.grid);
     this.ruler = scene.add.graphics().setDepth(DEPTH.ruler);
     this.groundFill = scene.add.rectangle(0, 0, 10, 10, GROUND_FILL, 1).setOrigin(0, 0).setDepth(DEPTH.ground);
@@ -74,8 +74,8 @@ export class BackgroundRenderer {
     this.groundEdge = scene.add.graphics().setDepth(DEPTH.ground + 0.2);
     this.line = scene.add.graphics().setDepth(DEPTH.destructionLine);
     // Labels sit left of the line (the height ruler lives on the right).
-    this.lineLabel = this.makeText('DESTRUCTION LINE', 13, '#ff8a6b').setDepth(DEPTH.destructionLine).setOrigin(1, 1);
-    this.lineValue = this.makeText('', 12, '#ff8a6b').setDepth(DEPTH.destructionLine).setOrigin(1, 0);
+    this.lineLabel = new GlyphText(scene, 13, LINE_IDLE, DEPTH.destructionLine, 1.2).setText('DESTRUCTION LINE').setOrigin(1, 1);
+    this.lineValue = new GlyphText(scene, 12, LINE_IDLE, DEPTH.destructionLine, 0.8).setOrigin(1, 0);
     this.lineLabel.setVisible(false);
     this.lineValue.setVisible(false);
     this.layout(this.bounds);
@@ -88,8 +88,6 @@ export class BackgroundRenderer {
     const R = Math.ceil(bounds.right + MARGIN_X);
     const T = Math.floor(bounds.top - MARGIN_TOP);
     const B = GROUND_DEPTH;
-
-    this.backdrop.setPosition(L * PPM, T * PPM).setSize((R - L) * PPM, (B - T) * PPM);
 
     // ---- measurement grid (sky only; the ground slab covers y > 0)
     const g = this.grid;
@@ -150,6 +148,7 @@ export class BackgroundRenderer {
     this.lineValue.setVisible(on);
     this.shownProgress = this.progress;
     this.labelColor = -1;
+    this.valueKey = -1;
     // Ruler sits just right of the structure.
     if (x1 !== undefined) {
       this.rulerX = Math.min(x1 + 1.5, this.bounds.right - 1.5);
@@ -164,7 +163,6 @@ export class BackgroundRenderer {
   }
 
   update(realDt: number): void {
-    this.time += realDt;
     if (this.lineHeight === null) {
       if (this.lineDirty) {
         this.line.clear();
@@ -173,17 +171,14 @@ export class BackgroundRenderer {
       return;
     }
     // Ease the displayed progress so jumps read as motion.
-    const prev = this.shownProgress;
     this.shownProgress += (this.progress - this.shownProgress) * Math.min(1, realDt * 5);
     const speed = 12 + this.shownProgress * 40;
     this.dash = (this.dash + realDt * speed) % 18;
     // Cheap (a few dozen segments): redraw every frame for the marching dashes.
-    void prev;
     this.drawLine();
   }
 
   destroy(): void {
-    this.backdrop.destroy();
     this.grid.destroy();
     this.ruler.destroy();
     this.groundFill.destroy();
@@ -257,36 +252,31 @@ export class BackgroundRenderer {
     }
     this.lineLabel.setPosition(x0 - 10, y - 1).setAlpha(0.75 + 0.25 * p);
     this.lineValue.setPosition(x0 - 10, y + 2).setAlpha(0.6 + 0.3 * p);
-    // Text re-rasterises on any style/text change: only touch it when the rounded values move.
+    // Only touch the labels when the rounded values move (no per-frame string building).
     const pct = Math.round(p * 100);
     const colorKey = done ? LINE_DONE : lerpColor(LINE_IDLE, LINE_CLOSE, Math.round(Math.min(1, p * 1.1) * 8) / 8);
     if (colorKey !== this.labelColor) {
       this.labelColor = colorKey;
-      const css = '#' + colorKey.toString(16).padStart(6, '0');
-      this.lineLabel.setColor(css);
-      this.lineValue.setColor(css);
-      this.lineLabel.setText(done ? 'DESTRUCTION LINE  ✓' : 'DESTRUCTION LINE');
+      this.lineLabel.setColor(colorKey);
+      this.lineValue.setColor(colorKey);
+      this.lineLabel.setText(done ? 'DESTRUCTION LINE ✓' : 'DESTRUCTION LINE');
     }
-    const value = `${h.toFixed(1)} m · ${pct}%`;
-    if (value !== this.lineValue.text) this.lineValue.setText(value);
+    const valueKey = pct * 100000 + Math.round(h * 10);
+    if (valueKey !== this.valueKey) {
+      this.valueKey = valueKey;
+      this.lineValue.setText(`${h.toFixed(1)} m · ${pct}%`);
+    }
   }
 
   /** @internal used by LabelPool. */
-  makeText(text: string, size: number, color: string): Phaser.GameObjects.Text {
-    const t = this.scene.add.text(0, 0, text, {
-      fontFamily: THEME.font,
-      fontSize: `${size}px`,
-      color,
-    });
-    t.setResolution(2);
-    t.setLetterSpacing(1);
-    return t;
+  makeText(size: number, color: number, depth: number): GlyphText {
+    return new GlyphText(this.scene, size, color, depth);
   }
 }
 
 /** Small pool of world-space labels, refilled on each (rare) redraw. */
 class LabelPool {
-  private items: Phaser.GameObjects.Text[] = [];
+  private items: GlyphText[] = [];
   private used = 0;
 
   constructor(private readonly depth: number) {}
@@ -298,12 +288,11 @@ class LabelPool {
   put(owner: BackgroundRenderer, text: string, x: number, y: number, ox: number, oy: number, alpha: number): void {
     let t = this.items[this.used];
     if (!t) {
-      t = owner.makeText(text, 11, THEME.textDim).setDepth(this.depth);
+      t = owner.makeText(11, LABEL_COLOR, this.depth);
       this.items.push(t);
     }
     this.used++;
-    if (t.text !== text) t.setText(text);
-    t.setPosition(x, y).setOrigin(ox, oy).setAlpha(alpha).setVisible(true);
+    t.setText(text).setOrigin(ox, oy).setPosition(x, y).setAlpha(alpha).setVisible(true);
   }
 
   end(): void {

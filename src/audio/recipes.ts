@@ -220,6 +220,9 @@ const creakWood: Recipe = (r) => {
     grit: 0.25,
   });
   onePoleLP(b, 5000);
+  // Tame the pulse peaks so the creak carries at modest volume.
+  normalize(b, 1);
+  saturate(b, 2.5);
   reverb(b, 0.14, 0.7, 0.45, 0.8);
   return done(b, 0.9);
 };
@@ -247,8 +250,10 @@ const groanMetal: Recipe = (r) => {
     release: 0.55,
     grit: 0.1,
   });
-  addTone(b, { f0: rate * 2, f1: rate * 1.7, glide: 0.8, amp: 0.12, attack: 0.25, decay: 0.6 });
+  addTone(b, { f0: rate * 3, f1: rate * 2.6, glide: 0.8, amp: 0.05, attack: 0.25, decay: 0.6 });
   onePoleLP(b, 3500);
+  normalize(b, 1);
+  saturate(b, 1.6);
   reverb(b, 0.3, 0.84, 0.3, 1.2);
   return done(b, 0.85);
 };

@@ -43,10 +43,12 @@ export class CameraDirector {
 
   // Target and current framing (world pixels / zoom).
   private tgtCx = 0;
-  private tgtCy = 0;
+  private tgtBottom = 0;
   private tgtZoom = 1;
   private cx = 0;
   private cy = 0;
+  /** World-pixel y of the view's bottom edge (anchored so the ground never drifts while zooming). */
+  private bottom = 0;
   private zoom = 1;
   private hasFrame = false;
 
@@ -75,8 +77,9 @@ export class CameraDirector {
   constructor(readonly scene: Phaser.Scene) {
     this.cam = scene.cameras.main;
     this.cx = this.tgtCx = this.cam.scrollX + this.cam.width / 2;
-    this.cy = this.tgtCy = this.cam.scrollY + this.cam.height / 2;
+    this.cy = this.cam.scrollY + this.cam.height / 2;
     this.zoom = this.tgtZoom = this.cam.zoom;
+    this.bottom = this.tgtBottom = this.cy + this.cam.height / this.zoom / 2;
     this.viewCx = this.cx;
     this.viewCy = this.cy;
     this.viewZoom = this.zoom;
@@ -97,11 +100,12 @@ export class CameraDirector {
     // place on screen and any spare height opens up above the structure.
     this.tgtZoom = zoom;
     this.tgtCx = ((bounds.left + bounds.right) / 2) * PPM;
-    this.tgtCy = bounds.bottom * PPM - h / zoom / 2;
+    this.tgtBottom = bounds.bottom * PPM;
     if (instant || !this.hasFrame) {
       this.cx = this.tgtCx;
-      this.cy = this.tgtCy;
+      this.bottom = this.tgtBottom;
       this.zoom = this.tgtZoom;
+      this.cy = this.bottom - h / this.zoom / 2;
       this.trauma = 0;
       this.kick = this.kickVel = 0;
       this.focusAmt = this.focusCur = this.focusHold = 0;
@@ -161,8 +165,9 @@ export class CameraDirector {
     // Smooth framing (log-space for zoom so zooming feels uniform).
     const k = 1 - Math.exp(-FRAME_LAMBDA * dt);
     this.cx += (this.tgtCx - this.cx) * k;
-    this.cy += (this.tgtCy - this.cy) * k;
+    this.bottom += (this.tgtBottom - this.bottom) * k;
     this.zoom = Math.exp(Math.log(this.zoom) + (Math.log(this.tgtZoom) - Math.log(this.zoom)) * k);
+    this.cy = this.bottom - this.cam.height / this.zoom / 2;
 
     // Punch spring (semi-implicit Euler, sub-stepped for stability).
     const sub = dt > 1 / 60 ? 2 : 1;

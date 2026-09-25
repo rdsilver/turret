@@ -7,7 +7,9 @@
  */
 import type { MaterialId } from '../../Materials';
 import type { PartTag } from '../../StructureDefinition';
-import { param, paramBool, paramStr, registerModule, type ModuleContext, type ModuleResult } from '../StructureGenerator';
+import { param, paramBool, paramStr, registerModule, type ModuleResult } from '../StructureGenerator';
+import { braceBay, type BracePattern } from './bracing';
+import { num, tagsOf } from './util';
 
 /** A single box. Params: w, h, material, dx (offset), tags (comma separated), angle. */
 registerModule('block', (ctx) => {
@@ -96,7 +98,10 @@ registerModule('slab', (ctx) => {
 /**
  * One storey of a post-and-beam frame: `columns` posts under a beam.
  * Params: w (total width), h (column height), columns, colW, beamH, material, beamMaterial,
- * strength (weld multiplier), weakColumn (index of a column with weakened joints).
+ * strength (weld multiplier), weakColumn (index of a column with weakened joints),
+ * brace ('none'|'x'|'single'|'chevron'|'v' diagonal bracing in every bay, default none),
+ * braceDir (single: 1 rises right, -1 rises left, 'alt' alternates per bay), braceT, braceMaterial,
+ * braceStrength, skipBay (index of a bay left unbraced — a deliberate weakness).
  */
 registerModule('frame', (ctx): ModuleResult => {
   const w = param(ctx, 'w', ctx.width);
@@ -110,25 +115,43 @@ registerModule('frame', (ctx): ModuleResult => {
   const weak = Math.round(param(ctx, 'weakColumn', -1));
   const idx: number[] = [];
   const cols: number[] = [];
+  const colX: number[] = [];
   for (let k = 0; k < n; k++) {
     const x = ctx.x - w / 2 + colW / 2 + (k * (w - colW)) / (n - 1);
     const c = ctx.draft.boxOn(x, ctx.baseY, colW, h, mat, { tags: k === weak ? ['weakpoint', ...(tagsOf(ctx) ?? [])] : tagsOf(ctx) });
     cols.push(c);
+    colX.push(x);
     idx.push(c);
   }
   const beam = ctx.draft.boxOn(ctx.x, ctx.baseY + h, w, beamH, beamMat, { tags: tagsOf(ctx) });
   idx.push(beam);
   cols.forEach((c, k) => ctx.draft.autoWeld({ among: [c, beam], toGround: false, strength: k === weak ? strength * 0.3 : strength }));
+  const pattern = paramStr<BracePattern>(ctx, 'brace', 'none');
+  if (pattern !== 'none') {
+    const t = param(ctx, 'braceT', 0.16);
+    const bmat = paramStr<MaterialId>(ctx, 'braceMaterial', mat);
+    const skip = Math.round(param(ctx, 'skipBay', -1));
+    const alt = ctx.spec.braceDir === 'alt';
+    for (let k = 0; k < n - 1; k++) {
+      if (k === skip) continue;
+      const dir = alt ? (k % 2 === 0 ? 1 : -1) : num(ctx.spec.braceDir, 1) >= 0 ? 1 : -1;
+      idx.push(
+        ...braceBay(ctx.draft, {
+          x0: colX[k]!,
+          x1: colX[k + 1]!,
+          y0: ctx.baseY,
+          y1: ctx.baseY + h,
+          pattern,
+          dir,
+          t,
+          material: bmat,
+          strength: param(ctx, 'braceStrength', strength),
+          densityScale: bmat === 'steel' ? 0.2 : 1,
+          beamPen: beamH,
+          floorPen: ctx.baseY > 0.001 ? 0.12 : 0,
+        }),
+      );
+    }
+  }
   return { parts: idx, top: ctx.baseY + h + beamH, width: w, x: ctx.x };
 });
-
-function tagsOf(ctx: ModuleContext): PartTag[] | undefined {
-  const t = ctx.spec.tags;
-  if (typeof t === 'string') return t.split(',').map((s) => s.trim()) as PartTag[];
-  if (Array.isArray(t)) return t as PartTag[];
-  return undefined;
-}
-
-function num(v: unknown, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}

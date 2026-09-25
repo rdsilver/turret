@@ -30,7 +30,7 @@ import type { CameraDirector } from './CameraDirector';
 import { DEPTH } from './depths';
 import { TEX } from './TextureKeys';
 import { FxParticle, mixColor, resetBurst } from './fx/FxParticle';
-import { resolveTexture } from './fx/FxTextures';
+import { FX_RING_RADIUS, FX_TEX, ensureFxTextures, resolveTexture } from './fx/FxTextures';
 import { ScreenOverlay } from './fx/ScreenOverlay';
 
 type Family = 'wood' | 'stone' | 'metal' | 'glass' | 'rubber';
@@ -137,8 +137,9 @@ export class EffectsManager {
       { key: TEX.sliver, add: true, cap: 450, depth: DEPTH.particles + 1, realFloor: 0 },
       { key: TEX.dot, add: true, cap: 300, depth: DEPTH.particles + 1, realFloor: 0 },
       { key: TEX.glow, add: true, cap: 90, depth: DEPTH.flash, realFloor: 0.5 },
-      { key: TEX.ring, add: false, cap: 40, depth: DEPTH.flash, realFloor: 0.5 },
+      { key: FX_TEX.ring, add: false, cap: 40, depth: DEPTH.flash, realFloor: 0.5 },
     ];
+    ensureFxTextures(scene);
     const mk = (s: EmitterSpec): Emitter => {
       const em = scene.add.particles(0, 0, resolveTexture(scene, s.key), {
         emitting: false,
@@ -404,7 +405,7 @@ export class EffectsManager {
     if (!e.hitGround && e.target) this.hitStop(0.045 + 0.045 * m);
 
     this.flash(x, y, 24 + 26 * m, 0xffffff, 70, 0.85);
-    this.ring(x, y, 36 + 48 * m, 230, 0.42, 0xffffff);
+    this.ring(x, y, 34 + 40 * m, 200, 0.4, 0xffffff);
     if (e.hitGround) {
       this.groundDust(x, 0.6 + 0.6 * m, GROUND_DUST);
       this.materialBurst('ground', x, y, 0.5 + 0.5 * m, UP, 0.9);
@@ -430,7 +431,7 @@ export class EffectsManager {
     const x = e.x * PPM;
     const y = e.y * PPM;
     if (e.hitGround) {
-      this.groundDust(x, 0.2 + 0.8 * m, mixColor(this.dustColor[e.material], GROUND_DUST, 0.5));
+      this.groundDust(x, 0.1 + 0.9 * m, mixColor(this.dustColor[e.material], GROUND_DUST, 0.5));
       this.materialBurst(e.material, x, y, m * 0.8, UP, 1.0);
     } else {
       this.puff(x, y, 1 + 5 * m, this.dustColor[e.material], 8 + 14 * m, 0.3 + 0.2 * m);
@@ -519,14 +520,17 @@ export class EffectsManager {
   }
 
   private onJointBroken(e: SimEvents['jointBroken']): void {
-    if (e.cause === 'removed') return;
+    // Shattering parts drop their joints too; partShattered draws that moment.
+    if (e.cause === 'removed' || e.cause === 'shatter') return;
     const x = e.x * PPM;
     const y = e.y * PPM;
     const r = ratingScale(e.rating);
     const fam = family(e.joint.bondMaterial);
     const metal = fam === 'metal' || family(e.materialA) === 'metal' || family(e.materialB) === 'metal';
-    const load = 1 / (1 + this.snapLoad * 0.15);
+    // Massive cascades (hundreds of joints in a few steps): draw a representative sample.
     this.snapLoad += 1;
+    if (this.snapLoad > 14 && Math.random() * this.snapLoad > 14) return;
+    const load = 1 / (1 + (this.snapLoad - 1) * 0.15);
     let s = (0.55 + 0.8 * r) * load;
     if (e.cause === 'explosion') s *= 0.45;
     const mat = e.joint.bondMaterial;
@@ -574,7 +578,7 @@ export class EffectsManager {
         b.fadePow = 3;
         b.jitter = 4;
         this.emit(this.chips, x, y, 5 + 9 * s);
-        this.puff(x, y, 4 + 6 * s, this.dustColor[mat], 14 + 14 * r, 0.38, 1.3);
+        this.puff(x, y, 4 + 6 * s, this.dustColor[mat], 14 + 14 * r, 0.3, 1.3);
         break;
       }
       case 'glass':
@@ -687,8 +691,8 @@ export class EffectsManager {
     b.jitter = R * 0.1;
     this.emit(this.chips, x, y, 10 + 10 * p);
 
-    this.ring(x, y, R * 1.15, 300, 0.55, 0xfff1dc);
-    this.ring(x, y, R * 1.9, 480, 0.18, 0xffffff);
+    this.ring(x, y, R * 1.15, 300, 0.5, 0xfff1dc);
+    this.ring(x, y, R * 1.9, 460, 0.14, 0xffffff);
     if (e.y > -2.5) this.groundDust(x, 0.7 + 0.3 * p, GROUND_DUST);
 
     this.overlay.flash(0.09 * p, 0xffe6c0, 9);
@@ -705,7 +709,7 @@ export class EffectsManager {
   }
 
   private onObjectiveComplete(): void {
-    this.overlay.pulse(0x7fffd0, 0.8, 1.2);
+    this.overlay.pulse(0x7fffd0, 0.65, 1.2);
     this.camera.punch(0.008);
   }
 
@@ -739,8 +743,8 @@ export class EffectsManager {
     const b = resetBurst();
     b.tint = color;
     b.lifeMin = b.lifeMax = life;
-    b.scaleMin = b.scaleMax = (radius * 0.25) / 32;
-    b.endScale = 4;
+    b.scaleMin = b.scaleMax = (radius * 0.3) / FX_RING_RADIUS;
+    b.endScale = 1 / 0.3;
     b.easeOut = true;
     b.alpha = alpha;
     b.fadePow = 1.3;
@@ -786,7 +790,7 @@ export class EffectsManager {
     b.endScale = 2.6;
     b.easeOut = true;
     b.aspect = 0.75;
-    b.alpha = 0.26 + 0.14 * s;
+    b.alpha = 0.22 + 0.12 * s;
     b.alphaVar = 0.4;
     b.fadeIn = 0.1;
     b.fadePow = 1.8;
@@ -853,7 +857,7 @@ export class EffectsManager {
         b.fadePow = 3;
         b.jitter = 3;
         this.emit(this.chips, x, y, 1 + 8 * m);
-        this.puff(x, y, 2 + 5 * m, this.dustColor[mat], 10 + 14 * m, 0.34, 1.3);
+        this.puff(x, y, 2 + 5 * m, this.dustColor[mat], 10 + 14 * m, 0.3, 1.3);
         break;
       case 'metal':
         if (m > 0.25) this.sparkBurst(x, y, 3 + 14 * m, 160 + 380 * m, angle, spread);

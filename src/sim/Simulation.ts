@@ -36,7 +36,7 @@ export interface SimulationOptions {
 
 /** Seconds of quiet (no failures) before a collapse counts as settled. */
 const SETTLE_QUIET = 1.1;
-const SETTLE_MIN = 1.6;
+const SETTLE_MIN = 2.6;
 const SETTLE_MAX = 7;
 const SETTLE_ACTIVE = 6;
 
@@ -58,6 +58,8 @@ export class Simulation implements SimContext {
   /** True while pre-settling a freshly built structure (views may ignore noise). */
   settling = false;
   objectiveMetAt = -1;
+  /** Bodies still awake when pre-settling ended (0 for a well-formed structure). */
+  settleActive = 0;
   private lastFailureAt = 0;
 
   constructor(opts: SimulationOptions = {}) {
@@ -91,7 +93,7 @@ export class Simulation implements SimContext {
    * Build a structure and let it settle under gravity before play starts, so
    * the player sees it at rest (and asleep).
    */
-  loadStructure(def: StructureDef, objective: ObjectiveDef = DEFAULT_OBJECTIVE, settleSeconds = 2.5): Structure {
+  loadStructure(def: StructureDef, objective: ObjectiveDef = DEFAULT_OBJECTIVE, settleSeconds = 5): Structure {
     this.clearStructure();
     const s = buildStructure(this.physics, def);
     this.structure = s;
@@ -112,10 +114,10 @@ export class Simulation implements SimContext {
     this.detector = new CollapseDetector(s, objective);
     this.chains.reset();
     this.chains.setTrackedMass(s.trackedMass);
-    // Put anything still barely moving to sleep; seed stress values for the heat map.
-    for (const p of s.parts) {
-      if (!p.fixed && !p.removed && Math.hypot(p.vx, p.vy) < 0.05 && Math.abs(p.av) < 0.05) p.body.sleep();
-    }
+    // Settling ends when Rapier has put every body to sleep (or on timeout; bodies are
+    // never force-slept individually here — that can drop a still-moving structure).
+    this.settleActive = this.physics.stats.active;
+    // Seed stress values for the heat map.
     this.physics.evaluateAllJoints();
     this.phase = 'standing';
     this.objectiveMetAt = -1;

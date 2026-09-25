@@ -158,15 +158,40 @@ function renderOnMainThread(jobs: { id: SoundId; variant: number }[], add: (id: 
   setTimeout(tick, 0);
 }
 
+/** Master low-pass used to muffle the world during slow motion (null until installed). */
+let busFilter: BiquadFilterNode | null = null;
+let busCtx: BaseAudioContext | null = null;
+let muffle = 0;
+
 /**
- * Route Phaser's master volume node through a soft compressor so dense
- * collapses stay loud but never clip. Idempotent.
+ * Muffle the whole mix: 0 = open (20 kHz), 1 = heavily low-passed (~2.4 kHz).
+ * Smoothly automated; cheap to call every frame (ignores tiny changes).
+ */
+export function setMasterMuffle(amount: number): void {
+  const a = Math.max(0, Math.min(1, amount));
+  if (!busFilter || !busCtx || Math.abs(a - muffle) < 0.01) return;
+  muffle = a;
+  const f = 20000 * Math.pow(2400 / 20000, a);
+  try {
+    busFilter.frequency.setTargetAtTime(f, busCtx.currentTime, 0.04);
+  } catch {
+    busFilter.frequency.value = f;
+  }
+}
+
+/**
+ * Route Phaser's master volume node through a low-pass (slow-mo muffle) and a
+ * soft compressor so dense collapses stay loud but never clip. Idempotent.
  */
 function installMasterBus(scene: Phaser.Scene, ctx: BaseAudioContext): void {
   const sm = scene.sound as unknown as { masterVolumeNode?: GainNode; __turretBus?: boolean };
   const out = sm.masterVolumeNode;
   if (!out || sm.__turretBus || typeof ctx.createDynamicsCompressor !== 'function') return;
   try {
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 20000;
+    lp.Q.value = 0.5;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16;
     comp.knee.value = 12;
@@ -174,8 +199,11 @@ function installMasterBus(scene: Phaser.Scene, ctx: BaseAudioContext): void {
     comp.attack.value = 0.003;
     comp.release.value = 0.25;
     out.disconnect();
-    out.connect(comp);
+    out.connect(lp);
+    lp.connect(comp);
     comp.connect(ctx.destination);
+    busFilter = lp;
+    busCtx = ctx;
     sm.__turretBus = true;
   } catch (e) {
     // Leave Phaser's default routing intact if anything goes wrong.

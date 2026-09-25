@@ -114,6 +114,38 @@ export class StructurePart extends Entity {
     return -this.y;
   }
 
+  /** Half-height of the shape's axis-aligned bounds at its CURRENT angle (m). */
+  get halfHeightNow(): number {
+    const s = this.shape;
+    if (s.kind === 'circle') return s.r;
+    if (s.kind === 'box') {
+      const c = Math.abs(Math.cos(this.angle));
+      const sn = Math.abs(Math.sin(this.angle));
+      return s.hw * sn + s.hh * c;
+    }
+    const c = Math.cos(this.angle);
+    const sn = Math.sin(this.angle);
+    let m = 0;
+    for (let i = 0; i < s.points.length; i += 2) m = Math.max(m, Math.abs(sn * s.points[i]! + c * s.points[i + 1]!));
+    return m;
+  }
+
+  /** Half-width of the shape's axis-aligned bounds at its CURRENT angle (m). */
+  get halfWidthNow(): number {
+    const s = this.shape;
+    if (s.kind === 'circle') return s.r;
+    if (s.kind === 'box') {
+      const c = Math.abs(Math.cos(this.angle));
+      const sn = Math.abs(Math.sin(this.angle));
+      return s.hw * c + s.hh * sn;
+    }
+    const c = Math.cos(this.angle);
+    const sn = Math.sin(this.angle);
+    let m = 0;
+    for (let i = 0; i < s.points.length; i += 2) m = Math.max(m, Math.abs(c * s.points[i]! - sn * s.points[i + 1]!));
+    return m;
+  }
+
   /** Lowest point of the shape (approx, uses extent). */
   get bottomHeight(): number {
     return -this.y - this.extent;

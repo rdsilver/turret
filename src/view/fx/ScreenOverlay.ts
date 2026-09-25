@@ -62,7 +62,7 @@ export class ScreenOverlay {
     const h = (cam.height / cam.zoom) * 1.12;
     const cx = cam.width / 2;
     const cy = cam.height / 2;
-    this.place(this.dark, this.darkAmt * 0.42, cx, cy, w, h);
+    this.place(this.dark, this.darkAmt * 0.6, cx, cy, w, h);
     const p = this.pulseT > 0 ? this.pulseT / this.pulseDur : 0;
     // Quick rise, slow fall.
     const env = p > 0.85 ? (1 - p) / 0.15 : p / 0.85;

@@ -16,17 +16,16 @@
  */
 import type * as Phaser from 'phaser';
 import type { StructurePart } from '../sim/StructurePart';
-import { PPM } from '../config/constants';
+import type { MaterialDef, MaterialId } from '../sim/Materials';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
-import { TextureAtlas } from './render/TextureAtlas';
+import { TextureAtlas, type AtlasFrame } from './render/TextureAtlas';
 import { hashString, measurePart, paintPart, shapeKey } from './render/PartPainter';
-import { css, lerpColor, luminance, scaleColor } from './render/color';
+import { glyphSet, miscAtlas, miscFrame, paintShot, shotFrame } from './render/MiscAtlas';
+import { generateTurretArt } from './render/TurretArt';
+import { TEXELS_PER_M, TEXTURE_RES } from './render/res';
 
-/** Supersampling of procedural art (texels per world pixel). */
-export const TEXTURE_RES = 2;
-/** Texels per simulation meter. */
-export const TEXELS_PER_M = PPM * TEXTURE_RES;
+export { TEXELS_PER_M, TEXTURE_RES };
 
 export interface PartFrame {
   key: string;
@@ -72,7 +71,10 @@ export class TextureFactory {
 
   static generateCommon(scene: Phaser.Scene): void {
     const t = scene.textures;
-    if (t.exists(TEX.pixel) && t.exists(RK.hatch)) return;
+    if (t.exists(TEX.pixel) && t.exists(RK.hatch)) {
+      miscAtlas(t);
+      return;
+    }
     const make = (key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): void => {
       if (t.exists(key)) return;
       const tex = t.createCanvas(key, w, h);
@@ -152,78 +154,10 @@ export class TextureFactory {
       c.fill();
     });
 
-    // ---- render-private keys ----
-    make(RK.weld, 14, 14, (c) => {
-      c.fillStyle = 'rgba(12,14,18,0.9)';
-      c.beginPath();
-      c.arc(7, 7, 6.2, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#4a515c';
-      c.beginPath();
-      c.arc(7, 7, 4.4, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.55)';
-      c.beginPath();
-      c.arc(5.8, 5.8, 1.6, 0, Math.PI * 2);
-      c.fill();
-    });
-    make(RK.node, 16, 16, (c) => {
-      c.fillStyle = 'rgba(10,12,16,0.95)';
-      c.beginPath();
-      c.arc(8, 8, 7.5, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#fff';
-      c.beginPath();
-      c.arc(8, 8, 5.6, 0, Math.PI * 2);
-      c.fill();
-    });
-    make(RK.hinge, 26, 26, (c) => {
-      c.fillStyle = 'rgba(10,12,16,0.85)';
-      c.beginPath();
-      c.arc(13, 13, 12, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = '#dfe5ee';
-      c.lineWidth = 3.2;
-      c.beginPath();
-      c.arc(13, 13, 8.6, 0, Math.PI * 2);
-      c.stroke();
-      c.fillStyle = '#8f99a8';
-      c.beginPath();
-      c.arc(13, 13, 3.6, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.8)';
-      c.beginPath();
-      c.arc(12, 12, 1.4, 0, Math.PI * 2);
-      c.fill();
-    });
-    make(RK.reticle, 64, 64, (c) => {
-      c.strokeStyle = '#fff';
-      c.lineWidth = 3;
-      c.beginPath();
-      c.arc(32, 32, 17, 0, Math.PI * 2);
-      c.stroke();
-      c.lineWidth = 3;
-      c.lineCap = 'round';
-      c.beginPath();
-      for (let i = 0; i < 4; i++) {
-        const a = (i * Math.PI) / 2;
-        c.moveTo(32 + Math.cos(a) * 22, 32 + Math.sin(a) * 22);
-        c.lineTo(32 + Math.cos(a) * 30, 32 + Math.sin(a) * 30);
-      }
-      c.stroke();
-      c.fillStyle = '#fff';
-      c.beginPath();
-      c.arc(32, 32, 3, 0, Math.PI * 2);
-      c.fill();
-    });
-    make(RK.pdot, 12, 12, (c) => {
-      const g = c.createRadialGradient(6, 6, 0, 6, 6, 6);
-      g.addColorStop(0, 'rgba(255,255,255,1)');
-      g.addColorStop(0.55, 'rgba(255,255,255,0.95)');
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = g;
-      c.fillRect(0, 0, 12, 12);
-    });
+    // ---- render-private art (misc atlas) + standalone hatch tile ----
+    miscAtlas(t);
+    glyphSet(t);
+    generateTurretArt(t);
     make(RK.hatch, 24, 24, (c) => {
       c.strokeStyle = 'rgba(255,255,255,1)';
       c.lineWidth = 1.2;
@@ -239,16 +173,20 @@ export class TextureFactory {
     });
   }
 
-  /** Atlas frame for a part (generated on first use, then cached). */
-  partFrame(part: StructurePart): PartFrame {
-    const mat = part.material;
-    const name = `${mat.id}:${shapeKey(part.shape)}${part.fixed ? ':f' : ''}`;
+  /**
+   * Atlas frame for a part (generated on first use, then cached).
+   * `neutral` = light-grey variant of the same art for the stress heat map
+   * (tinted by the heat colour with a plain MULTIPLY tint).
+   */
+  partFrame(part: StructurePart, neutral = false): PartFrame {
+    const mat = neutral ? neutralMaterial(part.material) : part.material;
+    const name = partName(part, neutral);
     const cached = this.set.frames.get(name);
     if (cached) return cached;
     const s = TEXELS_PER_M;
     const lay = measurePart(part.shape, s);
     const atlas = Math.max(lay.w, lay.h) <= SMALL_MAX ? this.set.small : this.set.big;
-    const seed = hashString(name);
+    const seed = hashString(partName(part, false));
     let f: PartFrame | null = null;
     if (atlas.fits(lay.w, lay.h)) {
       const af = atlas.add(name, lay.w, lay.h, (ctx) => paintPart(ctx, part.shape, mat, s, lay, { fixed: part.fixed, seed }));
@@ -256,7 +194,7 @@ export class TextureFactory {
     }
     if (!f) {
       // Oversized (or atlas failure): standalone texture.
-      const key = this.standalonePart(part, name);
+      const key = this.standalonePart(part, name, mat);
       f = { key, frame: '__BASE', originX: lay.ox / lay.w, originY: lay.oy / lay.h };
     }
     this.set.frames.set(name, f);
@@ -265,11 +203,10 @@ export class TextureFactory {
 
   /** Standalone texture key with the same art as partFrame (external callers). */
   partKey(part: StructurePart): string {
-    const name = `${part.material.id}:${shapeKey(part.shape)}${part.fixed ? ':f' : ''}`;
-    return this.standalonePart(part, name);
+    return this.standalonePart(part, partName(part, false), part.material);
   }
 
-  /** Round shot: fill colour, light rim so dark rounds read on the dark backdrop, specular dot. */
+  /** Round shot (standalone texture key): fill colour, light rim so dark rounds read on the dark backdrop, specular dot. */
   projectileKey(radiusPx: number, color: number): string {
     const rt = Math.max(3, Math.round(radiusPx * TEXTURE_RES));
     const key = `rk_shot_${rt}_${color.toString(16)}`;
@@ -278,30 +215,19 @@ export class TextureFactory {
     const d = rt * 2 + 4;
     const tex = t.createCanvas(key, d, d);
     if (!tex) return TEX.dot;
-    const c = tex.context;
-    const cx = d / 2;
-    const dark = luminance(color) < 0.3;
-    const rim = dark ? 0x9aa4b4 : scaleColor(color, 0.45);
-    // Body with a soft spherical gradient.
-    const g = c.createRadialGradient(cx - rt * 0.35, cx - rt * 0.35, rt * 0.1, cx, cx, rt);
-    g.addColorStop(0, css(lerpColor(color, 0xffffff, dark ? 0.35 : 0.45)));
-    g.addColorStop(0.55, css(color));
-    g.addColorStop(1, css(scaleColor(color, 0.7)));
-    c.fillStyle = g;
-    c.beginPath();
-    c.arc(cx, cx, rt, 0, Math.PI * 2);
-    c.fill();
-    c.lineWidth = Math.max(1.5, rt * 0.14);
-    c.strokeStyle = css(rim, 1);
-    c.beginPath();
-    c.arc(cx, cx, rt - c.lineWidth / 2, 0, Math.PI * 2);
-    c.stroke();
-    c.fillStyle = 'rgba(255,255,255,0.85)';
-    c.beginPath();
-    c.arc(cx - rt * 0.38, cx - rt * 0.38, Math.max(1, rt * 0.18), 0, Math.PI * 2);
-    c.fill();
+    paintShot(tex.context, d, rt, color);
     tex.refresh();
     return key;
+  }
+
+  /** Round shot as a misc-atlas frame (preferred: shares the world texture). */
+  projectileFrame(radiusPx: number, color: number): AtlasFrame {
+    return shotFrame(this.scene.textures, radiusPx, color, TEXTURE_RES);
+  }
+
+  /** Frame of a render-private art piece (RK.*) in the misc atlas. */
+  miscFrame(name: string): AtlasFrame {
+    return miscFrame(this.scene.textures, name);
   }
 
   /** Number of atlas pages in use (debug / memory trimming). */
@@ -322,7 +248,7 @@ export class TextureFactory {
     this.set.frames.clear();
   }
 
-  private standalonePart(part: StructurePart, name: string): string {
+  private standalonePart(part: StructurePart, name: string, mat: MaterialDef): string {
     const key = `rk_part_${name}`;
     const t = this.scene.textures;
     if (t.exists(key)) return key;
@@ -330,8 +256,24 @@ export class TextureFactory {
     const lay = measurePart(part.shape, s);
     const tex = t.createCanvas(key, lay.w, lay.h);
     if (!tex) return TEX.pixel;
-    paintPart(tex.context, part.shape, part.material, s, lay, { fixed: part.fixed, seed: hashString(name) });
+    paintPart(tex.context, part.shape, mat, s, lay, { fixed: part.fixed, seed: hashString(partName(part, false)) });
     tex.refresh();
     return key;
   }
+}
+
+function partName(part: StructurePart, neutral: boolean): string {
+  return `${part.material.id}:${shapeKey(part.shape)}${part.fixed ? ':f' : ''}${neutral ? ':n' : ''}`;
+}
+
+const neutralCache = new Map<MaterialId, MaterialDef>();
+
+/** Same material, repainted light grey (keeps pattern + outline) for heat-map tinting. */
+function neutralMaterial(m: MaterialDef): MaterialDef {
+  let n = neutralCache.get(m.id);
+  if (!n) {
+    n = { ...m, color: 0xe3e7ed, outline: 0x3a4049, alpha: m.alpha < 1 ? 0.8 : 1 };
+    neutralCache.set(m.id, n);
+  }
+  return n;
 }
