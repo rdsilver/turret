@@ -156,10 +156,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 119,
     reward: 420,
     waves: [
-      { creature: 'triceratops', at: 1, params: { speed: 0.7 } },
+      { creature: 'triceratops', at: 1, params: { speed: 0.68 } },
       { creature: 'hound', at: 16, params: { speed: 1.6 } },
       { creature: 'bird', at: 26, params: { speed: 1.6, height: 3 } },
-      { creature: 'hound', at: 34, params: { speed: 1.7 } },
+      { creature: 'hound', at: 40, params: { speed: 1.7 } },
     ],
   },
   {

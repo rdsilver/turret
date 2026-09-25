@@ -211,27 +211,35 @@ registerCreature('triceratops', (d, _rng, params) => {
   // are sized from the whole weight (legs estimated before they exist).
   const legMass = 2 * (2 * 0.34 * legF * 520 * legDensity + 0.5 * 0.12 * 520 * legDensity) + 2 * (2 * 0.38 * legB * 520 * legDensity + 0.54 * 0.12 * 520 * legDensity);
   const tref = (massOf(d) + legMass) * G * 0.3;
-  const hips: Array<[string, number, number, number, number]> = [
+  const legHp = P('legHp', 12.5);
+  // Part hp grows with 0.35 + sqrt(area) (partMaxHp).
+  const hpArea = (bw: number, bh: number) => 0.35 + Math.sqrt(bw * bh);
+  const legDefs: Array<[string, number, number, number, number]> = [
     ['FL', hipFX, hipFY, legF, 0.34],
     ['FR', hipFX, hipFY, legF, 0.34],
     ['BL', hipBX, hipBY, legB, 0.38],
     ['BR', hipBX, hipBY, legB, 0.38],
   ];
-  for (const [side, x, y, len, w] of hips) {
-    buildLeg(
+  for (const [side, x, y, len, w] of legDefs) {
+    const ids = buildLeg(
       d,
       side,
       x,
       y,
-      { thigh: len, shin: len, w, mat: 'wood', density: legDensity, hipTorque: tref * 2.5, kneeTorque: tref * 3, hp: P('legHp', 13), footW: w + 0.16, omega: 90, strength: 3 },
+      { thigh: len, shin: len, w, mat: 'wood', density: legDensity, hipTorque: tref * 2.5, kneeTorque: tref * 3, hp: legHp, footW: w + 0.16, omega: 90, strength: 3 },
       'body',
     );
+    // buildLeg leaves the foot at base hp, and a wrecked foot cripples the leg
+    // as surely as a wrecked shin: make the flat little foot as tough as the
+    // shin, so shooting at the toes isn't a shortcut past the grind.
+    const foot = d.parts.find((p) => p.id === ids.foot)!;
+    foot.hpScale = legHp * (hpArea(w * 0.88, len + 0.06) / hpArea(w + 0.16, 0.12));
   }
   const amp = P('amp', 0.42);
   const gait: Record<string, MuscleGait> = {};
   // A plodding four-beat walk: FL, BR, FR, BL.
   const phase: Record<string, number> = { FL: 0, BR: 0.25, FR: 0.5, BL: 0.75 };
-  for (const [side] of hips) {
+  for (const [side] of legDefs) {
     gait[`hip${side}`] = { shape: 'sin', amp, bias: 0.02, phase: phase[side]! };
     gait[`knee${side}`] = { shape: 'swing', amp: -0.8, bias: -0.08, phase: phase[side]! + 0.25 };
   }
@@ -240,7 +248,7 @@ registerCreature('triceratops', (d, _rng, params) => {
     weakPoints: ['shinFL', 'shinFR', 'thighFL', 'thighFR', 'shinBL', 'shinBR', 'hips'],
     weakPointsFromAbove: ['hips'],
     core: 'body',
-    legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
+    legs: legDefs.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     legGroups: [
       ['FL', 'FR'],
       ['BL', 'BR'],
