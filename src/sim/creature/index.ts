@@ -2,6 +2,7 @@
 import './abilities';
 import './blueprints/walkers';
 import './blueprints/beetle';
+import './blueprints/triceratops';
 import './blueprints/machines';
 import './blueprints/centipede';
 import './blueprints/boss';
