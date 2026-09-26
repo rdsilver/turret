@@ -560,6 +560,8 @@ export class Hud {
     if (sub.text && sub.y < HINT_Y + 20 && sub.y + sub.height > HINT_Y - 20) {
       x0 = Math.max(x0, Math.round(sub.x + sub.width + 18 + 24));
     }
+    // ...but a hint too long to clear it stays whole on screen.
+    x0 = Math.min(x0, Math.round(this.W - M - 18 - w));
     this.hintTag.x = x0;
     this.hintText.x = x0 + this.hintTag.width + gap;
     const g = this.hintBg;

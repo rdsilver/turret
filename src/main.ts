@@ -18,6 +18,9 @@ const game = new Phaser.Game({
   height: VIEW_HEIGHT,
   backgroundColor: '#121418',
   antialias: true,
+  // Phaser's multi-texture batch picks the sampler with an exact float compare
+  // that fails for texture slots 3+ on some rasterisers (whole triangles vanish).
+  render: { maxTextures: 3 },
   disableContextMenu: true,
   // index.html's #game flexbox centres the canvas; CENTER_BOTH would add its margins on top.
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.NO_CENTER },

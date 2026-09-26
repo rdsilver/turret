@@ -20,6 +20,7 @@ import { TopTurretView } from '../view/TopTurretView';
 import { scoreAssault } from '../game/AssaultScoring';
 import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef } from '../game/AssaultLevel';
 import { gameState } from '../game/GameState';
+import { assaultLevelAt, nextAssaultIndex } from '../game/AssaultProgress';
 import { UpgradeSystem } from '../game/UpgradeSystem';
 import { TextureFactory } from '../view/TextureFactory';
 import { WorldRenderer } from '../view/WorldRenderer';
@@ -38,52 +39,12 @@ import { GrabberView } from '../debug/GrabberView';
 import { onceEach } from '../ui/keys';
 import { pad2 } from '../ui/format';
 import { TURRET } from '../config/constants';
-import { hashString } from '../core/Random';
 
 export interface AssaultSceneData {
   levelIndex?: number;
 }
 
 type Flow = 'playing' | 'ending' | 'results';
-
-/** Base walking speed (m/s) of each creature in endless waves. */
-const ENDLESS_ROSTER: Array<[string, number]> = [
-  ['stickman', 1.0],
-  ['hound', 1.5],
-  ['thrower', 0.8],
-  ['engine', 0.8],
-  ['beetle', 0.55],
-  ['shield', 0.75],
-  ['hound', 1.5],
-  ['centipede', 0.9],
-  ['bird', 3.0],
-];
-
-/** Endless waves after the campaign: more, faster, mixed creatures (a boss every fifth wave: the strider and the tyrant take turns; the triceratops every fifth from the eighth). */
-export function endlessAssault(k: number): AssaultLevelDef {
-  const n = 3 + Math.floor(k * 0.8);
-  const faster = 1 + Math.min(0.5, k * 0.05);
-  const waves: AssaultLevelDef['waves'] = [];
-  for (let i = 0; i < n; i++) {
-    const [creature, speed] = ENDLESS_ROSTER[(i * 3 + k) % ENDLESS_ROSTER.length]!;
-    waves.push({ creature, at: 1 + i * Math.max(4, 9 - k * 0.3), params: { speed: speed * faster } });
-  }
-  if (k % 5 === 4) {
-    const rex = Math.floor(k / 5) % 2 === 1;
-    waves.push(rex ? { creature: 'trex', at: 2, params: { speed: 0.5 * faster } } : { creature: 'strider', at: 2, params: { speed: 0.45 * faster } });
-  }
-  if (k >= 7 && k % 5 === 2) waves.push({ creature: 'triceratops', at: 2, params: { speed: 0.6 * faster } });
-  return {
-    id: `assault-endless-${k}`,
-    name: `Endless Wave ${pad2(k + 1)}`,
-    subtitle: `${waves.length} creatures. They keep coming.`,
-    lesson: 'Prioritise: the fastest threat first, then whatever is closest to the line.',
-    hint: 'Short bursts. Cool the barrel between targets.',
-    seed: hashString(`assault-endless-${k}`),
-    reward: 300 + k * 60,
-    waves,
-  };
-}
 
 export class AssaultScene extends Phaser.Scene implements DebugApi {
   private sim!: Simulation;
@@ -132,7 +93,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
 
   init(data: AssaultSceneData): void {
     const gs = gameState();
-    const idx = data?.levelIndex ?? Math.min(gs.assaultIndex, ASSAULT_LEVELS.length);
+    const idx = data?.levelIndex ?? nextAssaultIndex(gs);
     this.levelIndex = Number.isFinite(idx) ? Math.max(0, Math.floor(idx)) : 0;
     this.flow = 'playing';
     this.endTimer = -1;
@@ -205,8 +166,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   // ------------------------------------------------------------------ level flow
 
   private currentLevelDef(): AssaultLevelDef {
-    if (this.levelIndex < ASSAULT_LEVELS.length) return ASSAULT_LEVELS[this.levelIndex]!;
-    return endlessAssault(this.levelIndex - ASSAULT_LEVELS.length);
+    return assaultLevelAt(this.levelIndex);
   }
 
   private startLevel(): void {

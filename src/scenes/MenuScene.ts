@@ -1,10 +1,11 @@
 /**
  * Main menu. OWNER: UI agent.
- * Title, short tagline, buttons: PLAY (continue campaign at gameState().levelIndex),
- * NEW GAME (resetGameState()), SANDBOX (debug testbed), DAILY SEED (hash of
- * today's date), SEED (enter a structure code -> procedural structure),
- * a controls legend and a live physics vignette.
- * Start the game with: this.scene.start('Game', { mode: 'campaign' | 'sandbox' | 'seed', seed? }).
+ * Title, short tagline, buttons: PLAY / CONTINUE (the creature campaign at the
+ * next level, then endless waves), NEW GAME (resetGameState(), then the
+ * creature campaign from level 1), SANDBOX (debug testbed), a controls legend
+ * and a live physics vignette. The demolition modes (structure campaign, daily
+ * seed, seed codes) are hidden for now; /?play=1 still opens the campaign.
+ * Start them with: this.scene.start('Game', { mode: 'campaign' | 'sandbox' | 'seed', seed? }).
  */
 import * as Phaser from 'phaser';
 import { ASSAULT_LEVELS } from '../data/assault/levels';
@@ -16,6 +17,7 @@ import { LabBackdrop } from '../ui/LabBackdrop';
 import { MenuVignette, type CellRect } from '../ui/MenuVignette';
 import { AudioManager } from '../audio/AudioManager';
 import { gameState, resetGameState } from '../game/GameState';
+import { nextAssaultIndex } from '../game/AssaultProgress';
 import { hashString } from '../core/Random';
 
 /** Parse a user-entered structure code: base-36 codes (as shown in-game) or any text (hashed). */
@@ -35,9 +37,7 @@ export function dailySeed(d: Date = new Date()): number {
 
 const LEGEND: Array<[string, string]> = [
   ['MOUSE', 'aim'],
-  ['CLICK', 'fire'],
-  ['WHEEL · ↑/↓', 'power'],
-  ['Q/E', 'ammo'],
+  ['HOLD CLICK · SPACE', 'fire'],
   ['R', 'restart'],
   ['ESC', 'menu'],
   ['`', 'debug'],
@@ -100,17 +100,14 @@ export class MenuScene extends Phaser.Scene {
     // Creature campaign (main game).
     const aTotal = ASSAULT_LEVELS.length;
     const aStarted = gs.assaultIndex > 0;
+    const aNext = nextAssaultIndex(gs);
+    const funds = gs.money > 0 ? ` · ${money(gs.money)}` : '';
     const aSub =
-      gs.assaultIndex >= aTotal
-        ? `CREATURES · ALL ${pad2(aTotal)} CLEARED · REPLAY THE LAST`
-        : `CREATURES · LEVEL ${pad2(gs.assaultIndex + 1)} / ${pad2(aTotal)}${gs.money > 0 ? ` · ${money(gs.money)}` : ''}`;
+      aNext >= aTotal ? `CREATURES · ENDLESS · WAVE ${pad2(aNext - aTotal + 1)}${funds}` : `CREATURES · LEVEL ${pad2(aNext + 1)} / ${pad2(aTotal)}${funds}`;
     mk(aStarted ? 'CONTINUE' : 'PLAY', aSub, 'ENTER', ['Enter', 'NumpadEnter', 'Space'], () => this.go({ mode: 'assault' }), 'primary');
-    // Demolition (the structure campaign) is hidden from the menu for now.
+    // Demolition (the structure campaign, daily seed and seed codes) is hidden from the menu for now.
     this.newGameBtn = mk('NEW GAME', aStarted || started || gs.money > 0 ? 'ERASES ALL PROGRESS' : 'START FRESH', 'N', ['KeyN'], () => this.newGame());
     mk('SANDBOX', 'TESTBED · SPAWN, GRAB, BREAK · DEBUG TOOLS', 'B', ['KeyB'], () => this.go({ mode: 'sandbox' }));
-    const daily = dailySeed();
-    mk('DAILY SEED', `${todayKey()} · STRUCTURE ${daily.toString(36).toUpperCase()}`, 'D', ['KeyD'], () => this.go({ mode: 'seed', seed: daily }));
-    mk('ENTER SEED…', 'PLAY A SHARED STRUCTURE CODE', 'K', ['KeyK'], () => this.promptSeed());
 
     // ------------------------------------------------------------ live vignette cell
     const cell: CellRect = { x: 1000, y: 180, w: 780, h: 600 };
@@ -193,7 +190,7 @@ export class MenuScene extends Phaser.Scene {
 
   private newGame(): void {
     const gs = gameState();
-    const hasProgress = gs.levelIndex > 0 || gs.money > 0 || Object.keys(gs.upgrades).length > 0;
+    const hasProgress = gs.assaultIndex > 0 || gs.levelIndex > 0 || gs.money > 0 || Object.keys(gs.upgrades).length > 0;
     if (hasProgress && this.confirmReset <= 0) {
       this.confirmReset = 3;
       this.confirmArmedAt = this.time.now;
@@ -203,29 +200,12 @@ export class MenuScene extends Phaser.Scene {
     // The confirming press must be a separate, deliberate one (not the same frame).
     if (hasProgress && this.time.now - this.confirmArmedAt < 200) return;
     resetGameState();
-    this.go({ mode: 'campaign' });
+    this.go({ mode: 'assault' });
   }
 
   private cancelConfirm(): void {
     this.confirmReset = 0;
     this.newGameBtn?.setLabel('NEW GAME').setSub('ERASES ALL PROGRESS');
-  }
-
-  private promptSeed(): void {
-    if (this.leaving) return;
-    let raw: string | null = null;
-    try {
-      raw = window.prompt('Structure code (as shown under a level name, e.g. K3F9Z) or any word:', '');
-    } catch {
-      raw = null;
-    }
-    if (raw === null) return;
-    const seed = parseSeed(raw);
-    if (seed === null) {
-      this.audio.play('ui_deny');
-      return;
-    }
-    this.go({ mode: 'seed', seed });
   }
 
   private buildLegend(x: number, y: number, width: number): void {

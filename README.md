@@ -8,8 +8,8 @@ A 2D physics prototype with two modes:
   buckle, an engine that overheats, an arm holding a shield, a body that
   comes apart in pieces.
 - **Demolition** — structural engineering, emergent chain reactions and one
-  very large cannon. (Hidden from the main menu for now; `/?play=1` still
-  opens it.)
+  very large cannon. (Hidden from the main menu for now, along with the daily
+  seed and seed codes; `/?play=1` still opens it.)
 
 > *"I understand why this thing is standing. Now I'm going to figure out the
 > funniest way to make it stop standing."*
@@ -86,7 +86,8 @@ hits near an edge chip pieces out of the silhouette.
 | 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
 After level 14 the game continues with endless mixed waves (the strider and
-the tyrant take turns as the boss every fifth wave). Between levels the
+the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
+joins every fifth wave too). Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
 automatic gun on a tall mast that picks the creature closest to the line and

@@ -23,6 +23,7 @@ import { onceEach } from '../ui/keys';
 import { LabBackdrop } from '../ui/LabBackdrop';
 import { AudioManager } from '../audio/AudioManager';
 import { gameState } from '../game/GameState';
+import { assaultCleared, assaultLevelAt, nextAssaultIndex } from '../game/AssaultProgress';
 import { levelManager } from '../game/LevelManager';
 import { UpgradeSystem } from '../game/UpgradeSystem';
 import type { UpgradeDef, UpgradeBranch } from '../data/upgrades';
@@ -563,7 +564,7 @@ export class UpgradeScene extends Phaser.Scene {
     const rows: Array<[string, string]> =
       this.mode === 'assault'
         ? [
-            ['Lines held', `${Math.min(gs.assaultIndex, ASSAULT_LEVELS.length)} / ${ASSAULT_LEVELS.length}`],
+            ['Lines held', `${assaultCleared(gs)} / ${ASSAULT_LEVELS.length}`],
             ['Total earned', money(gs.totalEarned)],
             ['Invested in workshop', money(this.upg.invested(gs.upgrades))],
           ]
@@ -628,9 +629,9 @@ export class UpgradeScene extends Phaser.Scene {
     let best: { grade: string } | null = null;
     if (this.mode === 'assault') {
       const total = ASSAULT_LEVELS.length;
-      const i = Math.min(gs.assaultIndex, total - 1);
-      const lvl = ASSAULT_LEVELS[i]!;
-      tagRight = gs.assaultIndex >= total ? `ALL ${pad2(total)} CLEARED` : `LEVEL ${pad2(i + 1)} / ${pad2(total)}`;
+      const i = nextAssaultIndex(gs);
+      const lvl = assaultLevelAt(i);
+      tagRight = i >= total ? `ENDLESS · WAVE ${pad2(i - total + 1)}` : `LEVEL ${pad2(i + 1)} / ${pad2(total)}`;
       title = lvl.name;
       body = lvl.subtitle;
       stats = `${lvl.waves.length} CREATURE${lvl.waves.length > 1 ? 'S' : ''}  ·  CONTRACT ${money(lvl.reward)}`;

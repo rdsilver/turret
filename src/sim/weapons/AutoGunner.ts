@@ -2,7 +2,8 @@
  * Automatic gunner for a secondary gun (the top turret): picks the creature
  * closest to the line, aims at its first remaining weak point (those open from
  * above first), leading it by the flight time, and holds the trigger for as
- * long as it has a target.
+ * long as it has a target. A weak point it has been firing at without landing
+ * a round (something in front of it soaks them up) is skipped for a while.
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
@@ -12,23 +13,39 @@ import { solveAim } from '../ballistics';
 
 /** Seconds between target re-evaluations. */
 const RETARGET = 0.35;
+/** Firing this long (plus twice the flight time) at a part without damaging it: it is shielded from here. */
+const BLOCKED_AFTER = 1.2;
+/** How long a shielded part is skipped. */
+const BLOCKED_FOR = 4;
 
 export class AutoGunner {
   enabled = true;
   private retarget = 0;
   private creature: Creature | null = null;
   private part: StructurePart | null = null;
-  private readonly off: () => void;
+  private time = 0;
+  /** Seconds of fire at `part` since it last took damage. */
+  private dry = 0;
+  /** Flight time to the target at the last aim (s). */
+  private tof = 0;
+  /** Parts found shielded, skipped until the given time. */
+  private readonly blocked = new Map<StructurePart, number>();
+  private readonly offs: Array<() => void>;
 
   constructor(
     private readonly ctx: SimContext,
     readonly weapon: Weapon,
   ) {
-    this.off = ctx.physics.addPreStepHook((dt) => this.step(dt));
+    this.offs = [
+      ctx.physics.addPreStepHook((dt) => this.step(dt)),
+      ctx.events.on('partDamaged', ({ part }) => {
+        if (part === this.part) this.dry = 0;
+      }),
+    ];
   }
 
   dispose(): void {
-    this.off();
+    for (const off of this.offs) off();
     this.weapon.triggerHeld = false;
   }
 
@@ -38,11 +55,17 @@ export class AutoGunner {
       w.triggerHeld = false;
       return;
     }
+    this.time += dt;
     this.retarget -= dt;
     const p0 = this.part;
+    if (p0 && w.triggerHeld && (this.dry += dt) > BLOCKED_AFTER + 2 * this.tof) {
+      this.blocked.set(p0, this.time + BLOCKED_FOR);
+      this.retarget = 0;
+    }
     if (this.retarget <= 0 || !this.creature?.active || !p0 || p0.removed || p0.wrecked) {
       this.pick();
       this.retarget = RETARGET;
+      if (this.part !== p0) this.dry = 0;
     }
     const p = this.part;
     if (!p) {
@@ -50,10 +73,13 @@ export class AutoGunner {
       return;
     }
     const m = w.muzzle();
-    const tof = Math.hypot(p.x - m.x, p.y - m.y) / Math.max(1, w.speed);
+    // Shins: aim low, under armour lips and shells that hang over the knees.
+    const ty = p.name?.startsWith('shin') ? p.y + p.halfHeightNow * 0.6 : p.y;
+    const tof = Math.hypot(p.x - m.x, ty - m.y) / Math.max(1, w.speed);
+    this.tof = tof;
     // A beating wing's own velocity swings with every stroke: lead it by the flight.
     const v = p.hasTag('wing') && this.creature ? this.creature.core : p;
-    const sol = solveAim(m.x, m.y, p.x + v.vx * tof, p.y + v.vy * tof, w.speed, this.ctx.physics.gravity);
+    const sol = solveAim(m.x, m.y, p.x + v.vx * tof, ty + v.vy * tof, w.speed, this.ctx.physics.gravity);
     if (!sol.length) {
       w.triggerHeld = false;
       return;
@@ -76,10 +102,11 @@ export class AutoGunner {
     this.creature = best;
     this.part = null;
     if (!best) return;
+    for (const [q, until] of this.blocked) if (until <= this.time || q.removed) this.blocked.delete(q);
     let part: StructurePart = best.core;
     for (const n of [...(best.spec.weakPointsFromAbove ?? []), ...(best.spec.weakPoints ?? [])]) {
       const q = best.structure.part(n);
-      if (q && !q.removed && !q.wrecked && best.owns(q)) {
+      if (q && !q.removed && !q.wrecked && best.owns(q) && !this.blocked.has(q)) {
         part = q;
         break;
       }

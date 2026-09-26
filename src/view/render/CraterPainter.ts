@@ -32,6 +32,8 @@ export interface Crater {
   ny: number;
   /** How far the centre lies inside the silhouette (texels, >= 0). */
   depth: number;
+  /** Thickness of the part under the crater: centre to the far side along the normal (texels). */
+  clear: number;
   /** Shape seed: the same crater always gets the same ragged outline. */
   seed: number;
 }
@@ -251,11 +253,18 @@ export function paintCraters(
 }
 
 /**
- * Chip or pit? Chips need the crater close to the edge; growth widens a chip's
- * reach only a little, so a battered part keeps a mix of chips and pits.
+ * Chip or pit? Chips need the crater close to the edge and the part thick
+ * enough under it; growth widens a chip's reach only a little, so a battered
+ * part keeps a mix of chips and pits.
  */
 function isBite(c: Crater, r: number, st: CraterStyle, g: CraterGeom): boolean {
-  return st.bite > 0 && c.depth < st.bite * Math.min(r, c.r * 1.3) && c.depth + r * 0.9 < g.maxNotch;
+  return (
+    st.bite > 0 &&
+    c.depth < st.bite * Math.min(r, c.r * 1.3) &&
+    c.depth + r * 0.9 < g.maxNotch &&
+    // Never through a thin tip or limb: a pit there instead.
+    r * 0.9 * (1 + st.biteJag * 0.5) + g.lw < c.clear
+  );
 }
 
 function paintPit(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom): void {

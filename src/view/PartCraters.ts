@@ -27,6 +27,8 @@
  * - One shared page texture instead of a texture per part: Phaser's
  *   multi-texture batch picks the sampler with an exact float compare, and
  *   many distinct textures in one batch drop triangles (see MiscAtlas.ts).
+ *   Pages still add textures to the world, so the game config also caps a
+ *   batch at 3 textures (main.ts: render.maxTextures).
  *   Regions and scratch canvases are recycled by size while a level runs.
  *   clear() frees scratch canvases, cached art and every page but the first,
  *   which is only emptied (creating a page costs a 4 MB texture upload, a
@@ -255,7 +257,8 @@ export class PartCraters {
       this.merge(set, list[best]!, cx, cy, r * Math.max(0.08, Math.min(0.55, share * 6)));
       if (!set.fresh.includes(best)) set.fresh.push(best);
     } else {
-      list.push({ x: cx, y: cy, r, nx: SF.nx, ny: SF.ny, depth: Math.max(0, depth), seed: (this.rand() * 0x7fffffff) | 0 });
+      const clear = across(p.shape, (cx - set.ox) / S, (cy - set.oy) / S, SF.nx, SF.ny) * S;
+      list.push({ x: cx, y: cy, r, nx: SF.nx, ny: SF.ny, depth: Math.max(0, depth), clear, seed: (this.rand() * 0x7fffffff) | 0 });
       set.fresh.push(list.length - 1);
     }
     this.markDirty(set);
@@ -338,13 +341,15 @@ export class PartCraters {
     }
     this.pages.length = Math.min(this.pages.length, keepPages);
     for (const page of this.pages) {
-      // Only the CPU copy is cleared: every region is repainted and uploaded before it is shown again.
+      // Clear the GPU copy too: regions are packed differently next time, and stale
+      // art left in a new region's transparent gutter would bleed in at its edges.
       for (const name of page.frames) page.tex.remove(name);
       page.frames.length = 0;
       page.shelves.length = 0;
       page.nextY = GAP;
       page.free.clear();
       page.ctx.clearRect(0, 0, PAGE_SIZE, PAGE_SIZE);
+      page.tex.refresh();
     }
     this.regionCount = 0;
     for (const list of this.scratchPool.values()) for (const ctx of list) freeCanvas(ctx);
@@ -403,10 +408,14 @@ export class PartCraters {
     k.y = (k.y * w1 + cy * w2) / (w1 + w2);
     k.r = Math.min(set.maxR, Math.hypot(k.r, grow));
     const S = TEXELS_PER_M;
-    surface(set.host.entity.shape, (k.x - set.ox) / S, (k.y - set.oy) / S, SF);
+    const shape = set.host.entity.shape;
+    const ux = (k.x - set.ox) / S;
+    const uy = (k.y - set.oy) / S;
+    surface(shape, ux, uy, SF);
     k.depth = Math.max(0, -SF.d * S);
     k.nx = SF.nx;
     k.ny = SF.ny;
+    k.clear = across(shape, ux, uy, SF.nx, SF.ny) * S;
   }
 
   private markDirty(set: CraterSet): void {
@@ -560,11 +569,17 @@ export class PartCraters {
     for (const s of page.shelves) {
       if (s.h >= h && s.h <= h * 1.5 + 8 && s.x + w + GAP <= PAGE_SIZE && (!best || s.h < best.h)) best = s;
     }
-    if (!best) {
-      if (page.nextY + h + GAP > PAGE_SIZE) return null;
+    if (!best && page.nextY + h + GAP <= PAGE_SIZE) {
       best = { y: page.nextY, h, x: GAP };
       page.shelves.push(best);
       page.nextY += h + GAP;
+    }
+    // No room for a new shelf: any tall enough shelf with width left beats opening another page.
+    if (!best) {
+      for (const s of page.shelves) {
+        if (s.h >= h && s.x + w + GAP <= PAGE_SIZE && (!best || s.h < best.h)) best = s;
+      }
+      if (!best) return null;
     }
     const r: Region = { page, x: best.x, y: best.y, w, h, frame: `r${regionSerial++}` };
     best.x += w + GAP;
@@ -697,6 +712,47 @@ function surface(shape: PartShape, x: number, y: number, out: Surface): void {
       out.nx = bnx;
       out.ny = bny;
       return;
+    }
+  }
+}
+
+/**
+ * How thick the part is under a crater: distance (m) from the local point
+ * (x, y) along the inward normal (nx, ny) to where that line leaves the shape.
+ * A chip must stop well short of it, or it would cut a thin horn tip or limb
+ * clean through (and leave a floating sliver while the collider stays whole).
+ */
+function across(shape: PartShape, x: number, y: number, nx: number, ny: number): number {
+  switch (shape.kind) {
+    case 'box': {
+      const tx = nx > 1e-9 ? (shape.hw - x) / nx : nx < -1e-9 ? (-shape.hw - x) / nx : Infinity;
+      const ty = ny > 1e-9 ? (shape.hh - y) / ny : ny < -1e-9 ? (-shape.hh - y) / ny : Infinity;
+      return Math.max(0, Math.min(tx, ty));
+    }
+    case 'circle': {
+      const b = x * nx + y * ny;
+      return Math.max(0, -b + Math.sqrt(Math.max(0, b * b - (x * x + y * y) + shape.r * shape.r)));
+    }
+    case 'poly': {
+      const p = shape.points;
+      const n = p.length;
+      let area2 = 0;
+      for (let i = 0; i < n; i += 2) area2 += p[i]! * p[(i + 3) % n]! - p[(i + 2) % n]! * p[i + 1]!;
+      const wind = area2 > 0 ? 1 : -1;
+      let t = Infinity;
+      for (let i = 0; i < n; i += 2) {
+        const ax = p[i]!;
+        const ay = p[i + 1]!;
+        const ex = p[(i + 2) % n]! - ax;
+        const ey = p[(i + 3) % n]! - ay;
+        const len = Math.hypot(ex, ey) || 1;
+        const onx = (wind * ey) / len;
+        const ony = (-wind * ex) / len;
+        const toward = nx * onx + ny * ony;
+        if (toward <= 1e-9) continue;
+        t = Math.min(t, -((x - ax) * onx + (y - ay) * ony) / toward);
+      }
+      return Math.max(0, t);
     }
   }
 }
