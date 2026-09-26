@@ -198,6 +198,7 @@ export class AudioManager {
     on('partFallen', this.onPartFallen);
     on('chainStarted', this.onChainStarted);
     on('partDeflected', this.onDeflected);
+    on('shieldBomb', this.onShieldBomb);
   }
 
   unbind(): void {
@@ -360,6 +361,28 @@ export class AudioManager {
   /** Torn-off limb: the explosion sample, quiet and pitched up into a small pop. */
   private onLimbPopped(e: SimEvents['limbPopped']): void {
     this.start('explosion', 0.22, 1.8 + Math.random() * 0.25, this.panFor(e.x * PPM), false);
+  }
+
+  /** Shield bombs: a fuse beep per blink (higher as it burns down), a pop when shot apart, a boom and clang as the wall springs up, a groan as it goes. */
+  private onShieldBomb(e: SimEvents['shieldBomb']): void {
+    const pan = this.panFor(e.x * PPM);
+    switch (e.phase) {
+      case 'tick':
+        this.start('ui_click', 0.3 + 0.4 * e.urgency, 1.1 + 0.5 * e.urgency, pan, false);
+        break;
+      case 'defused':
+        this.start('explosion', 0.2, 2.1, pan, false);
+        this.start('impact_metal', 0.5, 1.4, pan, false);
+        break;
+      case 'deployed':
+        this.start('explosion', 0.45, 1.35, pan, false);
+        this.start('snap_metal', 0.9, 0.6, pan, false);
+        break;
+      case 'crumbled':
+        this.start('groan_metal', 0.5, 0.7, pan, false);
+        this.start('debris', 0.3, 0.9, pan, false);
+        break;
+    }
   }
 
   private onBigCollapse(e: SimEvents['bigCollapse']): void {

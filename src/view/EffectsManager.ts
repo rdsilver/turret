@@ -327,6 +327,7 @@ export class EffectsManager {
     this.on('creatureAbility', this.onAbility);
     this.on('breach', this.onBreach);
     this.on('partDeflected', this.onPartDeflected);
+    this.on('shieldBomb', this.onShieldBomb);
   }
 
   // ---- creatures -----------------------------------------------------------
@@ -455,6 +456,54 @@ export class EffectsManager {
     this.overlay.flash(0.35, 0xff3b30, 2.5);
     this.overlay.pulse(0xff3b30, 1, 1.6);
     this.camera.addTrauma(0.6);
+  }
+
+  /**
+   * Shield bombs (creature/shieldBomb.ts): the fuse light blinks red (bigger
+   * and hotter as it burns down); shot apart it pops like a spent cell; when
+   * the fuse runs out, a burst of dust and sparks as the wall swings up; dust
+   * and grit as a wall goes.
+   */
+  private onShieldBomb(e: SimEvents['shieldBomb']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    const u = e.urgency;
+    switch (e.phase) {
+      case 'landed':
+        this.puff(x, y, 2, GROUND_DUST, 12, 0.3);
+        break;
+      case 'tick':
+        this.flash(x, y, 16 + 16 * u, u > 0.7 ? 0xff5a40 : 0xff2a1a, 120, 0.95);
+        this.flash(x, y, 5 + 4 * u, 0xffffff, 70, 1);
+        if (u > 0.7) this.ring(x, y, 20 + 20 * u, 170, 0.3, 0xff6a50);
+        break;
+      case 'defused':
+        this.flash(x, y, 30, 0x9dffd9, 100, 0.85);
+        this.flash(x, y, 12, 0xffffff, 50, 1);
+        this.sparkBurst(x, y, 10, 300, UP, Math.PI);
+        this.glitter(x, y, 8, 160);
+        this.puff(x, y, 3, 0xc9ced6, 14, 0.35);
+        break;
+      case 'deployed': {
+        // The wall lies along the ground to the right of its foot and swings up from there.
+        const h = e.part.extent * 2 * PPM;
+        this.flash(x, y - 12, 70, 0xfff1dc, 130, 0.9);
+        this.flash(x, y - 8, 34, 0x9dffd9, 180, 0.8);
+        this.ring(x, y - 10, 80, 280, 0.45, 0xfff1dc);
+        this.sparkBurst(x, y - 10, 24, 560, UP, 1.3);
+        this.groundDust(x, 1.2, GROUND_DUST);
+        this.groundDust(x + h * 0.5, 0.6, GROUND_DUST);
+        this.camera.addTrauma(0.18, 0.4);
+        break;
+      }
+      case 'crumbled': {
+        const h = e.part.extent * 2 * PPM;
+        for (let i = 0; i < 4; i++) this.puff(x, y + h * (0.4 - i * 0.25), 2, 0x9aa3ad, 18, 0.28, 1.3);
+        if (u > 0) this.materialBurst('armor', x, y, 0.8, Math.PI, 1.6);
+        this.groundDust(x, 0.7, GROUND_DUST);
+        break;
+      }
+    }
   }
 
   /** Subscribe a handler; events are ignored while the level pre-settles. */

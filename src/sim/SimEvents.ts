@@ -121,4 +121,11 @@ export interface SimEvents {
   collapseSettled: Record<string, never>;
   /** Weapon damage hit a part that can't be hurt right now (StructurePart.invulnerable): nothing changed. */
   partDeflected: { part: StructurePart; x: number; y: number };
+  /**
+   * A thrown shield bomb (creature/shieldBomb.ts): it landed, its fuse light
+   * blinked (urgency 0..1 = how far the fuse has burned), it was shot apart,
+   * it deployed its wall (part = the wall, at its foot), or the wall crumbled
+   * (urgency 1 = shot down).
+   */
+  shieldBomb: { phase: 'landed' | 'tick' | 'defused' | 'deployed' | 'crumbled'; part: StructurePart; x: number; y: number; urgency: number };
 }

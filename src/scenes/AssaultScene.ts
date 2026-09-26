@@ -234,6 +234,11 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
         if (this.flow === 'playing' && part.hasTag('limb')) this.hud?.flash('LIMB SEVERED', '#ffb547');
       }),
       ev.on('creatureOverheated', () => this.hud?.flash('ENGINE OVERHEATED', '#ffb547')),
+      ev.on('shieldBomb', ({ phase }) => {
+        if (this.flow !== 'playing') return;
+        if (phase === 'deployed') this.hud?.flash('SHIELD WALL UP', '#ffb547');
+        else if (phase === 'defused') this.hud?.flash('BOMB DEFUSED', '#6fe3a1');
+      }),
     );
   }
 
