@@ -159,6 +159,7 @@ export class AudioManager {
   private rateFactor = 1;
   private wasReady = true;
   private lastPartFallen = -1e9;
+  private lastHeal = -1e9;
   private firstSnapPending = false;
   private muffle = 0;
   /** Real seconds since the time scale was last frozen by a hit-stop. */
@@ -197,6 +198,7 @@ export class AudioManager {
     on('objectiveComplete', this.onObjective);
     on('partFallen', this.onPartFallen);
     on('chainStarted', this.onChainStarted);
+    on('partHealed', this.onPartHealed);
   }
 
   unbind(): void {
@@ -366,6 +368,14 @@ export class AudioManager {
 
   private onObjective(): void {
     this.start('collapse_sting', 0.6, 1, 0, false);
+  }
+
+  /** A mender's lamp mending: a faint high chime (the purchase bell, pitched up), at most about once a second. */
+  private onPartHealed(e: SimEvents['partHealed']): void {
+    const now = performance.now();
+    if (now - this.lastHeal < 950) return;
+    this.lastHeal = now;
+    this.start('ui_buy', 0.12, 1.9, this.panFor(e.organ.x * PPM), false);
   }
 
   private onPartFallen(e: SimEvents['partFallen']): void {

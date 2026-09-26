@@ -119,4 +119,9 @@ export interface SimEvents {
   objectiveComplete: { description: string };
   /** Objective complete AND motion has settled enough to show results. */
   collapseSettled: Record<string, never>;
+  /**
+   * A healer creature restored `amount` hit points to a damaged part (its
+   * joints regain strength with it). `organ` is the healer's lamp; (x, y) the part.
+   */
+  partHealed: { part: StructurePart; amount: number; integrity: number; healer: Creature; organ: StructurePart; x: number; y: number };
 }

@@ -6,6 +6,7 @@
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
  *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
+ *        [--noPriority]   (the bot ignores spec.targetPriority: healers are shot only when closest)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -56,6 +57,9 @@ sim.events.on('creatureAbility', (e) => ev(`${e.creature.spec.name}: ${e.ability
 sim.events.on('breach', (e) => ev(`BREACH by ${e.creature.spec.name}`));
 sim.events.on('creatureSplit', (e) => ev(`split: ${e.creature.spec.name}`));
 sim.events.on('creatureOverheated', (e) => ev(`${e.creature.spec.name} overheated`));
+let healed = 0;
+sim.events.on('partHealed', (e) => (healed += e.amount));
+const priority = !args.includes('--noPriority');
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -72,8 +76,10 @@ run(sim, Number(opt('seconds', '150')), () => {
   let best = Infinity;
   for (const c of session.creatures) {
     if (!c.active || c.core.removed || c.age < 0.5) continue;
-    if (c.x >= best) continue;
-    best = c.x;
+    // Support creatures (healers) first, as a player would, unless something is much closer.
+    const cx = c.x - (priority ? (c.spec.targetPriority ?? 0) : 0);
+    if (cx >= best) continue;
+    best = cx;
     const names = aimPart === 'auto' ? (c.spec.weakPoints ?? []) : [aimPart];
     let p = c.core;
     for (const n of names) {
@@ -112,6 +118,7 @@ const o = session.outcome();
 const r = scoreAssault(o);
 console.log(log.join('\n'));
 if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
+if (healed > 0) console.log(`healers mended ${healed.toFixed(1)} HP`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));

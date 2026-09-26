@@ -74,6 +74,8 @@ export interface FlySpec {
   /** Gentle altitude swoops around the spawn height (m, s). */
   swoop: number;
   swoopPeriod: number;
+  /** Parts hanging below the body whose touching the ground also counts as landing (a slung lamp). */
+  gear?: string[];
 }
 
 export interface CreatureSpec {
@@ -137,6 +139,11 @@ export interface CreatureSpec {
    * on as a creature of its own, led by its front-most tagged part.
    */
   split?: { tag: string; min: number };
+  /**
+   * Gunners (the top turret) treat it as this many metres closer to the line
+   * than it is when choosing a target: support creatures worth shooting first.
+   */
+  targetPriority?: number;
 }
 
 export interface CreatureParams {

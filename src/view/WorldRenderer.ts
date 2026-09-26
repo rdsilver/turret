@@ -18,6 +18,10 @@
  *    also leaves an impact crater in the part's own art (PartCraters: pits,
  *    chips bitten out of the silhouette, growing as integrity drops). Fading
  *    entities: alpha = fading/fadeDuration.
+ *  - Healing (partHealed, from a mender's lamp): the part glows green while it
+ *    is mended and its damage tint recedes with its integrity; its craters
+ *    stay as scars but shrink back as it heals. HealBeams draws the lamp's
+ *    cone of light and the beams to the parts it mends.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
  *  - Stress view (setStressView): parts tinted by the max joint.stressVis of
@@ -35,6 +39,7 @@ import { PPM } from '../config/constants';
 import { lerpAngle } from '../core/math';
 import { TextureFactory, TEXTURE_RES } from './TextureFactory';
 import { PartCraters, type CraterSet, type CraterStats } from './PartCraters';
+import { HealBeams } from './HealBeams';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
@@ -69,6 +74,8 @@ interface PartVis {
   animated: boolean;
   /** Impact craters (its art moves to the shared crater page) once the part has been hit. */
   craters: CraterSet | null;
+  /** Healing glow 1..0 (refreshed while a mender heals it; decays in real time). */
+  heal: number;
 }
 
 interface ProjVis {
@@ -96,6 +103,8 @@ const CABLE_COLOR = 0xcfd6e0;
 const HIT_FLASH_TIME = 0.16;
 /** Integrity below which a part throbs (about to break). */
 const CRITICAL_INTEGRITY = 0.3;
+/** Seconds a healing glow takes to fade (heal ticks come every 0.1 s). */
+const HEAL_GLOW_TIME = 0.45;
 /** Lowest y (world px) a sagging cable is drawn at: resting on the ground surface (y = 0). */
 const CABLE_FLOOR = -1;
 
@@ -123,6 +132,7 @@ export class WorldRenderer {
   private readonly glowPool: Image[] = [];
 
   private readonly craters: PartCraters;
+  private readonly healBeams: HealBeams;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -140,6 +150,7 @@ export class WorldRenderer {
     readonly textures: TextureFactory,
   ) {
     this.craters = new PartCraters(scene, textures);
+    this.healBeams = new HealBeams(scene, sim);
     this.trailGfx = scene.add.graphics().setDepth(DEPTH.projectiles - 0.5);
     this.cableGfx = scene.add.graphics().setDepth(DEPTH.cables);
     const ev = sim.events;
@@ -156,6 +167,7 @@ export class WorldRenderer {
       }),
       ev.on('structureLoaded', () => this.onStructureLoaded()),
       ev.on('partDamaged', ({ part, amount, armor, x, y }) => this.onPartDamaged(part, x, y, amount, armor)),
+      ev.on('partHealed', ({ part }) => this.onPartHealed(part)),
     );
     // Adopt anything that already exists (renderer created after the sim filled up).
     this.needsResync = sim.physics.entities.size > 0;
@@ -228,6 +240,7 @@ export class WorldRenderer {
       this.cablesDirty = false;
     }
     if (this.colliderDebug) this.drawColliders();
+    this.healBeams.update(alpha, realDt);
     // Crater repaints + texture uploads: once per damaged part per frame.
     if (this.craters.pending) this.craters.flush();
   }
@@ -279,6 +292,7 @@ export class WorldRenderer {
     // Crater art is dropped between levels (memory stays bounded); with
     // small-arms ammo the crater page is ready before the first hit.
     this.craters.clear();
+    this.healBeams.clear();
     if (trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
     // Keep texture memory bounded across many (procedural) levels.
     if (trimTextures && this.textures.atlasPages > 6) {
@@ -293,6 +307,7 @@ export class WorldRenderer {
     if (this.destroyed) return;
     this.clear(false);
     this.craters.destroy();
+    this.healBeams.destroy();
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;
@@ -359,6 +374,19 @@ export class WorldRenderer {
     this.applyPartTint(v, true);
   }
 
+  /** A mender healed the part: it glows green, its red recedes, its craters shrink back a little. */
+  private onPartHealed(p: StructurePart): void {
+    const v = p.view as PartVis | null;
+    if (!v || v.kind !== 0 || p.removed) return;
+    v.heal = 1;
+    if (!v.animated) {
+      v.animated = true;
+      this.animated.push(v);
+    }
+    this.craters.healed(v);
+    this.applyPartTint(v, true);
+  }
+
   private onStructureLoaded(): void {
     const s = this.sim.structure;
     if (!s) return;
@@ -407,7 +435,7 @@ export class WorldRenderer {
     img.y = p.y * PPM;
     img.rotation = p.angle;
     const v: PartVis = {
-      kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false, craters: null,
+      kind: 0, entity: p, img, joints: [], glow: null, tintSig: -1, tintStamp: -1, depth, neutral: false, flash: 0, animated: false, craters: null, heal: 0,
     };
     if (p.material.id === 'core' || p.isCore) {
       const gf = this.textures.miscFrame(RK.glow);
@@ -551,7 +579,7 @@ export class WorldRenderer {
     // Far-side limbs (2D side view) render darker so overlapping legs read apart.
     const back = p.hasTag('back');
     const d = 1 - p.integrity;
-    if (d < 0.005 && v.flash <= 0) {
+    if (d < 0.005 && v.flash <= 0 && v.heal <= 0) {
       const w = p.wear;
       const k = (w > 0.01 ? 1 - 0.26 * Math.min(1, w) : 1) * (back ? 0.62 : 1);
       return grey(k);
@@ -563,9 +591,16 @@ export class WorldRenderer {
     if (p.integrity < CRITICAL_INTEGRITY && !p.wrecked && this.throbbing(p)) {
       k *= 0.78 + 0.22 * Math.sin(this.time * 11 + p.id);
     }
-    const r = 255 * k;
-    const g = 255 * k * (1 - 0.8 * e);
-    const b = 255 * k * (1 - 0.86 * e);
+    let r = 255 * k;
+    let g = 255 * k * (1 - 0.8 * e);
+    let b = 255 * k * (1 - 0.86 * e);
+    if (v.heal > 0) {
+      // Being mended: a green flush over the (receding) red.
+      const h = 0.6 * v.heal;
+      r += (150 * k - r) * h;
+      g += (255 * k - g) * h;
+      b += (185 * k - b) * h;
+    }
     return ((r & 255) << 16) | ((g & 255) << 8) | (b & 255);
   }
 
@@ -581,7 +616,8 @@ export class WorldRenderer {
       const v = this.animated[i]!;
       const p = v.entity;
       if (v.flash > 0) v.flash = Math.max(0, v.flash - decay);
-      const keep = !p.removed && (v.flash > 0 || (p.integrity < CRITICAL_INTEGRITY && !p.wrecked && this.throbbing(p)));
+      if (v.heal > 0) v.heal = Math.max(0, v.heal - realDt / HEAL_GLOW_TIME);
+      const keep = !p.removed && (v.flash > 0 || v.heal > 0 || (p.integrity < CRITICAL_INTEGRITY && !p.wrecked && this.throbbing(p)));
       if (!this.stressView) this.applyPartTint(v, false);
       if (!keep) {
         v.animated = false;

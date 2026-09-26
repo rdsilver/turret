@@ -69,6 +69,15 @@ interface FloatPart {
   ring: number;
 }
 
+/** A flyer's heading for one step (see Creature.flyGoal). */
+export interface FlyGoal {
+  /** Body altitude to hold (m) and its rate of change (m/s, + = climbing). */
+  height: number;
+  vUp: number;
+  /** Horizontal velocity to fly at (m/s, sim x: negative = toward the turret). */
+  vx: number;
+}
+
 /** Seconds a creature must stay immobile before it counts as stopped for good. */
 const NEUTRALIZE_AFTER = 1.8;
 const STUCK_WINDOW = 7;
@@ -144,6 +153,17 @@ export class Creature {
   private launched = false;
   /** Flyers: each wing part's momentum relative to the body last step. */
   private readonly wingMomentum = new Map<StructurePart, { x: number; y: number }>();
+  /**
+   * Flyers: where to fly this step instead of straight at the turret, set by an
+   * ability (e.g. an escort) after every controller step and used up by the next
+   * one — so when the ability stops (organ lost) the flyer carries on like any
+   * other, at the altitude it was last sent to.
+   */
+  flyGoal: FlyGoal | null = null;
+  /** Flyers: cruising altitude (m): the spawn height, or where the last goal left it. */
+  private flyHeight = NaN;
+  /** Flyers: altitude (m) commanded this step (for traces). */
+  flyRef = 0;
 
   constructor(
     private readonly ctx: SimContext,
@@ -686,9 +706,15 @@ export class Creature {
     body.applyImpulse({ x: jx, y: jy }, true);
     // Altitude hold: a slow, gentle swoop around the spawn height, lifted at the
     // centre of mass of everything the wings carry (so lift doesn't twist it).
+    // A goal (set by an ability) overrides the altitude and the heading.
+    const goal = this.flyGoal;
+    this.flyGoal = null;
+    if (goal) this.flyHeight = goal.height;
+    else if (Number.isNaN(this.flyHeight)) this.flyHeight = this.bodyHeight0;
     const sw = (Math.PI * 2) / f.swoopPeriod;
-    const target = this.bodyHeight0 + f.swoop * Math.sin(t * sw);
-    const vTarget = f.swoop * sw * Math.cos(t * sw);
+    const target = goal ? goal.height : this.flyHeight + f.swoop * Math.sin(t * sw);
+    const vTarget = goal ? goal.vUp : f.swoop * sw * Math.cos(t * sw);
+    this.flyRef = target;
     const vUp = -core.vy;
     let up = m * g + m * (FLY_KP * (target - core.height) + FLY_KD * (vTarget - vUp));
     up = clamp(up, 0, m * g * f.liftMax * lift);
@@ -701,7 +727,7 @@ export class Creature {
     body.applyImpulseAtPoint({ x: 0, y: -up * dt }, { x: cx, y: core.y }, true);
     // Forward flight needs wings too; a wing short, it no longer hurries, and
     // the air soon slows it to a glide.
-    const cruise = wingsUp < f.wings.length ? this.spec.gait.speed * lift : speed;
+    const cruise = wingsUp < f.wings.length ? this.spec.gait.speed * lift : goal ? -goal.vx : speed;
     const fx = clamp(m * 3 * (-cruise - core.vx), -m * 3 * lift, m * 3 * Math.min(1, lift * 2));
     body.applyImpulse({ x: fx * dt, y: 0 }, true);
     // Keep the body level, as far as the wings allow; gliding down on one wing,
@@ -717,7 +743,11 @@ export class Creature {
     body.applyTorqueImpulse(tau * dt, true);
     // Down on the ground = stopped.
     if (this.state === 'spawning') return;
-    const grounded = this.core.height - this.core.halfHeightNow < 0.8;
+    let grounded = this.core.height - this.core.halfHeightNow < 0.8;
+    for (const n of f.gear ?? []) {
+      const p = this.structure.part(n);
+      if (p && !p.removed && this.connected.has(p) && p.height - p.halfHeightNow < 0.3) grounded = true;
+    }
     if (grounded || lift <= 0) {
       this.immobileTime += dt;
       this.state = 'immobilized';

@@ -1,6 +1,7 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
- * closest to the line, aims at its first remaining weak point (those open from
+ * closest to the line (support creatures count as closer by their
+ * spec.targetPriority), aims at its first remaining weak point (those open from
  * above first), leading it by the flight time, and holds the trigger for as
  * long as it has a target. A weak point it has been firing at without landing
  * a round (something in front of it soaks them up) is skipped for a while.
@@ -93,7 +94,7 @@ export class AutoGunner {
     let bestX = Infinity;
     for (const c of this.ctx.creatures.list) {
       if (!c.active || c.core.removed || c.age < 0.5) continue;
-      const x = c.frontX;
+      const x = c.frontX - (c.spec.targetPriority ?? 0);
       if (x < bestX) {
         bestX = x;
         best = c;
