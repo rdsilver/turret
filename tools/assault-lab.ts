@@ -6,6 +6,7 @@
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
  *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
+ *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -20,6 +21,7 @@ import { DEFENSE_LINE_X } from '../src/game/AssaultLevel';
 import { loadout, topTurretLevel } from './lib/loadouts';
 import { topTurretStats } from '../src/data/topTurret';
 import { Random } from '../src/core/Random';
+import { bombFuseLeft, liveShieldBombs, standingShieldWalls } from '../src/sim/creature/shieldBomb';
 
 await initRapier();
 const args = process.argv.slice(2);
@@ -56,6 +58,18 @@ sim.events.on('creatureAbility', (e) => ev(`${e.creature.spec.name}: ${e.ability
 sim.events.on('breach', (e) => ev(`BREACH by ${e.creature.spec.name}`));
 sim.events.on('creatureSplit', (e) => ev(`split: ${e.creature.spec.name}`));
 sim.events.on('creatureOverheated', (e) => ev(`${e.creature.spec.name} overheated`));
+const bombStats = { defused: 0, walls: 0, shotDown: 0, stopped: 0 };
+sim.events.on('partDamaged', ({ part }) => {
+  if (part.hasTag('shieldWall')) bombStats.stopped++;
+});
+sim.events.on('shieldBomb', (e) => {
+  if (e.phase === 'defused') bombStats.defused++;
+  else if (e.phase === 'deployed') bombStats.walls++;
+  else if (e.phase === 'crumbled' && e.urgency > 0) bombStats.shotDown++;
+  if (e.phase !== 'tick' && e.phase !== 'landed') ev(`shield bomb ${e.phase} at x=${e.x.toFixed(1)}`);
+});
+// A player shoots a ticking shield bomb before it becomes a wall (unless a wall already hides it).
+const shootBombs = opt('bombs', '1') !== '0';
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -87,6 +101,19 @@ run(sim, Number(opt('seconds', '150')), () => {
     const v = p.hasTag('wing') ? c.core : p;
     target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
   }
+  if (shootBombs) {
+    // The bomb whose fuse is shortest, once it has landed in range.
+    const now = sim.physics.simTime;
+    const walls = standingShieldWalls(sim);
+    let bomb = null as null | { x: number; y: number; left: number };
+    for (const b of liveShieldBombs(sim)) {
+      const left = bombFuseLeft(b, now);
+      const p = b.part;
+      if (left === Infinity || p.x > 50 || walls.some((x) => x < p.x)) continue;
+      if (!bomb || left < bomb.left) bomb = { x: p.x, y: p.y, left };
+    }
+    if (bomb) target = { x: bomb.x, y: bomb.y, vx: 0, vy: 0 };
+  }
   const w = sim.weapon;
   if (w.heat > 0.92) cooling = true;
   if (cooling && w.heat < 0.4) cooling = false;
@@ -112,6 +139,7 @@ const o = session.outcome();
 const r = scoreAssault(o);
 console.log(log.join('\n'));
 if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
+if (bombStats.defused + bombStats.walls > 0) console.log(`shield bombs: ${bombStats.defused} shot apart, ${bombStats.walls} walls (${bombStats.shotDown} shot down, ${bombStats.stopped} rounds stopped)`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));
