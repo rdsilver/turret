@@ -6,7 +6,7 @@
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
  *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
- *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would)
+ *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would, unless a creature is about to cross)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -63,13 +63,15 @@ sim.events.on('partDamaged', ({ part }) => {
   if (part.hasTag('shieldWall')) bombStats.stopped++;
 });
 sim.events.on('shieldBomb', (e) => {
-  if (e.phase === 'defused') bombStats.defused++;
+  if (e.phase === 'defused' && e.part.hasTag('shieldBomb')) bombStats.defused++; // (not canisters knocked off a pack)
   else if (e.phase === 'deployed') bombStats.walls++;
   else if (e.phase === 'crumbled' && e.urgency > 0) bombStats.shotDown++;
   if (e.phase !== 'tick' && e.phase !== 'landed') ev(`shield bomb ${e.phase} at x=${e.x.toFixed(1)}`);
 });
-// A player shoots a ticking shield bomb before it becomes a wall (unless a wall already hides it).
+// A player shoots a ticking shield bomb before it becomes a wall (unless a wall already hides it,
+// or a creature is within BOMB_TRIAGE_M of the line).
 const shootBombs = opt('bombs', '1') !== '0';
+const BOMB_TRIAGE_M = 8;
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -101,7 +103,9 @@ run(sim, Number(opt('seconds', '150')), () => {
     const v = p.hasTag('wing') ? c.core : p;
     target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
   }
-  if (shootBombs) {
+  // A ticking bomb comes first, unless something is about to cross the line (a player deals with that first).
+  const urgent = session.creatures.some((c) => c.active && c.frontX - DEFENSE_LINE_X < BOMB_TRIAGE_M);
+  if (shootBombs && !urgent) {
     // The bomb whose fuse is shortest, once it has landed in range.
     const now = sim.physics.simTime;
     const walls = standingShieldWalls(sim);

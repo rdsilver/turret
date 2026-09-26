@@ -23,8 +23,10 @@
  * the line, never so far out that they can't be hit), bombHp, wallH, wallW,
  * wallLife, wallHp (world metres / hp multipliers, not scaled), muscle /
  * windup / release / carry (the throwing arm's shoulder and its angles), hand
- * (part the bomb leaves from), ammo (comma-separated pack parts: each throw
- * takes one, none left = no more bombs; shoot one off and that bomb is gone).
+ * (part the bomb leaves from while it is attached; else the organ), ammo
+ * (comma-separated pack parts: each throw takes one as it lets go, none left
+ * = no more bombs; one shot or knocked off the pack pops on the spot, so the
+ * only glowing canister ever lying on the field is a live bomb).
  *
  * Bombs and walls block bullets but never touch creatures (or anything else
  * but the ground): a creature can lob a bomb over its own wall.
@@ -76,9 +78,16 @@ interface ShieldWall {
   crumbleAt: number;
 }
 
+/** A canister still racked on a creature's pack (it pops if it comes off). */
+interface PackCan {
+  part: StructurePart;
+  owner: Creature;
+}
+
 interface BombField {
   bombs: ShieldBomb[];
   walls: ShieldWall[];
+  cans: PackCan[];
 }
 
 /** Seconds the wall takes to swing up from the ground. */
@@ -107,7 +116,7 @@ const fields = new WeakMap<PhysicsWorld, BombField>();
 function fieldOf(ctx: SimContext): BombField {
   let f = fields.get(ctx.physics);
   if (!f) {
-    const field: BombField = { bombs: [], walls: [] };
+    const field: BombField = { bombs: [], walls: [], cans: [] };
     fields.set(ctx.physics, field);
     ctx.physics.addPreStepHook(() => animateWalls(ctx, field));
     ctx.physics.addStepHook(() => stepField(ctx, field));
@@ -146,6 +155,17 @@ function str(spec: AbilitySpec, k: string): string | null {
 
 function stepField(ctx: SimContext, f: BombField): void {
   const now = ctx.physics.simTime;
+  for (let i = f.cans.length - 1; i >= 0; i--) {
+    const { part, owner } = f.cans[i]!;
+    if (part.removed) {
+      f.cans.splice(i, 1); // thrown (or faded with its creature)
+    } else if (part.wrecked || !owner.owns(part)) {
+      // Shot (or knocked) off the pack: it pops on the spot, so the only
+      // glowing canister ever lying on the field is a live bomb.
+      f.cans.splice(i, 1);
+      pop(ctx, part);
+    }
+  }
   for (let i = f.bombs.length - 1; i >= 0; i--) {
     const b = f.bombs[i]!;
     const p = b.part;
@@ -155,7 +175,7 @@ function stepField(ctx: SimContext, f: BombField): void {
     }
     if (p.wrecked) {
       f.bombs.splice(i, 1);
-      defuse(ctx, b);
+      pop(ctx, p);
       continue;
     }
     if (b.landedAt < 0) {
@@ -200,9 +220,8 @@ function stepField(ctx: SimContext, f: BombField): void {
   }
 }
 
-/** Shot apart before the fuse ran out: a harmless pop. */
-function defuse(ctx: SimContext, b: ShieldBomb): void {
-  const p = b.part;
+/** A canister bursts harmlessly (a bomb shot apart before its fuse ran out, or one knocked off a pack): a hop, a flash, gone. */
+function pop(ctx: SimContext, p: StructurePart): void {
   p.collider.setCollisionGroups(SPENT_GROUPS);
   // A little hop as it bursts, then gone.
   p.body.applyImpulse({ x: (ctx.rng.next() - 0.5) * p.mass * 2, y: -p.mass * 3 }, true);
@@ -309,6 +328,11 @@ registerAbility('throwShieldBomb', {
     m.set(spec.part, { timer: num(spec, 'delay', 3), winding: false, carry: 0 });
     const arm = typeof spec.muscle === 'string' ? c.muscles.get(spec.muscle) : undefined;
     arm?.setDrive(ctx.physics.world, num(spec, 'carry', 0.5));
+    const field = fieldOf(ctx);
+    for (const n of (str(spec, 'ammo') ?? '').split(',')) {
+      const p = n ? c.structure.part(n) : undefined;
+      if (p) field.cans.push({ part: p, owner: c });
+    }
   },
   step(c, spec, ctx, dt, organ) {
     const st = throwState.get(c)?.get(spec.part);
@@ -331,18 +355,27 @@ registerAbility('throwShieldBomb', {
         st.timer = windupTime + 1;
         return;
       }
+      // Reaching back over the shoulder for a canister.
       st.winding = true;
-      // Reaching back over the shoulder, it takes a canister from its pack.
-      if (ammo) {
-        ctx.physics.removeEntity(ammo);
-        c.markDirty();
-      }
       if (armOk) arm!.setDrive(world, num(spec, 'windup', -2.3));
     }
     if (st.timer > 0) return;
     st.winding = false;
     st.timer = num(spec, 'interval', 5);
-    const hand = (typeof spec.hand === 'string' ? c.structure.part(spec.hand) : null) ?? organ;
+    // The canister leaves the pack as the bomb leaves the hand (one shot off
+    // during the wind-up: it takes the next; none left: no throw).
+    const ammo = nextAmmo(c, spec);
+    if (ammo === undefined) {
+      if (armOk) arm!.setDrive(world, num(spec, 'carry', 0.5));
+      return;
+    }
+    if (ammo) {
+      ctx.physics.removeEntity(ammo);
+      c.markDirty();
+    }
+    // Thrown from the claw while it has one, else from the bare arm.
+    const h = typeof spec.hand === 'string' ? c.structure.part(spec.hand) : undefined;
+    const hand = h && c.organAttached(h) ? h : organ;
     const size = num(spec, 'size', 0.95);
     const w = size * 0.7;
     // Lob it from the hand so it comes down `ahead` metres in front (never nearer the turret than minX).
