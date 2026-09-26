@@ -22,7 +22,7 @@ import { StructurePart } from '../sim/StructurePart';
 import { PPM } from '../config/constants';
 import { SOUND_VARIANTS, setMasterMuffle, soundDuration, soundKey, type SoundId } from './SoundSynth';
 
-type Category = 'boom' | 'gun' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui';
+type Category = 'boom' | 'gun' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui' | 'aura';
 
 interface CategorySpec {
   max: number;
@@ -45,6 +45,8 @@ const CATEGORIES: Record<Category, CategorySpec> = {
   air: { max: 1, interval: 500, global: true },
   sting: { max: 1, interval: 1500, global: false },
   ui: { max: 4, interval: 25, global: false },
+  /** A creature's lingering effect (a healer's lamp at work): one voice, at most about once a second. */
+  aura: { max: 1, interval: 950, global: true },
 };
 
 const GLOBAL_CAP = 14;
@@ -88,6 +90,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   ui_deny: { cat: 'ui', vol: 0.5, jitter: 0.02 },
   cash: { cat: 'ui', vol: 0.55, jitter: 0.02 },
   collapse_sting: { cat: 'sting', vol: 0.5, jitter: 0.01 },
+  mend: { cat: 'aura', vol: 0.3, jitter: 0.05 },
 };
 
 /** Voice bookkeeping shared by every AudioManager (the sound manager is global). */
@@ -199,6 +202,7 @@ export class AudioManager {
     on('chainStarted', this.onChainStarted);
     on('partDeflected', this.onDeflected);
     on('shieldBomb', this.onShieldBomb);
+    on('partHealed', this.onPartHealed);
   }
 
   unbind(): void {
@@ -396,6 +400,11 @@ export class AudioManager {
 
   private onObjective(): void {
     this.start('collapse_sting', 0.6, 1, 0, false);
+  }
+
+  /** A mender's lamp mending: a faint falling shimmer (the aura category plays it at most about once a second). */
+  private onPartHealed(e: SimEvents['partHealed']): void {
+    this.start('mend', 0.45, 1, this.panFor(e.organ.x * PPM), false);
   }
 
   private onPartFallen(e: SimEvents['partFallen']): void {

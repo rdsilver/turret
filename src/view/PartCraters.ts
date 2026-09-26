@@ -14,7 +14,8 @@
  *   one, so the painting cost of a part stays bounded however long it is shot.
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
- *   chips.
+ *   chips. A healed part (healed()) keeps its craters as scars, shrunk back
+ *   to the growth step of its integrity.
  * - flush() (end of WorldRenderer.update): each dirty part repaints at most
  *   once per frame into its own small CPU canvas — just the new / merged
  *   craters on top, or everything on a fresh copy of its base art when the
@@ -276,6 +277,17 @@ export class PartCraters {
     set.full = true;
     this.markDirty(set);
     return set.region !== null;
+  }
+
+  /**
+   * The part got some integrity back (a mender healed it): its craters stay as
+   * scars, but shrink back when it climbs a growth step.
+   */
+  healed(host: CraterHost): void {
+    const set = host.craters;
+    if (!set || set.released) return;
+    const step = Math.min(GROW_STEPS, Math.round((1 - Math.max(0, host.entity.integrity)) * GROW_STEPS));
+    if (step !== set.step) this.markDirty(set);
   }
 
   /** The part's display object goes away: region and scratch are recycled. Never touches the image. */

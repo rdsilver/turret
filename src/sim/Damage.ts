@@ -12,7 +12,7 @@ import type { SimContext } from './SimContext';
 import type { StructurePart } from './StructurePart';
 
 /** Joint strength left at zero integrity just before the part is wrecked. */
-const MIN_JOINT_SCALE = 0.18;
+export const MIN_JOINT_SCALE = 0.18;
 
 export class DamageSystem {
   /** Global multiplier (difficulty, debug). */

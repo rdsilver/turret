@@ -101,6 +101,7 @@ function apply(c: Creature, st: RoamState): void {
 
 function release(c: Creature, st: RoamState): void {
   st.off();
+  roam.delete(c);
   st.current = st.next = null;
   c.weakSpot = null;
   for (const p of c.structure.parts) p.invulnerable = false;
@@ -153,8 +154,11 @@ registerAbility('roamingWeakSpot', {
     if (st.next && !inPlay(c, st.next)) st.next = null;
     const cur = st.current;
     if (!cur || !inPlay(c, cur)) {
-      // Wrecked or cut off while it was the spot: move on at once.
-      moveTo(st, st.next ?? draw(c, st, cur));
+      // Wrecked or cut off while it was the spot: move on at once (to the core if
+      // nothing else is left; never leave the creature with no way to hurt it).
+      const to = st.next ?? draw(c, st, cur) ?? (inPlay(c, c.core) ? c.core : null);
+      if (!to) return release(c, st);
+      moveTo(st, to);
     } else if (st.burnout > 0 && st.startIntegrity - cur.integrity >= st.burnout) {
       // Spent for this visit.
       moveTo(st, st.next ?? draw(c, st, cur));

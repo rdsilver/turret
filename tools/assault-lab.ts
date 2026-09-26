@@ -8,6 +8,9 @@
  *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
  *        [--react 0.35]   (s the bot takes to notice a roaming weak spot has moved; --aim auto chases it)
  *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would, unless a creature is about to cross)
+ *        [--noPriority]   (the bot leaves support creatures (spec.targetPriority, e.g. healers) alone while anything else is on the field)
+ *        [--add creature@at[:k=v,k=v...]]   (repeatable: extra wave entries, to try a placement without editing levels.ts,
+ *                                            e.g. --add mender@12:heal=2)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -43,8 +46,19 @@ const tier = opt('tier', '');
 const stats = tier ? loadout(tier) : (PRESETS[opt('stats', 'mg')] ?? PRESETS.mg!);
 const aimPart = opt('aim', 'auto');
 const png = opt('png', `tools/out/assault-${id}.png`);
-const level = ASSAULT_LEVELS.find((l) => l.id === id);
-if (!level) throw new Error(`no level ${id}`);
+const base = ASSAULT_LEVELS.find((l) => l.id === id);
+if (!base) throw new Error(`no level ${id}`);
+const extra = args.flatMap((a, i) => (a === '--add' && args[i + 1] ? [args[i + 1]!] : [])).map((s) => {
+  const [head, kv] = s.split(':');
+  const [creature, at] = head!.split('@');
+  const params: Record<string, number> = {};
+  for (const e of kv ? kv.split(',') : []) {
+    const [k, v] = e.split('=');
+    params[k!] = Number(v);
+  }
+  return { creature: creature!, at: Number(at ?? 1), params };
+});
+const level = extra.length ? { ...base, waves: [...base.waves, ...extra] } : base;
 
 const seed = Number(opt('seed', '0'));
 const sim = new Simulation({ seed: seed || 3, weaponStats: stats, ammo: AMMO.bullet });
@@ -75,6 +89,15 @@ sim.events.on('shieldBomb', (e) => {
 // or a creature is within BOMB_TRIAGE_M of the line).
 const shootBombs = opt('bombs', '1') !== '0';
 const BOMB_TRIAGE_M = 8;
+let healed = 0;
+let firstHeal = -1;
+sim.events.on('partHealed', (e) => {
+  // (Only while the level is on: the sim runs on after it is won or lost.)
+  if (session.state !== 'running') return;
+  if (firstHeal < 0) firstHeal = session.elapsed;
+  healed += e.amount;
+});
+const priority = !args.includes('--noPriority');
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -92,10 +115,21 @@ run(sim, Number(opt('seconds', '150')), () => {
   // Bot gunner: target the closest active creature.
   let target = null as null | { x: number; y: number; vx: number; vy: number };
   let best = Infinity;
-  for (const c of session.creatures) {
-    if (!c.active || c.core.removed || c.age < 0.5) continue;
-    if (c.x >= best) continue;
-    best = c.x;
+  const live = session.creatures.filter((c) => c.active && !c.core.removed && c.age >= 0.5);
+  const others = live.filter((c) => !c.spec.targetPriority).length;
+  for (const c of live) {
+    let cx = c.x;
+    if (c.spec.targetPriority && others > 0) {
+      // Support creatures (healers): --noPriority, a player who ignores them
+      // until nothing else is left; otherwise, one who shoots one exactly when
+      // the top turret would (counting its Creature.targetPriority, by fronts).
+      if (!priority) continue;
+      const ahead = live.every((o) => o === c || c.frontX - c.targetPriority < o.frontX);
+      if (!ahead) continue;
+      cx = -Infinity;
+    }
+    if (cx >= best) continue;
+    best = cx;
     const names = aimPart === 'auto' ? (c.spec.weakPoints ?? []) : [aimPart];
     let p = c.core;
     for (const n of names) {
@@ -161,6 +195,7 @@ const r = scoreAssault(o);
 console.log(log.join('\n'));
 if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
 if (bombStats.defused + bombStats.walls > 0) console.log(`shield bombs: ${bombStats.defused} shot apart, ${bombStats.walls} walls (${bombStats.shotDown} shot down, ${bombStats.stopped} rounds stopped)`);
+if (healed > 0) console.log(`healers mended ${healed.toFixed(1)} HP (first at ${firstHeal.toFixed(1)}s)`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));

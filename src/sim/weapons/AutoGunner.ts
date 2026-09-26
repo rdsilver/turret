@@ -1,9 +1,10 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
- * closest to the line, aims at its first remaining weak point (those open from
- * above first; a roaming weak spot, Creature.weakSpot, before anything),
- * leading it by the flight time, and holds the trigger for as
- * long as it has a target. A weak point it has been firing at without landing
+ * closest to the line (moved up or down that order by the creature's
+ * targetPriority: a healer at work counts as closer), aims at its first
+ * remaining weak point (those open from above first; a roaming weak spot,
+ * Creature.weakSpot, before anything), leading it by the flight time, and
+ * holds the trigger for as long as it has a target. A weak point it has been firing at without landing
  * a round (something in front of it soaks them up) is skipped for a while.
  */
 import type { SimContext } from '../SimContext';
@@ -59,7 +60,8 @@ export class AutoGunner {
     this.time += dt;
     this.retarget -= dt;
     const p0 = this.part;
-    if (p0 && w.triggerHeld && (this.dry += dt) > BLOCKED_AFTER + 2 * this.tof) {
+    // (A roaming weak spot is the only thing worth shooting on its creature: never skipped.)
+    if (p0 && w.triggerHeld && p0 !== this.creature?.weakSpot && (this.dry += dt) > BLOCKED_AFTER + 2 * this.tof) {
       this.blocked.set(p0, this.time + BLOCKED_FOR);
       this.retarget = 0;
     }
@@ -94,7 +96,7 @@ export class AutoGunner {
     let bestX = Infinity;
     for (const c of this.ctx.creatures.list) {
       if (!c.active || c.core.removed || c.age < 0.5) continue;
-      const x = c.frontX;
+      const x = c.frontX - c.targetPriority;
       if (x < bestX) {
         bestX = x;
         best = c;

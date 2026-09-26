@@ -128,4 +128,9 @@ export interface SimEvents {
    * (urgency 1 = shot down).
    */
   shieldBomb: { phase: 'landed' | 'tick' | 'defused' | 'deployed' | 'crumbled'; part: StructurePart; x: number; y: number; urgency: number };
+  /**
+   * A healer creature restored `amount` hit points to a damaged part (its
+   * joints regain strength with it). `organ` is the healer's lamp; (x, y) the part.
+   */
+  partHealed: { part: StructurePart; amount: number; integrity: number; healer: Creature; organ: StructurePart; x: number; y: number };
 }

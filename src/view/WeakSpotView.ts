@@ -149,7 +149,8 @@ export class WeakSpotView {
     h.setRotation(art.rotation);
     h.setScale((hw * PPM * HALO * grow) / 64, (hy * PPM * HALO * grow) / 64);
     // Behind every part on its side of the body.
-    h.setDepth(art.depth - 0.3);
+    // (Setting a depth, even an unchanged one, queues a sort of the whole display list.)
+    if (h.depth !== art.depth - 0.3) h.setDepth(art.depth - 0.3);
     h.setAlpha(alpha).setVisible(true);
   }
 
