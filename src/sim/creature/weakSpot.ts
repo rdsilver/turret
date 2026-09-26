@@ -16,7 +16,7 @@
  * (burning each visit out quickly) brings every part round again sooner than
  * one who waits for a single part to come back.
  *
- * Damage stays where it landed: a leg worn down over two visits buckles, and a
+ * Damage stays where it landed: a leg worn down over three visits buckles, and a
  * body worn through dies. A part that is wrecked or cut off drops out of the
  * rotation (if the spot was on it, it moves on at once). Once the creature is
  * stopped every part is vulnerable again, so its wreck behaves like any other.

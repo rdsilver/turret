@@ -93,15 +93,16 @@ From level 3 on, three more creatures join the existing levels:
   off the throwing arm and the bombs stop.
 - **Shifter**, a stone golem: only one block can be hurt at a time, and it
   glows. Everything else shrugs rounds off. The glow jumps to another block
-  every few seconds (or sooner once that block has taken a beating), and the
-  damage stays: a leg worn down on two visits buckles, the head or body kills it.
+  every few seconds (or sooner once a visit has worn about a third off that
+  block), and the damage stays: a block goes on its third visit (a leg gives
+  way a little before that), and the head or body kills it.
 - **Mender** hovers over the other creatures and heals them in a cone of green
   light (joints get their strength back too). Shoot its lamp and the healing
   stops; shoot a wing and it comes down. The top turret goes for it once it is
   at work.
 
-Every creature is 30% faster than its level's base speed, and birds twice as
-fast.
+Every creature is 30% faster than its level's base speed; flyers (birds and
+the Mender) are twice as fast.
 
 After level 14 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
@@ -147,9 +148,12 @@ npx tsx tools/creature-lab.ts beetle --shoot shinFL,shinFR --tier 5
 npx tsx tools/assault-lab.ts a07 --tier 7 --aimError 0.3
 #   bot plays a whole level (aims at each creature's weak points, leads
 #   moving targets, human-ish aim error) and prints result + payout
-#   (--seed N varies the run; --top N overrides the top turret)
+#   (--seed N varies the run; --top N overrides the top turret; --add
+#    mender@12:heal=2 tries an extra wave entry; --bombs 0, --react 0.35 and
+#    --noPriority change how the bot treats shield bombs, weak spots, healers)
 npx tsx tools/leg-trace.ts hound FL 3 4.2 2   # gait tuning trace for one leg
 npx tsx tools/fly-trace.ts bird --cut wingL1   # flight steadiness + glide after losing a wing
+npx tsx tools/heal-lab.ts                      # a Mender escorting and healing allies: rates, station, filmstrip
 ```
 
 Upgrade builds per level (`--tier 1..14`) are defined in `tools/lib/loadouts.ts`.

@@ -152,6 +152,8 @@ registerAbility(HEAL_ABILITY, {
       const amount = Math.min(w.lost, (budget * w.lost) / lostSum, partRate * p.maxHp);
       if (amount <= 0) continue;
       p.integrity = Math.min(1, p.integrity + amount / p.maxHp);
+      // Wear (the resting darkening of a battered part) heals with it.
+      p.wear = Math.min(p.wear, 1 - p.integrity);
       restoreJoints(ctx, p);
       ctx.events.emit('partHealed', { part: p, amount, integrity: p.integrity, healer: c, organ, x: p.x, y: p.y });
       mended = true;
