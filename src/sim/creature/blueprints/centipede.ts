@@ -6,12 +6,11 @@
  * segment; a piece of one segment is harmless.
  *
  * It is graded from the front: a wooden head and two wooden segments, then
- * steel, then an armoured tail. From the turret's low angle the front shields
- * everything behind it, so the gun chews it from the head back: the wood goes
- * fast, the steel takes a while, and the last pair needs one long burst from
- * a cool barrel — but the tail is also the farthest from the line. The top
- * turret fires from above and works the fewest-cuts plan (every other
- * segment: seg1, seg3, seg4), which can leave single harmless segments behind.
+ * steel, then an armoured tail, each segment on legs of its own material.
+ * From the turret's low angle the front shields everything behind it, so the
+ * gun chews it from the head back: the wood goes fast, the steel takes a
+ * while, and the last pair needs one long burst from a cool barrel — but the
+ * tail is also the farthest from the line.
  */
 import { registerCreature, type CreatureSpec, type LegSpec, type MuscleGait } from '../CreatureTypes';
 import { MATERIALS } from '../../Materials';
@@ -33,11 +32,13 @@ registerCreature('centipede', (d, _rng, params) => {
   // so the gait doesn't care what it's made of.
   const nSteel = Math.ceil((n - 2) / 2);
   const hp = { wood: P('woodHp', 2), steel: P('steelHp', 0.9), armor: P('armorHp', 0.9) };
+  const mats = Array.from({ length: n }, (_, i) => (i < 2 ? 'wood' : i < 2 + nSteel ? 'steel' : 'armor') as 'wood' | 'steel' | 'armor');
+  /** densityScale that makes a part of `mat` weigh what a wooden one would. */
+  const asWood = (mat: 'wood' | 'steel' | 'armor') => (density * MATERIALS.wood.density) / MATERIALS[mat].density;
   for (let i = 0; i < n; i++) {
-    const mat = i < 2 ? 'wood' : i < 2 + nSteel ? 'steel' : 'armor';
+    const mat = mats[i]!;
     const tags = i === 0 ? ['segment', 'core'] : mat === 'armor' ? ['segment', 'armor'] : ['segment'];
-    const densityScale = (density * MATERIALS.wood.density) / MATERIALS[mat].density;
-    d.box(i * pitch, y, segW, segH, mat, { id: `seg${i}`, densityScale, tags, hpScale: hp[mat] });
+    d.box(i * pitch, y, segW, segH, mat, { id: `seg${i}`, densityScale: asWood(mat), tags, hpScale: hp[mat] });
   }
   // Wooden head with steel mandibles, in front of the first segment.
   d.box(-0.72, y + 0.06, 0.5, 0.4, 'wood', { id: 'head', densityScale: 0.4, hpScale: P('headHp', 1.6) });
@@ -66,7 +67,8 @@ registerCreature('centipede', (d, _rng, params) => {
   for (let i = 0; i < n; i++) {
     for (const side of ['L', 'R']) {
       const id = `${i}${side}`;
-      buildLeg(d, id, i * pitch, hipY, { thigh: legLen, shin: legLen, w: 0.12, mat: 'wood', density, hipTorque: tref * 2, kneeTorque: tref * 2.4, hp: P('legHp', 0.9), footW: 0.3, omega: P('omega', 160) }, `seg${i}`);
+      // Legs match their segment (and weigh the same as wooden ones).
+      buildLeg(d, id, i * pitch, hipY, { thigh: legLen, shin: legLen, w: 0.12, mat: mats[i]!, density: asWood(mats[i]!), hipTorque: tref * 2, kneeTorque: tref * 2.4, hp: P('legHp', 0.9), footW: 0.3, omega: P('omega', 160) }, `seg${i}`);
       legs.push({ name: id, joints: [`hip${id}`, `knee${id}`], parts: [`thigh${id}`, `shin${id}`, `foot${id}`], foot: `foot${id}` });
       // A wave runs from head to tail; the two legs of a segment alternate.
       const ph = i * 0.18 + (side === 'R' ? 0.5 : 0);

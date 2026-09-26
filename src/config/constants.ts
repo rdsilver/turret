@@ -57,6 +57,10 @@ export const TOP_TURRET = {
 
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;
+/** Walking (and floating) creatures move at this multiple of their blueprint / level speed. */
+export const CREATURE_SPEED = 1.3;
+/** Flyers cruise at this multiple of their blueprint / level speed. */
+export const FLYER_SPEED = 2;
 
 export const TURRET = {
   x: 2.5,

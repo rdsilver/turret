@@ -15,7 +15,7 @@ import { Creature } from './Creature';
 import { getCreatureBlueprint, type CreatureParams, type CreatureSpec } from './CreatureTypes';
 import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
-import { CREATURE_SCALE, GROUP, interactionGroups } from '../../config/constants';
+import { CREATURE_SCALE, CREATURE_SPEED, FLYER_SPEED, GROUP, interactionGroups } from '../../config/constants';
 import { scaleCreature } from './blueprints/kit';
 import type { BreakableJoint } from '../BreakableJoint';
 
@@ -73,6 +73,7 @@ export class CreatureManager {
     const draft = new StructureDraft(rng);
     const spec = getCreatureBlueprint(blueprintId)(draft, rng, params);
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
+    spec.gait.speed *= spec.fly ? FLYER_SPEED : CREATURE_SPEED;
     const def = draft.toDef(x, spec.name);
     const structure = buildStructure(this.ctx.physics, def);
     // Limbs overlap in a 2D side view: creature parts never collide with each other.
