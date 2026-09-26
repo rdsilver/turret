@@ -20,9 +20,16 @@ const ENDLESS_ROSTER: Array<[string, number]> = [
   ['hound', 1.5],
   ['centipede', 0.9],
   ['bird', 3.0],
+  ['bomber', 0.75],
 ];
 
-/** Endless waves after the campaign: more, faster, mixed creatures (a boss every fifth wave: the strider and the tyrant take turns; the triceratops every fifth from the eighth). */
+/**
+ * Endless waves after the campaign: more, faster, mixed creatures (a boss every
+ * fifth wave: the strider and the tyrant take turns; the triceratops every
+ * fifth from the eighth; a shifter every third from the second, tougher as
+ * the waves go on; and from the fourth, every other wave, a mender arriving
+ * behind the second creature so it always has someone to heal).
+ */
 export function endlessAssault(k: number): AssaultLevelDef {
   const n = 3 + Math.floor(k * 0.8);
   const faster = 1 + Math.min(0.5, k * 0.05);
@@ -36,6 +43,8 @@ export function endlessAssault(k: number): AssaultLevelDef {
     waves.push(rex ? { creature: 'trex', at: 2, params: { speed: 0.5 * faster } } : { creature: 'strider', at: 2, params: { speed: 0.45 * faster } });
   }
   if (k >= 7 && k % 5 === 2) waves.push({ creature: 'triceratops', at: 2, params: { speed: 0.6 * faster } });
+  if (k >= 1 && k % 3 === 1) waves.push({ creature: 'shifter', at: 6, params: { speed: 0.65 * faster, hp: Math.min(1.4, 1 + k * 0.03) } });
+  if (k >= 3 && k % 2 === 1) waves.push({ creature: 'mender', at: 1 + Math.max(4, 9 - k * 0.3) + 6, params: { heal: Math.min(3, 1.5 + k * 0.1) } });
   return {
     id: `assault-endless-${k}`,
     name: `Endless Wave ${String(k + 1).padStart(2, '0')}`,

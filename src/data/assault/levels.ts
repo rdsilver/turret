@@ -1,7 +1,9 @@
 /**
  * Creature campaign (assault levels). Pure data: which creatures come, when.
  * The roster grows more complex (armour, engines, abilities, odd gaits) as
- * the campaign goes on.
+ * the campaign goes on. Speeds are base values: creatures spawn at
+ * CREATURE_SPEED (flyers FLYER_SPEED) times them. A wave's `hint` shows
+ * when that creature arrives (where a new kind first appears).
  */
 import type { AssaultLevelDef } from '../../game/AssaultLevel';
 
@@ -37,7 +39,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     hint: 'Aim above the rubber: the long arm with the metal scoop is the thrower.',
     seed: 103,
     reward: 150,
-    waves: [{ creature: 'thrower', at: 1 }],
+    waves: [
+      { creature: 'thrower', at: 1 },
+      { creature: 'bomber', at: 5, params: { cans: 2, armHp: 1 }, hint: 'Shoot the blinking canister before it turns into a steel wall.' },
+    ],
   },
   {
     id: 'a04',
@@ -51,6 +56,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'hound', at: 1, params: { speed: 1.6 } },
       { creature: 'stickman', at: 8, params: { speed: 0.9 } },
       { creature: 'hound', at: 22, params: { speed: 1.7 } },
+      { creature: 'shifter', at: 30, params: { hp: 0.6 }, hint: 'Only the glowing block can be hurt. Follow the glow from block to block.' },
     ],
   },
   {
@@ -64,6 +70,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'beetle', at: 1, params: { speed: 0.7 } },
       { creature: 'stickman', at: 26, params: { speed: 0.95 } },
+      { creature: 'mender', at: 14, params: { heal: 1.5 }, hint: 'Its green lamp heals whatever it shines on: shoot the lamp first.' },
     ],
   },
   {
@@ -112,6 +119,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'thrower', at: 24, params: { speed: 0.8 } },
       { creature: 'hound', at: 36, params: { speed: 1.6 } },
       { creature: 'bird', at: 16, params: { speed: 3, height: 3.2 } },
+      { creature: 'bomber', at: 31 },
+      { creature: 'shifter', at: 40, params: { hp: 0.9 } },
     ],
   },
   {
@@ -126,6 +135,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'centipede', at: 1 },
       { creature: 'hound', at: 28, params: { speed: 1.6 } },
       { creature: 'bird', at: 20, params: { speed: 3.2, height: 2.8 } },
+      { creature: 'mender', at: 22, params: { heal: 2 } },
     ],
   },
   {
@@ -145,6 +155,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'stickman', at: 34, params: { speed: 1 } },
       { creature: 'bird', at: 18, params: { speed: 3.2, height: 3.2 } },
       { creature: 'bird', at: 26, params: { speed: 3.4, height: 2.5 } },
+      { creature: 'mender', at: 24, params: { heal: 2.5 } },
+      { creature: 'shifter', at: 40, params: { hp: 1.1 } },
     ],
   },
   {
@@ -160,6 +172,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'hound', at: 8, params: { speed: 1.6 } },
       { creature: 'bird', at: 38, params: { speed: 3.2, height: 3 } },
       { creature: 'hound', at: 40, params: { speed: 1.7 } },
+      { creature: 'bomber', at: 30 },
     ],
   },
   {
@@ -176,6 +189,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'hound', at: 45, params: { speed: 1.5 } },
       { creature: 'bird', at: 42, params: { speed: 3, height: 3.4 } },
       { creature: 'bird', at: 50, params: { speed: 3, height: 2.6 } },
+      { creature: 'mender', at: 24, params: { heal: 2.5 } },
+      { creature: 'shifter', at: 32, params: { hp: 1.2 } },
     ],
   },
   {
@@ -202,6 +217,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 36, params: { speed: 3.4, height: 3.2 } },
       { creature: 'hound', at: 34, params: { speed: 1.6 } },
       { creature: 'bird', at: 54, params: { speed: 3.4, height: 2.6 } },
+      { creature: 'bomber', at: 20 },
+      { creature: 'mender', at: 34, params: { heal: 2.5 } },
     ],
   },
 ];

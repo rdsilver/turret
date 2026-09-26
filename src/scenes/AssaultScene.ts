@@ -18,7 +18,7 @@ import { AssaultSession } from '../game/AssaultSession';
 import { topTurretStats } from '../data/topTurret';
 import { TopTurretView } from '../view/TopTurretView';
 import { scoreAssault } from '../game/AssaultScoring';
-import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef } from '../game/AssaultLevel';
+import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef, type WaveEntry } from '../game/AssaultLevel';
 import { gameState } from '../game/GameState';
 import { assaultLevelAt, nextAssaultIndex } from '../game/AssaultProgress';
 import { UpgradeSystem } from '../game/UpgradeSystem';
@@ -85,6 +85,8 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   private massScale = 1;
   private endTimer = -1;
   private hinted = false;
+  /** Wave hints already shown this attempt. */
+  private readonly waveHints = new Set<WaveEntry>();
   private offs: Array<() => void> = [];
 
   constructor() {
@@ -182,6 +184,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.flow = 'playing';
     this.endTimer = -1;
     this.hinted = false;
+    this.waveHints.clear();
     this.sim.weapon.heat = 0;
     this.sim.weapon.overheated = false;
     if (this.sim.topWeapon) {
@@ -234,6 +237,14 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
         if (this.flow === 'playing' && part.hasTag('limb')) this.hud?.flash('LIMB SEVERED', '#ffb547');
       }),
       ev.on('creatureOverheated', () => this.hud?.flash('ENGINE OVERHEATED', '#ffb547')),
+      ev.on('creatureSpawned', ({ creature }) => {
+        // A new kind of creature explains itself as it arrives.
+        if (this.flow !== 'playing') return;
+        const w = this.level.waves.find((e) => e.hint && e.creature === creature.kind && !this.waveHints.has(e));
+        if (!w) return;
+        this.waveHints.add(w);
+        this.hud?.hint(w.hint!);
+      }),
       ev.on('shieldBomb', ({ phase }) => {
         if (this.flow !== 'playing') return;
         if (phase === 'deployed') this.hud?.flash('SHIELD WALL UP', '#ffb547');

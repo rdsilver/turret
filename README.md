@@ -72,9 +72,9 @@ hits near an edge chip pieces out of the silhouette.
 | --- | --- | --- | --- |
 | 1 | First Contact | Stick walker | knees |
 | 2 | Pair | two walkers | stop the closest first |
-| 3 | The Thrower | walker with a sling arm that throws rubber shields | the sling arm (bullets bounce off rubber) |
-| 4 | The Hound | fast quadruped | both front (or both back) legs |
-| 5 | Shell Game | armoured beetle, six steel legs | legs under the shell; armour-piercing rounds |
+| 3 | The Thrower | walker with a sling arm that throws rubber shields; first Sapper | the sling arm (bullets bounce off rubber); shoot the Sapper's blinking bombs |
+| 4 | The Hound | fast quadruped; first Shifter | both front (or both back) legs; chase the Shifter's glow |
+| 5 | Shell Game | armoured beetle, six steel legs; first Mender | legs under the shell; armour-piercing rounds; the Mender's lamp |
 | 6 | Flock | flapping birds | a wing: lose one and it can't stay up (the top turret helps) |
 | 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
 | 8 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
@@ -85,9 +85,27 @@ hits near an edge chip pieces out of the silhouette.
 | 13 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
 | 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
+From level 3 on, three more creatures join the existing levels:
+
+- **Sapper** lobs shield bombs ahead of itself. A bomb's light blinks faster and
+  faster; shoot it apart in time, or it springs up into a tall steel wall that
+  stops your rounds and hides whatever walks behind it until it crumbles. Shoot
+  off the throwing arm and the bombs stop.
+- **Shifter**, a stone golem: only one block can be hurt at a time, and it
+  glows. Everything else shrugs rounds off. The glow jumps to another block
+  every few seconds (or sooner once that block has taken a beating), and the
+  damage stays: a leg worn down on two visits buckles, the head or body kills it.
+- **Mender** hovers over the other creatures and heals them in a cone of green
+  light (joints get their strength back too). Shoot its lamp and the healing
+  stops; shoot a wing and it comes down. The top turret goes for it once it is
+  at work.
+
+Every creature is 30% faster than its level's base speed, and birds twice as
+fast.
+
 After level 14 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
-joins every fifth wave too). Between levels the
+joins every fifth wave too, with shifters, menders and sappers mixed in). Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
 automatic gun on a tall mast that picks the creature closest to the line and

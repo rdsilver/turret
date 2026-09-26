@@ -17,6 +17,8 @@ export interface WaveEntry {
   /** Spawn x (sim m); default SPAWN_X. */
   x?: number;
   params?: CreatureParams;
+  /** Hint shown when this creature arrives (where a new kind of creature first appears). */
+  hint?: string;
 }
 
 export interface AssaultLevelDef {
