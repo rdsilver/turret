@@ -119,4 +119,6 @@ export interface SimEvents {
   objectiveComplete: { description: string };
   /** Objective complete AND motion has settled enough to show results. */
   collapseSettled: Record<string, never>;
+  /** Weapon damage hit a part that can't be hurt right now (StructurePart.invulnerable): nothing changed. */
+  partDeflected: { part: StructurePart; x: number; y: number };
 }

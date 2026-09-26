@@ -197,6 +197,7 @@ export class AudioManager {
     on('objectiveComplete', this.onObjective);
     on('partFallen', this.onPartFallen);
     on('chainStarted', this.onChainStarted);
+    on('partDeflected', this.onDeflected);
   }
 
   unbind(): void {
@@ -280,7 +281,8 @@ export class AudioManager {
     if (!mat) return;
     if (e.projectile.mass < 8) {
       // Bullet hits: quiet, high ticks (armour pings), rate-limited by the impact category.
-      if (e.first) this.queue(this.pending.impact, impactSound(mat), 0.3, 0.22, 1.35, x);
+      // (A part that can't be hurt right now pings instead: onDeflected.)
+      if (e.first && !(e.target as StructurePart).invulnerable) this.queue(this.pending.impact, impactSound(mat), 0.3, 0.22, 1.35, x);
       return;
     }
     if (e.first) {
@@ -290,6 +292,11 @@ export class AudioManager {
     } else if (e.speed > 5) {
       this.queue(this.pending.impact, impactSound(mat), 1 + m, 0.3 + 0.4 * m, 1, x);
     }
+  }
+
+  /** A round glanced off a part that can't be hurt right now: a thin, bright ping, nothing like a hit. */
+  private onDeflected(e: SimEvents['partDeflected']): void {
+    this.queue(this.pending.impact, 'impact_metal', 0.32, 0.3, 2.1, e.x * PPM);
   }
 
   private onImpact(e: SimEvents['impact']): void {

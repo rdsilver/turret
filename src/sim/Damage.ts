@@ -4,7 +4,9 @@
  * (armour absorbs a share) and weakens every joint attached to it. The
  * physics then does the breaking — a weakened knee buckles under the
  * creature's own weight and stride. At zero integrity the part is wrecked:
- * glass shatters, explosives detonate, anything else is torn off.
+ * glass shatters, explosives detonate, anything else is torn off. An
+ * invulnerable part (StructurePart.invulnerable) shrugs hits off: the round
+ * deflects (partDeflected) and nothing changes.
  */
 import type { SimContext } from './SimContext';
 import type { StructurePart } from './StructurePart';
@@ -24,6 +26,11 @@ export class DamageSystem {
    */
   apply(part: StructurePart, amount: number, x: number, y: number, pierce = 0): number {
     if (part.removed || part.fixed || part.wrecked || amount <= 0) return 0;
+    if (part.invulnerable) {
+      // Nothing wears down (no integrity loss, no weakened joints, no crater).
+      this.ctx.events.emit('partDeflected', { part, x, y });
+      return 0;
+    }
     const armor = (part.material.armor ?? 0) * (1 - Math.min(1, Math.max(0, pierce)));
     const dealt = amount * this.scale * (1 - armor);
     const before = part.integrity;

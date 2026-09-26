@@ -68,6 +68,13 @@ export class StructurePart extends Entity {
   wrecked = false;
   /** 0..1+ heat (engines overheat when shot). */
   heat = 0;
+  /**
+   * Can't be hurt right now: weapon damage deflects (DamageSystem emits
+   * partDeflected and changes nothing) and blasts don't break its joints to
+   * other invulnerable parts. Set and cleared by whoever grants it (a roaming
+   * weak spot keeps every other part of its creature invulnerable).
+   */
+  invulnerable = false;
 
   constructor(def: PartDef, material: MaterialDef, shape: PartShape) {
     super();

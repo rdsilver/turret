@@ -1,7 +1,8 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
  * closest to the line, aims at its first remaining weak point (those open from
- * above first), leading it by the flight time, and holds the trigger for as
+ * above first; a roaming weak spot, Creature.weakSpot, before anything),
+ * leading it by the flight time, and holds the trigger for as
  * long as it has a target. A weak point it has been firing at without landing
  * a round (something in front of it soaks them up) is skipped for a while.
  */
@@ -103,6 +104,12 @@ export class AutoGunner {
     this.part = null;
     if (!best) return;
     for (const [q, until] of this.blocked) if (until <= this.time || q.removed) this.blocked.delete(q);
+    // Only one part can be hurt right now (a roaming weak spot): that one, shielded or not.
+    const spot = best.weakSpot;
+    if (spot && !spot.removed && !spot.wrecked && best.owns(spot)) {
+      this.part = spot;
+      return;
+    }
     let part: StructurePart = best.core;
     for (const n of [...(best.spec.weakPointsFromAbove ?? []), ...(best.spec.weakPoints ?? [])]) {
       const q = best.structure.part(n);

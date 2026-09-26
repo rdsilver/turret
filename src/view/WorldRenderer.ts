@@ -24,6 +24,7 @@
  *    their joints (green -> yellow -> red, pulsing when yielding); joint
  *    markers coloured by stress, sized by damage.
  *  - Collider debug (setColliderDebug): sim.physics.world.debugRender() lines.
+ *  - Roaming weak spots glow (WeakSpotView, placed after the parts each frame).
  */
 import * as Phaser from 'phaser';
 import type { Simulation } from '../sim/Simulation';
@@ -35,6 +36,7 @@ import { PPM } from '../config/constants';
 import { lerpAngle } from '../core/math';
 import { TextureFactory, TEXTURE_RES } from './TextureFactory';
 import { PartCraters, type CraterSet, type CraterStats } from './PartCraters';
+import { WeakSpotView } from './WeakSpotView';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
@@ -123,6 +125,8 @@ export class WorldRenderer {
   private readonly glowPool: Image[] = [];
 
   private readonly craters: PartCraters;
+  /** Glow on roaming weak spots (the only part of such a creature that can be hurt). */
+  private readonly weakSpots: WeakSpotView;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -140,6 +144,10 @@ export class WorldRenderer {
     readonly textures: TextureFactory,
   ) {
     this.craters = new PartCraters(scene, textures);
+    this.weakSpots = new WeakSpotView(scene, sim, textures, (p) => {
+      const v = p.view as Vis | null;
+      return v && v.kind === 0 ? v.img : null;
+    });
     this.trailGfx = scene.add.graphics().setDepth(DEPTH.projectiles - 0.5);
     this.cableGfx = scene.add.graphics().setDepth(DEPTH.cables);
     const ev = sim.events;
@@ -219,6 +227,7 @@ export class WorldRenderer {
     this.syncCur = prev;
 
     if (this.fading.length) this.updateFading();
+    this.weakSpots.update(realDt, this.stressView);
     if (this.cores.length) this.updateCores();
     if (this.animated.length) this.updateAnimated(realDt);
     if (this.projs.length || this.trailsDrawn) this.drawTrails();
@@ -279,6 +288,7 @@ export class WorldRenderer {
     // Crater art is dropped between levels (memory stays bounded); with
     // small-arms ammo the crater page is ready before the first hit.
     this.craters.clear();
+    this.weakSpots.clear();
     if (trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
     // Keep texture memory bounded across many (procedural) levels.
     if (trimTextures && this.textures.atlasPages > 6) {
@@ -293,6 +303,7 @@ export class WorldRenderer {
     if (this.destroyed) return;
     this.clear(false);
     this.craters.destroy();
+    this.weakSpots.destroy();
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;

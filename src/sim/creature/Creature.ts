@@ -110,6 +110,11 @@ export class Creature {
   power = 1;
   /** Walking-speed multiplier set by the game (creatures hurry as they near the line). */
   speedBoost = 1;
+  /**
+   * The only part that can be hurt right now, for a creature whose weak spot
+   * roams (ability roamingWeakSpot; null otherwise): gunners aim here first.
+   */
+  weakSpot: StructurePart | null = null;
   /** 0..1 locomotion capacity from working legs. */
   capacity = 1;
   functionalLegs = 0;

@@ -6,6 +6,7 @@
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
  *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
+ *        [--react 0.35]   (s the bot takes to notice a roaming weak spot has moved; --aim auto chases it)
  *   (--top: top turret level; defaults to what the tier owns)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
@@ -20,6 +21,8 @@ import { DEFENSE_LINE_X } from '../src/game/AssaultLevel';
 import { loadout, topTurretLevel } from './lib/loadouts';
 import { topTurretStats } from '../src/data/topTurret';
 import { Random } from '../src/core/Random';
+import type { Creature } from '../src/sim/creature/Creature';
+import type { StructurePart } from '../src/sim/StructurePart';
 
 await initRapier();
 const args = process.argv.slice(2);
@@ -62,6 +65,9 @@ const aimError = Number(opt('aimError', '0'));
 const botRng = new Random(seed ? 200 + seed : 99);
 let errX = 0;
 let errY = 0;
+// A roaming weak spot is chased like a human would: `react` seconds after it moves.
+const react = Number(opt('react', '0.35'));
+const chase = new Map<Creature, { spot: StructurePart | null; aim: StructurePart | null; at: number }>();
 let cooling = false;
 let lastFrame = -10;
 run(sim, Number(opt('seconds', '150')), () => {
@@ -82,6 +88,17 @@ run(sim, Number(opt('seconds', '150')), () => {
         p = q;
         break;
       }
+    }
+    if (aimPart === 'auto' && c.weakSpot) {
+      let k = chase.get(c);
+      if (!k) chase.set(c, (k = { spot: c.weakSpot, aim: c.weakSpot, at: -Infinity }));
+      if (k.spot !== c.weakSpot) {
+        k.spot = c.weakSpot;
+        k.at = session.elapsed;
+      }
+      if (session.elapsed - k.at >= react) k.aim = k.spot;
+      const q = k.aim;
+      if (q && !q.removed && !q.wrecked && c.owns(q)) p = q;
     }
     // Lead a beating wing by the bird's flight, as a player would, not by its stroke.
     const v = p.hasTag('wing') ? c.core : p;

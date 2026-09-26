@@ -43,6 +43,8 @@ const G = 12 * PPM * 1.15;
 const GROUND_DUST = 0x8f8a7e;
 /** Radius (m) of the little pop when a limb tears off. */
 const LIMB_POP_RADIUS = 0.6;
+/** Rounds deflecting off a part that can't be hurt right now (see StructurePart.invulnerable). */
+const DEFLECT_COLOR = 0x9ee8ff;
 
 const SLOW_TARGET = 0.35;
 const SLOW_IN = 0.08;
@@ -324,6 +326,7 @@ export class EffectsManager {
     this.on('creatureNeutralized', this.onNeutralized);
     this.on('creatureAbility', this.onAbility);
     this.on('breach', this.onBreach);
+    this.on('partDeflected', this.onPartDeflected);
   }
 
   // ---- creatures -----------------------------------------------------------
@@ -338,6 +341,32 @@ export class EffectsManager {
       // Nearly broken parts shed more (a visible warning).
       this.materialBurst(e.part.material.id, x, y, 0.3, Math.PI, 1.4);
     }
+  }
+
+  /** A round hit a part that can't be hurt right now: a cold, bright ping and no dust (nothing wore down). */
+  private onPartDeflected(e: SimEvents['partDeflected']): void {
+    if (!this.takeImpactToken(0.35)) return;
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    this.flash(x, y, 11, DEFLECT_COLOR, 60, 0.8);
+    this.ring(x, y, 12, 140, 0.45, DEFLECT_COLOR);
+    // Sparks glance back toward the turret (always on the left).
+    const b = resetBurst();
+    b.tint = 0xf2fdff;
+    b.tintEnd = DEFLECT_COLOR;
+    b.angle = Math.PI;
+    b.spread = 1.3;
+    b.speedMin = 110;
+    b.speedMax = 300;
+    b.lifeMin = 80;
+    b.lifeMax = 200;
+    b.scaleMin = 0.3;
+    b.scaleMax = 0.5;
+    b.stretch = 0.003;
+    b.gravity = G * 0.4;
+    b.drag = 2;
+    b.alpha = 0.95;
+    this.emit(this.sparks, x, y, 3);
   }
 
   private onPartWrecked(e: SimEvents['partWrecked']): void {
@@ -531,7 +560,8 @@ export class EffectsManager {
     const mat: MaterialId | null = e.target instanceof StructurePart ? e.target.material.id : e.hitGround ? 'ground' : null;
     if (p.mass < 8) {
       // Bullets: small puff of material + ricochet sparks off armour; no hit-stop.
-      if (!e.first || !mat || !this.takeImpactToken(0.5)) return;
+      // (A part that can't be hurt right now pings instead: onPartDeflected.)
+      if (!e.first || !mat || (e.target instanceof StructurePart && e.target.invulnerable) || !this.takeImpactToken(0.5)) return;
       if (e.hitGround) this.groundDust(x, 0.12, GROUND_DUST);
       else this.materialBurst(mat, x, y, 0.18, back, 1.1);
       return;
