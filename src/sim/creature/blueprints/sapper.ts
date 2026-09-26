@@ -20,7 +20,7 @@
  *
  * It is a support creature: it matters most walking ahead of others, whose
  * approach its walls cover. Params: speed, cans (1..4), interval, delay,
- * ahead, fuse, maxLive, bombHp, wallH, wallLife, wallHp, armHp, legHp, canHp.
+ * ahead, fuse, maxLive, bombHits, wallH, wallLife, wallHp, armHp, legHp, canHp.
  */
 import { registerCreature, type CreatureSpec } from '../CreatureTypes';
 import { G, buildLeg, draftMass, walkerGait } from './kit';
@@ -88,13 +88,14 @@ registerCreature('bomber', (d, _rng, params) => {
         interval: P('interval', 5),
         delay: P('delay', 2),
         ahead: P('ahead', 4.5),
-        size: 0.5,
+        // Big, so it's easy to see and hit (2.85 m tall at creature scale).
+        size: 1.5,
         flight: 1.5,
         fuse: P('fuse', 3.5),
         maxLive: P('maxLive', 2),
         minX: 22,
         maxX: 42,
-        bombHp: P('bombHp', 0.11),
+        hits: P('bombHits', 4),
         wallH: P('wallH', 11.5),
         wallW: 1,
         wallLife: P('wallLife', 14),

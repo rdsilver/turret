@@ -87,8 +87,9 @@ hits near an edge chip pieces out of the silhouette.
 
 From level 3 on, three more creatures join the existing levels:
 
-- **Sapper** lobs shield bombs ahead of itself. A bomb's light blinks faster and
-  faster; shoot it apart in time, or it springs up into a tall steel wall that
+- **Sapper** lobs big shield bombs ahead of itself. A bomb's light blinks faster
+  and faster; hit it four times before it runs out (any round counts), or it
+  springs up into a tall steel wall that
   stops your rounds and hides whatever walks behind it until it crumbles. Shoot
   off the throwing arm and the bombs stop.
 - **Shifter**, a stone golem: only one block can be hurt at a time, and it

@@ -2,11 +2,11 @@
  * Shield bombs: a creature ability and the bombs and walls it leaves on the
  * field.
  *
- *  throwShieldBomb – lobs a glowing canister (unarmoured: hitting it is the
- *                    hard part) ten-odd metres ahead of the creature. Once
- *                    it lands its fuse ticks: a red light blinking and
- *                    beeping faster and faster. Shoot it apart before the
- *                    fuse runs out and it pops harmlessly. If the fuse runs
+ *  throwShieldBomb – lobs a big glowing canister ten-odd metres ahead of the
+ *                    creature. Once it lands its fuse ticks: a red light
+ *                    blinking and beeping faster and faster. Hit it `hits`
+ *                    times (4; any round counts, whatever its damage) before
+ *                    the fuse runs out and it pops harmlessly. If the fuse runs
  *                    out it springs up into a tall armour wall standing on
  *                    the ground: bullets (the main gun's and the top
  *                    turret's) stop on it, so it shields every creature
@@ -20,7 +20,8 @@
  * flight (s in the air), fuse (s after landing), maxLive (bombs + standing
  * walls of this creature at once), minX / maxX (sim x range bombs land in:
  * never so near the turret that a wall would hide the last stretch before
- * the line, never so far out that they can't be hit), bombHp, wallH, wallW,
+ * the line, never so far out that they can't be hit), hits (rounds that pop a
+ * bomb), wallH, wallW,
  * wallLife, wallHp (world metres / hp multipliers, not scaled), muscle /
  * windup / release / carry (the throwing arm's shoulder and its angles), hand
  * (part the bomb leaves from while it is attached; else the organ), ammo
@@ -56,6 +57,9 @@ export interface ShieldBomb {
   landedAt: number;
   /** Fuse (s) once landed. */
   fuse: number;
+  /** Rounds it has taken, and how many pop it. */
+  hits: number;
+  hitsToPop: number;
   nextTick: number;
   wall: WallSpec;
 }
@@ -120,6 +124,15 @@ function fieldOf(ctx: SimContext): BombField {
     fields.set(ctx.physics, field);
     ctx.physics.addPreStepHook(() => animateWalls(ctx, field));
     ctx.physics.addStepHook(() => stepField(ctx, field));
+    // Bombs count rounds, not damage: the Nth hit pops one, whatever the gun.
+    ctx.events.on('partDamaged', ({ part, x, y }) => {
+      const b = field.bombs.find((k) => k.part === part);
+      if (!b || part.wrecked) return;
+      b.hits++;
+      // (Integrity shows how close it is to popping: tint and craters follow it.)
+      part.integrity = Math.max(0, 1 - b.hits / b.hitsToPop);
+      if (b.hits >= b.hitsToPop) ctx.damage.wreck(part, x, y);
+    });
     f = field;
   }
   return f;
@@ -389,7 +402,8 @@ registerAbility('throwShieldBomb', {
     const vy = (ty - y0 - 0.5 * g * T * T) / T;
     const part = spawnPart(
       ctx.physics,
-      { id: 'shieldBomb', shape: { kind: 'box', w, h: size }, x: 0, y: 0, material: 'core', tags: ['shieldBomb'], hpScale: num(spec, 'bombHp', 0.11), friction: 1.4, restitution: 0.05, densityScale: 0.5 },
+      // (Hit points only as a backstop: it pops on its Nth hit, see fieldOf.)
+      { id: 'shieldBomb', shape: { kind: 'box', w, h: size }, x: 0, y: 0, material: 'core', tags: ['shieldBomb'], hpScale: 1000, friction: 1.4, restitution: 0.05, densityScale: 0.5 },
       { x: x0, y: y0, angle: (ctx.rng.next() - 0.5) * 0.3, vx, vy, av: (ctx.rng.next() - 0.5) * 0.8 },
     );
     part.collider.setCollisionGroups(BOMB_GROUPS);
@@ -400,6 +414,8 @@ registerAbility('throwShieldBomb', {
       thrownAt: ctx.physics.simTime,
       landedAt: -1,
       fuse: num(spec, 'fuse', 3.5),
+      hits: 0,
+      hitsToPop: Math.max(1, Math.round(num(spec, 'hits', 4))),
       nextTick: 0,
       wall: { h: num(spec, 'wallH', 9), w: num(spec, 'wallW', 1), life: num(spec, 'wallLife', 14), hp: num(spec, 'wallHp', 0.3) },
     });
