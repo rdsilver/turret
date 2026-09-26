@@ -125,6 +125,8 @@ export class ExplosionSystem {
         // Break nearby joints outright; farther joints only if weak relative to the blast.
         for (let k = e.joints.length - 1; k >= 0; k--) {
           const j = e.joints[k]!;
+          // Invulnerable parts hold together (the blast still shoves them).
+          if (e.invulnerable && j.other(e)?.invulnerable !== false) continue;
           const jd = Math.hypot(j.wx - x, j.wy - y);
           if (jd >= radius) continue;
           const blastForce = power * 900_000 * (1 - jd / radius);

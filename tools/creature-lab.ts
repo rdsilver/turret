@@ -4,6 +4,8 @@
  *   npx tsx tools/creature-lab.ts stickman [--seconds 20] [--x 45] [--shoot kneeL|torso|...]
  *        [--start 3] [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--png tools/out/creature-stickman.png] [--frames 0.5,2,4,8]
  *        [--params speed=1.4,amp=0.6]   (blueprint params)
+ *        [--shoot weakspot [--react 0.35]]   (chase a roaming weak spot, `react` s behind it)
+ *        [--shoot random]   (a random part of its body, a new one every 1.5 s)
  *
  * Reports walking speed, stability (does it stay upright unshot?), time to
  * reach the defense line, and — with --shoot — how long/how many rounds it
@@ -16,6 +18,8 @@ import { AMMO } from '../src/data/ammo';
 import { solveAim } from '../src/sim/ballistics';
 import { DEFENSE_LINE_X } from '../src/game/AssaultLevel';
 import { loadout } from './lib/loadouts';
+import { Random } from '../src/core/Random';
+import type { StructurePart } from '../src/sim/StructurePart';
 
 await initRapier();
 await import('../src/sim/creature');
@@ -51,7 +55,9 @@ const log: string[] = [];
 const ev = (s: string) => log.push(`${sim.physics.simTime.toFixed(2)}s ${s}`);
 let rounds = 0;
 let hits = 0;
+let deflected = 0;
 sim.events.on('projectileFired', () => rounds++);
+sim.events.on('partDeflected', () => deflected++);
 sim.events.on('partDamaged', (e) => {
   hits++;
   if (hits % 5 === 1) ev(`hit ${e.part.name ?? e.part.index} integrity=${e.integrity.toFixed(2)}`);
@@ -70,12 +76,38 @@ let reachedLine = -1;
 let lastPrint = 0;
 const rows: string[] = [];
 // --shoot a,b,c: hold fire on each part in turn until it is wrecked or cut off.
-const targets = shoot ? shoot.split(',').map((n) => c.structure.part(n)) : [];
+const mode = shoot === 'weakspot' || shoot === 'random' ? shoot : '';
+const targets = shoot && !mode ? shoot.split(',').map((n) => c.structure.part(n)) : [];
 if (targets.some((p) => !p)) throw new Error(`no part in "${shoot}" (parts: ${c.structure.parts.map((p) => p.name).join(', ')})`);
-const currentTarget = () => targets.find((p) => p && !p.removed && !p.wrecked && sim.creatures.list.some((k) => k.active && k.owns(p)));
+const live = (p: StructurePart | null | undefined) => !!p && !p.removed && !p.wrecked && sim.creatures.list.some((k) => k.active && k.owns(p));
+const react = Number(opt('react', '0.35'));
+const aimRng = new Random(77);
+let seen: StructurePart | null = null;
+let aimed: StructurePart | null = null;
+let since = -Infinity;
+const currentTarget = (t: number) => {
+  if (mode === 'weakspot') {
+    // A roaming weak spot, chased `react` seconds behind (as a player would).
+    if (c.weakSpot !== seen) {
+      seen = c.weakSpot;
+      since = t;
+    }
+    if (t - since >= react) aimed = seen;
+    return live(aimed) ? aimed! : undefined;
+  }
+  if (mode === 'random') {
+    if (t - since >= 1.5 || !live(aimed)) {
+      const body = c.structure.parts.filter((p) => live(p));
+      aimed = body.length ? aimRng.pick(body) : null;
+      since = t;
+    }
+    return live(aimed) ? aimed! : undefined;
+  }
+  return targets.find((p) => live(p));
+};
 
 run(sim, seconds, (t) => {
-  const target = currentTarget();
+  const target = currentTarget(t);
   if (target && t >= start && sim.creatures.activeCount > 0) {
     const w = sim.weapon;
     const m = w.muzzle();
@@ -104,7 +136,7 @@ console.log(log.slice(0, 60).join('\n'));
 for (const k of sim.creatures.list) if (k !== c) console.log(`  also: ${k.spec.name} (core ${k.core.name}) state=${k.state} cause=${k.cause ?? '-'} x=${k.x.toFixed(1)} legs=${k.functionalLegs}/${k.ownedLegs}`);
 const walked = spawnX - c.x;
 console.log(
-  `\nSUMMARY ${id}${Object.keys(params).length ? ' ' + JSON.stringify(params) : ''}: walked ${walked.toFixed(1)} m in ${seconds}s (avg ${(walked / seconds).toFixed(2)} m/s), state=${c.state} cause=${c.cause ?? '-'}, reached line at ${reachedLine >= 0 ? reachedLine.toFixed(1) + 's' : 'never'}, rounds fired=${rounds} hits=${hits}`,
+  `\nSUMMARY ${id}${Object.keys(params).length ? ' ' + JSON.stringify(params) : ''}: walked ${walked.toFixed(1)} m in ${seconds}s (avg ${(walked / seconds).toFixed(2)} m/s), state=${c.state} cause=${c.cause ?? '-'}, reached line at ${reachedLine >= 0 ? reachedLine.toFixed(1) + 's' : 'never'}, rounds fired=${rounds} hits=${hits}${deflected ? ` deflected=${deflected}` : ''}`,
 );
 const cx = Math.min(spawnX, c.x);
 await renderFilmstrip(frames, png, { left: cx - 22, right: spawnX + 16, top: -24, bottom: 1.5 }, { cols: 3 });
