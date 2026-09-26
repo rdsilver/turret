@@ -10,10 +10,15 @@
  *
  * Beat it by taking it out first. The lamp hangs below the body in plain view
  * of the gun: shoot it off and the light goes out for good (the mender just
- * tags along after that, harmless until it is alone). Or shoot a wing off like
- * a bird's: the light goes out at once and it glides down. Out-shooting its
- * light works too — it mends 2.5 hit points a second (level param `heal`) —
- * but takes longer. The top turret goes for it first while the lamp shines.
+ * tags along after that, harmless until it is alone). Or shoot a wing off: the
+ * light goes out at once and the lamp's weight drags it down within a few
+ * metres (no bird's long glide). Right at the line that can still be too far:
+ * there, and once it is alone and flying at the line, go for the body or head.
+ * Out-shooting its light works too — it mends 2.5 hit points a second (level
+ * param `heal`) — but takes longer. The top turret leaves it be on its way in
+ * (an escort never crosses the line while it has an ally), then goes for it
+ * first once it has seen it mend for 2 s (param `notice`) — unless something
+ * else is about to break through.
  */
 import { registerCreature, type AbilitySpec, type CreatureSpec, type MuscleGait } from '../CreatureTypes';
 import { G, draftMass } from './kit';
@@ -38,8 +43,8 @@ registerCreature('mender', (d, _rng, params) => {
   d.weld('hanger', 'body', { at: [0, H - 0.17], seam: 0.08, strength: 4 });
   d.box(0, H - 0.58, 0.34, 0.07, 'steel', { id: 'cap', densityScale: 0.12 });
   d.weld('cap', 'hanger', { at: [0, H - 0.55], seam: 0.08, strength: 4 });
-  // Big and fragile: a round glowing target that a few seconds of fire breaks.
-  d.circle(0, H - 0.81, 0.2, 'core', { id: 'lamp', densityScale: 0.15, tags: ['organ'], hpScale: P('lampHp', 0.4) });
+  // Big and fragile (6.4 HP): a round glowing target that a few seconds of fire breaks.
+  d.circle(0, H - 0.81, 0.2, 'core', { id: 'lamp', densityScale: 0.15, tags: ['organ'], hpScale: P('lampHp', 0.5) });
   d.weld('lamp', 'cap', { at: [0, H - 0.62], seam: 0.16, strength: 3 });
   const shoulder: [number, number] = [-0.06, H + 0.14];
   const elbow: [number, number] = [0.1, H + 0.76];
@@ -70,7 +75,7 @@ registerCreature('mender', (d, _rng, params) => {
   }
   const abilities: AbilitySpec[] = [
     { id: 'heal', part: 'lamp', rate: P('heal', 2.5), partRate: 0.3, r0: 1.1, tan: 0.4, reach: 24 },
-    { id: 'escort', part: 'body', above: P('above', 5), minHeight: 8, maxHeight: 24, speed: 1.8 },
+    { id: 'escort', part: 'body', above: P('above', 5), minHeight: 8, maxHeight: 24, speed: 1.8, drop: 6, notice: P('notice', 2) },
   ];
   return {
     name: 'Mender',
@@ -92,8 +97,8 @@ registerCreature('mender', (d, _rng, params) => {
     lean: 0,
     vitals: ['body', 'head'],
     abilities,
-    // Worth shooting first while its lamp shines: the top turret goes for it
-    // unless something is 10 m closer to the line (escort drops it with the lamp).
+    // Worth shooting first once seen mending (escort sets Creature.targetPriority):
+    // the top turret goes for it unless something is 10 m closer to the line.
     targetPriority: 10,
     bounty: 90,
   } satisfies CreatureSpec;

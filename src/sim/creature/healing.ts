@@ -18,8 +18,15 @@
  *           middle drawn toward its damage (never ahead of its front), and
  *           keeps pace; a healer whose lamp is gone tags along behind it.
  *           With no ally left it hangs in the air for `linger` seconds, then
- *           flies at the line like any flyer.
- *           (above, minHeight, maxHeight, speed, retarget, linger)
+ *           flies at the line like any flyer. A wing short, it stops trying
+ *           to hold height and drops at about `drop` m/s (the lamp drags it
+ *           down: a short fall, not a bird's long glide).
+ *           It also sets the creature's target priority (see priority()):
+ *           once it has been seen mending for `notice` seconds, gunners go
+ *           for it first while its light shines; until then, and once the
+ *           light is out, an escort counts as no closer to the line than the
+ *           ally it follows (it is no threat to the line while it has one).
+ *           (above, minHeight, maxHeight, speed, retarget, linger, drop, notice)
  *
  * Distances are metres at game scale (after scaleCreature).
  */
@@ -29,6 +36,7 @@ import type { AbilitySpec } from './CreatureTypes';
 import type { StructurePart } from '../StructurePart';
 import { registerAbility } from './abilities';
 import { MIN_JOINT_SCALE } from '../Damage';
+import { TURRET } from '../../config/constants';
 import { clamp } from '../../core/math';
 
 export const HEAL_ABILITY = 'heal';
@@ -88,8 +96,15 @@ function restoreJoints(ctx: SimContext, part: StructurePart): void {
 
 interface HealState {
   acc: number;
+  /** Seconds spent mending something so far. */
+  time: number;
 }
 const healState = new WeakMap<Creature, HealState>();
+
+/** Seconds this healer has spent mending something so far. */
+export function mendedFor(c: Creature): number {
+  return healState.get(c)?.time ?? 0;
+}
 
 interface Wounded {
   part: StructurePart;
@@ -99,7 +114,7 @@ const wounded: Wounded[] = [];
 
 registerAbility(HEAL_ABILITY, {
   init(c) {
-    healState.set(c, { acc: 0 });
+    healState.set(c, { acc: 0, time: 0 });
   },
   step(c, spec, ctx, dt, organ) {
     const st = healState.get(c);
@@ -131,6 +146,7 @@ registerAbility(HEAL_ABILITY, {
     // The budget goes where the damage is: shares by hit points lost.
     const budget = num(spec, 'rate', 2.5) * T;
     const partRate = num(spec, 'partRate', 0.3) * T;
+    let mended = false;
     for (const w of wounded) {
       const p = w.part;
       const amount = Math.min(w.lost, (budget * w.lost) / lostSum, partRate * p.maxHp);
@@ -138,8 +154,10 @@ registerAbility(HEAL_ABILITY, {
       p.integrity = Math.min(1, p.integrity + amount / p.maxHp);
       restoreJoints(ctx, p);
       ctx.events.emit('partHealed', { part: p, amount, integrity: p.integrity, healer: c, organ, x: p.x, y: p.y });
+      mended = true;
     }
     wounded.length = 0;
+    if (mended) st.time += T;
   },
 });
 
@@ -198,6 +216,40 @@ function pickAlly(c: Creature, ctx: SimContext, st: EscortState): Creature | nul
   return best;
 }
 
+/**
+ * A creature whose front is this close to the turret (m; the defense line is
+ * 6.5 m in front of it) is about to break through: then nothing else is worth
+ * shooting first.
+ */
+const CLOSING = 14.5;
+
+/**
+ * How much closer to the line than it is gunners should count an escort right
+ * now (Creature.targetPriority):
+ *  - a healer seen mending for `notice` seconds, its light still shining:
+ *    spec.targetPriority (it is known for what it is: shoot it first) — but
+ *    not while another creature is about to break through;
+ *  - any other escort with an ally to follow (on its way to station, its
+ *    light not yet seen at work, or out): no closer than that ally's front.
+ *    It never crosses the line while it has one, so it is no threat yet —
+ *    and the light gets to do some visible good before the top turret swings
+ *    round to it;
+ *  - alone: as close as it is (and a wing short, see the escort step, as it
+ *    may still come down across the line).
+ */
+function priority(c: Creature, ctx: SimContext, ally: Creature | null, notice: number): number {
+  if (!ally) return 0;
+  const base = c.spec.targetPriority ?? 0;
+  if (base > 0 && healing(c) && mendedFor(c) >= notice) {
+    let closing = false;
+    for (const o of ctx.creatures.list) {
+      if (o !== c && o.active && !o.core.removed && o.frontX < TURRET.x + CLOSING) closing = true;
+    }
+    if (!closing) return base;
+  }
+  return Math.min(0, c.frontX - ally.frontX - 0.5);
+}
+
 registerAbility('escort', {
   init(c) {
     escortState.set(c, { ally: null, retarget: 0, hx: 0, top: 0, vAlly: 0, h: 0, vh: 0, vx: 0, fresh: true, lonely: 0 });
@@ -205,14 +257,22 @@ registerAbility('escort', {
   step(c, spec, ctx, dt) {
     const st = escortState.get(c);
     if (!st || !c.spec.fly) return;
-    // A healer without its lamp is no longer worth shooting first.
-    if (c.spec.targetPriority && healSpec(c) && !canHeal(c)) c.spec.targetPriority = 0;
+    if (c.state === 'crippled') {
+      c.targetPriority = 0;
+      // A wing short, it gives up holding height and the lamp takes it down
+      // (the controller's glide would carry it 9 m on from station height;
+      // a wing short, the controller keeps its own heading).
+      c.flyGoal = { height: c.core.height - 1, vUp: -num(spec, 'drop', 6), vx: c.core.vx };
+      st.fresh = true;
+      return;
+    }
     st.retarget -= dt;
     if (st.retarget <= 0 || !st.ally?.active || st.ally.core.removed) {
       st.retarget = num(spec, 'retarget', 1);
       st.ally = pickAlly(c, ctx, st);
     }
     const k = st.ally;
+    c.targetPriority = priority(c, ctx, k, num(spec, 'notice', 2));
     const core = c.core;
     if (!k) {
       // Nothing left to escort: it hangs in the air a moment, looking, then

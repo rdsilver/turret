@@ -140,8 +140,9 @@ export interface CreatureSpec {
    */
   split?: { tag: string; min: number };
   /**
-   * Gunners (the top turret) treat it as this many metres closer to the line
-   * than it is when choosing a target: support creatures worth shooting first.
+   * Support creatures worth shooting first: while its abilities say it is at
+   * work they set Creature.targetPriority to this, and gunners (the top turret)
+   * treat it as that many metres closer to the line than it is.
    */
   targetPriority?: number;
 }

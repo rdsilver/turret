@@ -119,6 +119,12 @@ export class Creature {
   power = 1;
   /** Walking-speed multiplier set by the game (creatures hurry as they near the line). */
   speedBoost = 1;
+  /**
+   * Metres closer to the line than it is that gunners (the top turret) count it
+   * right now, set by its abilities: a support creature at work raises it (to
+   * spec.targetPriority); an escort not yet at work may lower it below 0.
+   */
+  targetPriority = 0;
   /** 0..1 locomotion capacity from working legs. */
   capacity = 1;
   functionalLegs = 0;
