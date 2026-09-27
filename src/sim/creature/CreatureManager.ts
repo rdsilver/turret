@@ -74,6 +74,10 @@ export class CreatureManager {
     const rng = new Random(seed);
     const draft = new StructureDraft(rng);
     const spec = getCreatureBlueprint(blueprintId)(draft, rng, params);
+    // A different name, bounty or toughness for this one (a hatchling is a small, frail stick walker).
+    if (typeof params.name === 'string') spec.name = params.name;
+    if (typeof params.bounty === 'number') spec.bounty = params.bounty;
+    if (typeof params.hpMul === 'number') for (const p of draft.parts) p.hpScale = (p.hpScale ?? 1) * (params.hpMul as number);
     // Later levels swap some wooden parts for steel (param `steel`: the share of them), each build its own.
     if (typeof params.steel === 'number') swapWoodForSteel(draft, spec, params.steel, new Random(hashString(`steel:${seed}`)));
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));

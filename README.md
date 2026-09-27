@@ -73,30 +73,41 @@ hits near an edge chip pieces out of the silhouette.
 | 1 | First Contact | Stick walker | knees |
 | 2 | Pair | two walkers | stop the closest first |
 | 3 | The Thrower | walker with a sling arm that throws rubber shields; first Sapper | the sling arm (bullets bounce off rubber); shoot the Sapper's blinking bombs |
-| 4 | The Hound | fast quadruped: one of the four parts of its front legs (a thigh or a shin, at random) is steel; first Shifter | the wooden parts of the front legs, or both back legs; chase the Shifter's glow |
+| 4 | The Hound | fast quadruped: three of the four parts of its front legs are steel, one thigh or shin (at random) is still wood; first Shifter | the wooden front-leg part, or both back legs; chase the Shifter's glow |
 | 5 | Shell Game | armoured beetle, six steel legs | legs under the shell; armour-piercing rounds |
-| 6 | Geometry | solid shapes tumbling in one after another: a wooden triangle, square, pentagon, hexagon, heptagon, then a stone octagon | any one wedge breaks a shape apart; on the octagon, only the glowing wedge |
-| 7 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 8 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 9 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
-| 10 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
-| 11 | Stampede | everything | triage |
-| 12 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
-| 13 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 14 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
-| 15 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
+| 6 | Geometry | hollow shapes tumbling in one after another: a triangle, square, pentagon, hexagon and heptagon, more of each one steel, then a stone octagon | a wooden side while it faces you; on the octagon, only the glowing side |
+| 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
+| 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
+| 9 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 10 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 11 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
+| 12 | Stampede | everything | triage |
+| 13 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
+| 14 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 15 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 16 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
-**Geometry** (level 6): each shape is cut into wedges from its centre, one
-per side, and rolls by tipping over its leading corner; the fewer the sides,
-the harder it lurches. Rounds land on whichever wedges face you, so the wear
-is shared out and more sides last longer; break any one wedge and the shape
-bursts apart. The octagon at the end is stone and, like the Shifter, can only
-be hurt in the one wedge that glows. The glow jumps at random between the
-wedges turned toward you every few seconds (sooner once a visit has worn
-half off it, or the roll carries it out of sight), and a wedge breaks on its
-second good visit.
+**Geometry** (level 6): each shape is hollow, like the Roller: a ring of
+straight sides joined at the corners, rolling by tipping over its leading
+corner (the fewer the sides, the harder it lurches). Every shape has two
+wooden sides and the rest steel, so the steel share grows with the sides: a
+third of the triangle, half the square, three fifths of the pentagon, and so
+on to five sevenths of the heptagon (which sides is random). Steel shrugs
+rounds off; break a wooden side while it faces you and the ring bursts apart.
+The octagon at the end is stone and, like the Shifter, can only be hurt in
+the one side that glows. The glow jumps at random between the sides turned
+toward you every few seconds (sooner once a visit has worn half off it, or
+the roll carries it out of sight), and a side breaks on its second good
+visit.
 
-**Steel swaps**: from Shield Wall (level 9) on, the easier walkers (stick
+**Broodmother** (level 7): a big, slow wooden walker with a glowing green sac
+at her belly. Every few seconds a hatchling springs up on the ground in front
+of her: a small stick walker that runs at the line at twice a walker's pace
+(two about at a time, six in all). Hatchlings drop to a short burst, but they
+keep coming until you burst the sac; she herself goes down at the knees and
+shins like any walker.
+
+**Steel swaps**: from Shield Wall (level 10) on, the easier walkers (stick
 walkers, throwers, hounds, shield-bearers, sappers) come with some of their
 wooden parts swapped for steel of the same weight: 15% of them in Shield
 Wall, rising to 35% in Tyrant. Which parts is random for each creature, and
@@ -122,9 +133,10 @@ From level 3 on, three more creatures join the existing levels:
 Every creature is 30% faster than its level's base speed; birds are twice as
 fast.
 
-After level 15 the game continues with endless mixed waves (the strider and
+After level 16 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
-joins every fifth wave too, with shifters, sappers and rollers mixed in, and
+joins every fifth wave too, with shifters, sappers, rollers and broodmothers
+mixed in, and
 the easier walkers carry steel swaps: a third of their wood, up to half).
 Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,

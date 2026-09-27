@@ -8,6 +8,7 @@
  *        [--seed N]   (0 = the default run; other values vary the sim, the bot's aim and the creatures' random builds)
  *        [--react 0.35]   (s the bot takes to notice a roaming weak spot has moved; --aim auto chases it)
  *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would, unless a creature is about to cross)
+ *        [--sac 1|0] (1 = default: go for a broodmother's sac first, unless something is near the line)
  *        [--add creature@at[:k=v,k=v...]]   (repeatable: extra wave entries, to try a placement without editing levels.ts,
  *                                            e.g. --add shifter@12:hp=0.8)
  *   (--top: top turret level; defaults to what the tier owns)
@@ -91,6 +92,8 @@ sim.events.on('shieldBomb', (e) => {
 // or a creature is within BOMB_TRIAGE_M of the line).
 const shootBombs = opt('bombs', '1') !== '0';
 const BOMB_TRIAGE_M = 8;
+const shootSacs = opt('sac', '1') !== '0';
+const SAC_TRIAGE_M = 14;
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -144,6 +147,19 @@ run(sim, Number(opt('seconds', '150')), () => {
     const v = p.hasTag('wing') ? c.core : p;
     target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
     hold = waiting.includes(c);
+  }
+  // A brood sac comes first (it is where the hatchlings come from), unless something is near the line.
+  if (shootSacs && !session.creatures.some((c) => c.active && c.frontX - DEFENSE_LINE_X < SAC_TRIAGE_M)) {
+    let sac = null as null | StructurePart;
+    for (const c of live) {
+      const id = c.spec.abilities?.find((a) => a.id === 'brood')?.part;
+      const q = id ? c.structure.part(id) : null;
+      if (q && !q.removed && !q.wrecked && c.owns(q) && (!sac || q.x < sac.x)) sac = q;
+    }
+    if (sac) {
+      target = { x: sac.x, y: sac.y, vx: sac.vx, vy: sac.vy };
+      hold = false;
+    }
   }
   // A ticking bomb comes first, unless something is about to cross the line (a player deals with that first).
   const urgent = session.creatures.some((c) => c.active && c.frontX - DEFENSE_LINE_X < BOMB_TRIAGE_M);

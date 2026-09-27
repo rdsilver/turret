@@ -101,8 +101,9 @@ registerCreature('thrower', (d, _rng, params) => {
 /**
  * HOUND — a fast quadruped. Trots (diagonal legs move together). It keeps
  * coming on three legs; take out a front pair (or a back pair) and it goes
- * down. One of the four parts of its front legs (a thigh or a shin, picked
- * at random) is steel.
+ * down. Three of the four parts of its front legs are steel: only one thigh
+ * or shin, picked at random, is still wood (so one front leg is all steel;
+ * the wooden part and the back legs are the way in).
  */
 registerCreature('hound', (d, rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
@@ -127,11 +128,13 @@ registerCreature('hound', (d, rng, params) => {
   for (const [side, x] of hips) {
     buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * P('hipK', 2.5), kneeTorque: tref * P('kneeK', 3), hp: P('legHp', 0.8), omega: P('omega', 90) }, 'body');
   }
-  // One front-leg part in steel, weighing what wood would (the gait doesn't notice).
+  // Three front-leg parts in steel, weighing what wood would (the gait doesn't
+  // notice); one, picked at random, stays wood.
   const front = ['shinFL', 'thighFL', 'shinFR', 'thighFR'];
   // (Its own stream: builds from nearby seeds would draw alike from the shared one.)
-  const steel = front[new Random(hashString(`hound:${rng.seed}`)).int(0, front.length - 1)]!;
-  steelInWood(d.parts.find((q) => q.id === steel)!);
+  const wood = front[new Random(hashString(`hound:${rng.seed}`)).int(0, front.length - 1)]!;
+  const steel = front.filter((n) => n !== wood);
+  for (const n of steel) steelInWood(d.parts.find((q) => q.id === n)!);
   const amp = P('amp', 0.6);
   const gait: Record<string, MuscleGait> = {};
   // Trot: FL+BR together, FR+BL half a cycle later.
@@ -142,8 +145,8 @@ registerCreature('hound', (d, rng, params) => {
   }
   return {
     name: 'Hound',
-    // The wooden front-leg parts first (every front leg keeps at least one).
-    weakPoints: [...front.filter((n) => n !== steel), steel, 'head', 'body'],
+    // The wooden front-leg part, then the back legs (a wooden pair), then the steel.
+    weakPoints: [wood, 'shinBL', 'shinBR', 'thighBL', 'thighBR', ...steel, 'head', 'body'],
     core: 'body',
     legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     gait: { speed, stride: P('stride', 3), muscles: gait },

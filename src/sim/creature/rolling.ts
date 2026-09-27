@@ -10,7 +10,7 @@
  * a little where it meets the ground). A torn seam or a lost rim part opens
  * it, and an open ring can't roll: Creature treats that as downed.
  *
- * A polygon (RollSpec.tip: wedges round a hub, or any ring with corners)
+ * A polygon (RollSpec.tip: a ring of straight sides, or anything with corners)
  * tumbles rather than rolls: sitting on a face, it is tipped over its leading
  * corner by adding the torque gravity puts against that to the spin control;
  * past the corner it falls onto the next face and the spin control brakes it.

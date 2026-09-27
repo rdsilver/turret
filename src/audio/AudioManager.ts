@@ -199,6 +199,7 @@ export class AudioManager {
     on('chainStarted', this.onChainStarted);
     on('partDeflected', this.onDeflected);
     on('shieldBomb', this.onShieldBomb);
+    on('creatureHatched', this.onHatched);
   }
 
   unbind(): void {
@@ -356,6 +357,13 @@ export class AudioManager {
     const x = e.x * PPM;
     this.start('explosion', 0.6 + 0.35 * Math.min(1, p), 1.1 - 0.15 * Math.min(1, p), this.panFor(x), false);
     if (p > 0.6) this.start('debris', 0.35, 1, this.panFor(x), false);
+  }
+
+  /** A hatchling springs up: a soft, low rubbery thump and a quick rush of air. */
+  private onHatched(e: SimEvents['creatureHatched']): void {
+    const pan = this.panFor(e.x * PPM);
+    this.start('impact_rubber', 0.55, 0.7, pan, false);
+    this.start('whoosh', 0.25, 1.5, pan, false);
   }
 
   /** Torn-off limb: the explosion sample, quiet and pitched up into a small pop. */

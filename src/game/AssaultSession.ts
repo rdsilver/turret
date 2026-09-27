@@ -42,7 +42,7 @@ export class AssaultSession {
   private stopX = new Map<Creature, number>();
   closest = Infinity;
   breachedBy: Creature | null = null;
-  /** Creatures that came from splits (a cut centipede's back half). */
+  /** Creatures that came from splits (a cut centipede's back half) or were hatched by a broodmother. */
   private extra = 0;
   endedAt = -1;
   private offs: Array<() => void> = [];
@@ -66,15 +66,19 @@ export class AssaultSession {
       ev.on('partWrecked', ({ part }) => {
         if (this.state === 'running' && part.hasTag('limb')) this.limbsSevered++;
       }),
-      ev.on('creatureSplit', ({ creature, parent }) => {
-        if (this.state !== 'running' || !this.creatures.includes(parent)) return;
-        this.creatures.push(creature);
-        this.extra++;
-      }),
+      ev.on('creatureSplit', ({ creature, parent }) => this.adoptExtra(creature, parent)),
+      ev.on('creatureHatched', ({ creature, parent }) => this.adoptExtra(creature, parent)),
       ev.on('creatureNeutralized', ({ creature }) => {
         if (this.state === 'running' && !this.stopX.has(creature)) this.stopX.set(creature, creature.frontX);
       }),
     );
+  }
+
+  /** One of ours split in two or hatched another: that one has to be stopped too. */
+  private adoptExtra(creature: Creature, parent: Creature): void {
+    if (this.state !== 'running' || !this.creatures.includes(parent)) return;
+    this.creatures.push(creature);
+    this.extra++;
   }
 
   get elapsed(): number {

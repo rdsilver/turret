@@ -2,6 +2,7 @@
 import './abilities';
 import './weakSpot';
 import './shieldBomb';
+import './brood';
 import './blueprints/walkers';
 import './blueprints/beetle';
 import './blueprints/triceratops';
@@ -15,3 +16,4 @@ import './blueprints/shifter';
 import './blueprints/sapper';
 import './blueprints/wheel';
 import './blueprints/shapes';
+import './blueprints/brood';

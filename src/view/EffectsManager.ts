@@ -328,6 +328,7 @@ export class EffectsManager {
     this.on('breach', this.onBreach);
     this.on('partDeflected', this.onPartDeflected);
     this.on('shieldBomb', this.onShieldBomb);
+    this.on('creatureHatched', this.onHatched);
   }
 
   // ---- creatures -----------------------------------------------------------
@@ -446,6 +447,15 @@ export class EffectsManager {
     const y = e.y * PPM;
     this.puff(x, y, 5, GROUND_DUST, 20, 0.28, 1.4);
     this.camera.addTrauma(0.15, 0.5);
+  }
+
+  /** A broodmother hatched a walker in front of it: a green flash where it springs up, a ring and a kick of dust. */
+  private onHatched(e: SimEvents['creatureHatched']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    this.flash(x, y, 70, 0x5dffc1, 220, 0.7);
+    this.ring(x, y, 90, 320, 0.45, 0x9dffd9);
+    this.puff(x, 0, 4, GROUND_DUST, 22, 0.3, 1.2);
   }
 
   private onAbility(e: SimEvents['creatureAbility']): void {
