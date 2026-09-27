@@ -35,7 +35,6 @@ export interface CellRect {
 const SPECIMENS: Array<{ kind: string; params?: Record<string, number> }> = [
   { kind: 'stickman', params: { speed: 0.8 } },
   { kind: 'hound', params: { speed: 1.2 } },
-  { kind: 'knight' },
   { kind: 'thrower' },
   { kind: 'blob' },
   { kind: 'smoker' },

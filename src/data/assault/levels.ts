@@ -142,15 +142,13 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
   {
     id: 'a06c',
     name: 'Colossus',
-    subtitle: 'Knights in bolted armour, a smoker, a blob of jelly, and behind them something enormous.',
+    subtitle: 'A smoker, a blob of jelly, and behind them something enormous.',
     lesson: 'Big things come apart in stages. Each stage leaves something open: find it and pour it on.',
     hint: 'Bolts first, then whatever they uncover.',
     seed: 127,
     reward: 330,
     waves: [
-      { creature: 'knight', at: 1, hint: 'Every plate hangs on one steel bolt. Shoot the bolt and the plate falls off.' },
-      { creature: 'smoker', at: 8, hint: 'Its smoke hides whatever walks behind it, from you and the top turret. Shoot the smokestack.' },
-      { creature: 'knight', at: 13 },
+      { creature: 'smoker', at: 1, hint: 'Its smoke hides whatever walks behind it, from you and the top turret. Shoot the smokestack.' },
       { creature: 'blob', at: 22, hint: 'Shoot it anywhere. It bursts into two smaller blobs, and those into two more.' },
       { creature: 'colossus', at: 32, hint: 'Shoot both bolts off its chest plate, then pour it into the glowing core.' },
     ],

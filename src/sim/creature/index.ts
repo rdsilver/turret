@@ -20,7 +20,6 @@ import './blueprints/sapper';
 import './blueprints/wheel';
 import './blueprints/shapes';
 import './blueprints/brood';
-import './blueprints/knight';
 import './blueprints/smoker';
 import './blueprints/blob';
 import './blueprints/colossus';

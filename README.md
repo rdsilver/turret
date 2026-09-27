@@ -81,7 +81,7 @@ each standing in view and walking into an automatic gun.
 | 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
 | 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
 | 9 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 10 | Colossus | Knights in bolted armour, a Smoker, a Blob, then the Colossus | bolts, the smokestack, anything on a blob; the Colossus's bolts, then its core |
+| 10 | Colossus | a Smoker, a Blob, then the Colossus | the smokestack, anything on a blob; the Colossus's bolts, then its core |
 | 11 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
 | 12 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
 | 13 | Stampede | everything | triage |
@@ -110,12 +110,8 @@ of her: a small stick walker that runs at the line at twice a walker's pace
 keep coming until you burst the sac; she herself goes down at the knees and
 shins like any walker.
 
-**Colossus** (level 10) brings four new creatures:
+**Colossus** (level 10) brings three new creatures:
 
-- **Knight**: a wooden walker in armour (helm, breastplate, plates on each
-  thigh and shin). Rounds spark off the plates, but each hangs on one steel
-  bolt near its top: shoot the bolt and the plate falls off, leaving the wood
-  behind it bare.
 - **Smoker**: a walker with a boiler and a tall smokestack, trailing a wall
   of thick smoke that hides whatever walks behind it, from you and from the
   top turret (rounds still go through). Shoot the stack and the smoke stops.
