@@ -9,12 +9,18 @@
  * The ring holds its shape through its seams alone (rubber seams let it squash
  * a little where it meets the ground). A torn seam or a lost rim part opens
  * it, and an open ring can't roll: Creature treats that as downed.
+ *
+ * A polygon (RollSpec.tip: wedges round a hub, or any ring with corners)
+ * tumbles rather than rolls: sitting on a face, it is tipped over its leading
+ * corner by adding the torque gravity puts against that to the spin control;
+ * past the corner it falls onto the next face and the spin control brakes it.
  */
 import type { SimContext } from '../SimContext';
 import type { Structure } from '../Structure';
 import type { StructurePart } from '../StructurePart';
 import type { BreakableJoint } from '../BreakableJoint';
 import type { RollSpec } from './CreatureTypes';
+import type { Creature } from './Creature';
 import { clamp } from '../../core/math';
 
 /** Spin controller gain (1/s): how quickly it closes on its rolling speed. */
@@ -23,6 +29,8 @@ const SPIN_GAIN = 3;
 const DRIVE_TORQUE = 0.5;
 /** Hub height below this share of its rest height = squashed flat. */
 const FLAT_SHARE = 0.5;
+/** A rim corner this close to the ground (m) is touching it (a polygon's pivot). */
+const CONTACT = 0.15;
 
 export class Wheel {
   readonly rim: StructurePart[];
@@ -41,8 +49,11 @@ export class Wheel {
   readonly outer: number;
   /** Hub height above the ground at rest (m). */
   readonly restHeight: number;
+  /** A polygon: tip it over its leading corner (RollSpec.tip). */
+  private readonly tip: boolean;
 
   constructor(structure: Structure, spec: RollSpec) {
+    this.tip = !!spec.tip;
     this.rim = spec.rim.map((n) => {
       const p = structure.part(n);
       if (!p) throw new Error(`Wheel: rim part "${n}" missing`);
@@ -152,7 +163,9 @@ export class Wheel {
     // Inertia about the point touching the ground (plus a little for the rim parts' own turning).
     const J = this.inertia * 1.05 + this.mass * h * h;
     const cap = this.mass * gravity * h * DRIVE_TORQUE * strength;
-    const tau = clamp(J * SPIN_GAIN * (target - this.spin), -cap, cap);
+    // (A polygon also needs what lifts it over its leading corner: counter-clockwise, like rolling left.)
+    const lift = this.tip ? this.tipTorque(gravity) : 0;
+    const tau = clamp(J * SPIN_GAIN * (target - this.spin) - lift, -cap, cap);
     // Every rim part pulled along the ring in proportion to its mass and
     // distance from the hub: a pure torque (the pulls cancel out).
     const a = (tau / this.inertia) * dt;
@@ -161,6 +174,29 @@ export class Wheel {
       const k = p.mass * a;
       p.body.applyImpulse({ x: -(p.y - this.hubY) * k, y: (p.x - this.hubX) * k }, true);
     }
+  }
+
+  /**
+   * Torque (N m) gravity holds it back with about its leading corner on the
+   * ground (the front-most rim corner touching it): its weight times how far
+   * the hub still sits behind that corner. 0 once the hub is over or past it,
+   * or with nothing on the ground.
+   */
+  private tipTorque(gravity: number): number {
+    let pivot = Infinity;
+    for (const p of this.rim) {
+      if (p.removed || p.shape.kind !== 'poly') continue;
+      const c = Math.cos(p.angle);
+      const s = Math.sin(p.angle);
+      const pts = p.shape.points;
+      for (let i = 0; i < pts.length; i += 2) {
+        // (Sim y points down: the ground is y = 0.)
+        const y = p.y + s * pts[i]! + c * pts[i + 1]!;
+        if (y < -CONTACT) continue;
+        pivot = Math.min(pivot, p.x + c * pts[i]! - s * pts[i + 1]!);
+      }
+    }
+    return pivot < this.hubX ? this.mass * gravity * (this.hubX - pivot) : 0;
   }
 
   /** The ring bursts: every seam still holding tears, and the rim parts fly out from the hub. */
@@ -179,4 +215,23 @@ export class Wheel {
       p.body.applyTorqueImpulse((ctx.rng.next() - 0.5) * p.mass * p.extent * speed, true);
     }
   }
+}
+
+/**
+ * The weak points of a rolling creature a gun at (x, y) can hurt right now:
+ * those whose outer face looks toward it (the rest of the ring is in the way
+ * of the others), in weak-point order. With a roaming weak spot, only that
+ * part counts (everything else deflects rounds).
+ */
+export function exposedWeakPoints(c: Creature, x: number, y: number): StructurePart[] {
+  const w = c.wheel;
+  if (!w) return [];
+  const open = (q: StructurePart | null | undefined): q is StructurePart => !!q && !q.removed && !q.wrecked && c.owns(q) && w.faces(q, x, y);
+  if (c.weakSpot) return open(c.weakSpot) ? [c.weakSpot] : [];
+  const out: StructurePart[] = [];
+  for (const n of c.spec.weakPoints ?? []) {
+    const q = c.structure.part(n);
+    if (open(q)) out.push(q);
+  }
+  return out;
 }

@@ -73,19 +73,36 @@ hits near an edge chip pieces out of the silhouette.
 | 1 | First Contact | Stick walker | knees |
 | 2 | Pair | two walkers | stop the closest first |
 | 3 | The Thrower | walker with a sling arm that throws rubber shields; first Sapper | the sling arm (bullets bounce off rubber); shoot the Sapper's blinking bombs |
-| 4 | The Hound | fast quadruped, front legs three-quarters steel; first Shifter | the wooden tops of the front legs, or both back legs; chase the Shifter's glow |
-| 5 | Shell Game | armoured beetle, six steel legs; first Mender | legs under the shell; armour-piercing rounds; the Mender's lamp |
-| 6 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 7 | Overheat | engine walker; first Jumping Bean | the engine: it stalls when hot, explodes when destroyed; catch the bean between hops |
-| 8 | Shield Wall | shield-bearers; first Hastener | the arm holding the plate, the head above, the shins below; the Hastener's crystal |
-| 9 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
-| 10 | Stampede | everything | triage |
-| 11 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
-| 12 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 13 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
-| 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
+| 4 | The Hound | fast quadruped: one of the four parts of its front legs (a thigh or a shin, at random) is steel; first Shifter | the wooden parts of the front legs, or both back legs; chase the Shifter's glow |
+| 5 | Shell Game | armoured beetle, six steel legs | legs under the shell; armour-piercing rounds |
+| 6 | Geometry | solid shapes tumbling in one after another: a wooden triangle, square, pentagon, hexagon, heptagon, then a stone octagon | any one wedge breaks a shape apart; on the octagon, only the glowing wedge |
+| 7 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
+| 8 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 9 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 10 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
+| 11 | Stampede | everything | triage |
+| 12 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
+| 13 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 14 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 15 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
-From level 3 on, six more creatures join the existing levels:
+**Geometry** (level 6): each shape is cut into wedges from its centre, one
+per side, and rolls by tipping over its leading corner; the fewer the sides,
+the harder it lurches. Rounds land on whichever wedges face you, so the wear
+is shared out and more sides last longer; break any one wedge and the shape
+bursts apart. The octagon at the end is stone and, like the Shifter, can only
+be hurt in the one wedge that glows. The glow jumps at random between the
+wedges turned toward you every few seconds (sooner once a visit has worn
+half off it, or the roll carries it out of sight), and a wedge breaks on its
+second good visit.
+
+**Steel swaps**: from Shield Wall (level 9) on, the easier walkers (stick
+walkers, throwers, hounds, shield-bearers, sappers) come with some of their
+wooden parts swapped for steel of the same weight: 15% of them in Shield
+Wall, rising to 35% in Tyrant. Which parts is random for each creature, and
+changes on every attempt; look for the wood.
+
+From level 3 on, three more creatures join the existing levels:
 
 - **Sapper** lobs big shield bombs ahead of itself. A bomb's light blinks faster
   and faster; hit it 15 times before it runs out (any round counts), or it
@@ -97,32 +114,19 @@ From level 3 on, six more creatures join the existing levels:
   every few seconds (or sooner once a visit has worn about a third off that
   block), and the damage stays: a block goes on its third visit (a leg gives
   way a little before that), and the head or body kills it.
-- **Mender** hovers over the other creatures and heals them in a cone of green
-  light: joints get their strength back and the craters and chips fade away,
-  until a fully healed part looks as if it was never hit. Shoot its lamp and
-  the healing stops; shoot a wing and it comes down. The top turret goes for
-  it once it is at work.
 - **Roller**, a big wheel of seven rubber segments and one wooden plank. Rounds
   glance off the rubber; only the plank can be hurt, and it rolls round with
   the wheel, so time your shots for when it faces you. Break the plank and the
   whole ring bursts apart.
-- **Hastener**, a swift carrying a crystal. It hovers over one creature and
-  holds a violet beam on it, and that creature (just that one) gets faster for
-  good: up to about 1.6x, even after the Hastener is gone. Then it moves on to
-  the next. Shoot the crystal to stop it; hastened creatures trail speed
-  streaks.
-- **Jumping Bean**, a big seed pod with a grub inside. It never walks: it
-  rests, rocks (the tell), then kicks off in a random hop, mostly forward,
-  sometimes a big leap or a skip backwards, tumbling through the air. Grind
-  the shell down or hit its glowing peephole; stopped, the grub pops out.
 
-Every creature is 30% faster than its level's base speed; flyers (birds, the
-Mender and the Hastener) are twice as fast.
+Every creature is 30% faster than its level's base speed; birds are twice as
+fast.
 
-After level 14 the game continues with endless mixed waves (the strider and
+After level 15 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
-joins every fifth wave too, with shifters, menders, sappers, rollers and
-hasteners and jumping beans mixed in). Between levels the
+joins every fifth wave too, with shifters, sappers and rollers mixed in, and
+the easier walkers carry steel swaps: a third of their wood, up to half).
+Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
 automatic gun on a tall mast that picks the creature closest to the line and
@@ -159,19 +163,19 @@ npx tsx tools/bench.ts   # scaling benchmark: 100 -> 2000 welded bodies
 
 # Creatures
 npx tsx tools/creature-lab.ts hound --seconds 20
-#   walk test: speed, stability, filmstrip PNG
+#   walk test: speed, stability, filmstrip PNG (--seed N: another random
+#   build; --params steel=0.3 tries a steel swap)
 npx tsx tools/creature-lab.ts beetle --shoot shinFL,shinFR --tier 5
 #   hold fire on parts in turn with the level-5 upgrade build
 npx tsx tools/assault-lab.ts a07 --tier 7 --aimError 0.3
 #   bot plays a whole level (aims at each creature's weak points, leads
 #   moving targets, human-ish aim error) and prints result + payout
-#   (--seed N varies the run; --top N overrides the top turret; --add
-#    mender@12:heal=2 tries an extra wave entry; --bombs 0, --react 0.35 and
-#    --noPriority change how the bot treats shield bombs, weak spots, healers)
+#   (--seed N varies the run and the creatures' random builds; --top N
+#    overrides the top turret; --add shifter@12:hp=0.8 tries an extra wave
+#    entry; --bombs 0 and --react 0.35 change how the bot treats shield bombs
+#    and roaming weak spots)
 npx tsx tools/leg-trace.ts hound FL 3 4.2 2   # gait tuning trace for one leg
 npx tsx tools/fly-trace.ts bird --cut wingL1   # flight steadiness + glide after losing a wing
-npx tsx tools/heal-lab.ts                      # a Mender escorting and healing allies: rates, station, filmstrip
-npx tsx tools/haste-lab.ts walk hound --mul 1.6  # does a creature still walk at a Hastener's full boost?
 ```
 
 Upgrade builds per level (`--tier 1..14`) are defined in `tools/lib/loadouts.ts`.

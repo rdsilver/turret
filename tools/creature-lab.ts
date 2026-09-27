@@ -4,8 +4,10 @@
  *   npx tsx tools/creature-lab.ts stickman [--seconds 20] [--x 45] [--shoot kneeL|torso|...]
  *        [--start 3] [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--png tools/out/creature-stickman.png] [--frames 0.5,2,4,8]
  *        [--params speed=1.4,amp=0.6]   (blueprint params)
+ *        [--seed 11]   (spawn seed: the build's random choices, e.g. which hound leg part is steel)
  *        [--shoot weakspot [--react 0.35]]   (chase a roaming weak spot, `react` s behind it)
  *        [--shoot random]   (a random part of its body, a new one every 1.5 s)
+ *   (A rolling creature's target is only fired on while it faces the gun.)
  *
  * Reports walking speed, stability (does it stay upright unshot?), time to
  * reach the defense line, and — with --shoot — how long/how many rounds it
@@ -50,7 +52,9 @@ for (const kv of opt('params', '').split(',').filter(Boolean)) {
   params[k!] = Number.isFinite(Number(v)) ? Number(v) : v!;
 }
 const sim = new Simulation({ seed: 5, weaponStats: stats, ammo: AMMO.bullet });
-const c = sim.creatures.spawn(id, spawnX, params, 11);
+const c = sim.creatures.spawn(id, spawnX, params, Number(opt('seed', '11')));
+const metal = c.structure.parts.filter((p) => p.material.id === 'steel' || p.material.id === 'armor').map((p) => `${p.name}:${p.material.id}`);
+if (metal.length) console.log(`metal parts: ${metal.join(', ')}`);
 const log: string[] = [];
 const ev = (s: string) => log.push(`${sim.physics.simTime.toFixed(2)}s ${s}`);
 let rounds = 0;
@@ -115,7 +119,8 @@ run(sim, seconds, (t) => {
     const tof = Math.hypot(target.x - m.x, target.y - m.y) / w.speed;
     const sol = solveAim(m.x, m.y, target.x + target.vx * tof, target.y + target.vy * tof, w.speed, sim.physics.gravity);
     if (sol.length) w.setAngle(sol[0]!);
-    w.triggerHeld = !(w.heat > 0.9);
+    // (On a wheel, it holds fire while the part is turned away: the ring in front would soak it up.)
+    w.triggerHeld = !(w.heat > 0.9) && !(c.wheel && !c.wheel.faces(target, m.x, m.y));
   } else sim.weapon.triggerHeld = false;
   if (reachedLine < 0 && sim.creatures.list.some((k) => k.active && k.x < DEFENSE_LINE_X)) reachedLine = t;
   if (t - lastPrint >= 1) {

@@ -70,15 +70,6 @@ interface FloatPart {
   ring: number;
 }
 
-/** A flyer's heading for one step (see Creature.flyGoal). */
-export interface FlyGoal {
-  /** Body altitude to hold (m) and its rate of change (m/s, + = climbing). */
-  height: number;
-  vUp: number;
-  /** Horizontal velocity to fly at (m/s, sim x: negative = toward the turret). */
-  vx: number;
-}
-
 /** Seconds a creature must stay immobile before it counts as stopped for good. */
 const NEUTRALIZE_AFTER = 1.8;
 const STUCK_WINDOW = 7;
@@ -121,22 +112,10 @@ export class Creature {
   /** Walking-speed multiplier set by the game (creatures hurry as they near the line). */
   speedBoost = 1;
   /**
-   * Lasting speed multiplier of this one creature (1 = as its blueprint says):
-   * a hastener's beam raises it for good (see haste.ts). Every way of getting
-   * about drives for travelSpeed, which includes it.
-   */
-  speedMul = 1;
-  /**
    * The only part that can be hurt right now, for a creature whose weak spot
    * roams (ability roamingWeakSpot; null otherwise): gunners aim here first.
    */
   weakSpot: StructurePart | null = null;
-  /**
-   * Metres closer to the line than it is that gunners (the top turret) count it
-   * right now, set by its abilities: a support creature at work raises it (to
-   * spec.targetPriority); an escort not yet at work may lower it below 0.
-   */
-  targetPriority = 0;
   /** 0..1 locomotion capacity from working legs. */
   capacity = 1;
   functionalLegs = 0;
@@ -156,8 +135,6 @@ export class Creature {
   private downedTime = 0;
   private stuckRefX = 0;
   private stuckTimer = 0;
-  /** Hopping: seconds left on the ground before the next hop. */
-  private hopTimer = 0;
   /** Parts still connected to the core through intact joints (abilities need their organ attached). */
   private connected = new Set<StructurePart>();
   private connectedDirty = true;
@@ -173,15 +150,6 @@ export class Creature {
   private launched = false;
   /** Flyers: each wing part's momentum relative to the body last step. */
   private readonly wingMomentum = new Map<StructurePart, { x: number; y: number }>();
-  /**
-   * Flyers: where to fly this step instead of straight at the turret, set by an
-   * ability (e.g. an escort) after every controller step and used up by the next
-   * one — so when the ability stops (organ lost) the flyer carries on like any
-   * other, at the altitude it was last sent to.
-   */
-  flyGoal: FlyGoal | null = null;
-  /** Flyers: cruising altitude (m): the spawn height, or where the last goal left it. */
-  private flyHeight = NaN;
   /** Flyers: altitude (m) commanded this step (for traces). */
   flyRef = 0;
   /** Rolling creatures (spec.roll): the ring it rolls on. */
@@ -293,11 +261,11 @@ export class Creature {
 
   /**
    * Speed (m/s) it travels at with nothing holding it back: its gait speed,
-   * hurried near the line (speedBoost) and hastened (speedMul). Floating and
-   * flying drive for it; walking for it scaled by its working legs and power.
+   * hurried near the line (speedBoost). Floating and flying drive for it;
+   * walking and rolling for it scaled by working legs (or ring) and power.
    */
   get travelSpeed(): number {
-    return this.spec.gait.speed * this.speedBoost * this.speedMul;
+    return this.spec.gait.speed * this.speedBoost;
   }
 
   /** A joint of this creature's structure broke (called by the manager). */
@@ -411,10 +379,6 @@ export class Creature {
       this.rollStep(dt);
       return;
     }
-    if (this.spec.hop) {
-      this.hopStep(dt);
-      return;
-    }
     this.age += dt;
     const world = this.ctx.physics.world;
     const g = this.ctx.physics.gravity;
@@ -469,9 +433,7 @@ export class Creature {
     const walking = this.state !== 'neutralized' && this.age > SPAWN_SETTLE && power > 0.05 && this.capacity > 0 && !downed && !stalled;
     // The gait eases in over its first moments (a standing start, not a jolt that snaps hips).
     const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
-    // (travelSpeed scaled by working legs, power and the ease-in, multiplied in
-    // this order so an unhastened walker's numbers stay exactly as they were.)
-    const speed = this.spec.gait.speed * this.capacity * power * ramp * this.speedBoost * this.speedMul;
+    const speed = this.spec.gait.speed * this.capacity * power * ramp * this.speedBoost;
     if (walking) {
       // The gait runs at the TARGET speed (legs keep cycling if it's blocked: it struggles).
       const rate = speed / Math.max(0.2, this.spec.gait.stride);
@@ -752,14 +714,9 @@ export class Creature {
     body.applyImpulse({ x: jx, y: jy }, true);
     // Altitude hold: a slow, gentle swoop around the spawn height, lifted at the
     // centre of mass of everything the wings carry (so lift doesn't twist it).
-    // A goal (set by an ability) overrides the altitude and the heading.
-    const goal = this.flyGoal;
-    this.flyGoal = null;
-    if (goal) this.flyHeight = goal.height;
-    else if (Number.isNaN(this.flyHeight)) this.flyHeight = this.bodyHeight0;
     const sw = (Math.PI * 2) / f.swoopPeriod;
-    const target = goal ? goal.height : this.flyHeight + f.swoop * Math.sin(t * sw);
-    const vTarget = goal ? goal.vUp : f.swoop * sw * Math.cos(t * sw);
+    const target = this.bodyHeight0 + f.swoop * Math.sin(t * sw);
+    const vTarget = f.swoop * sw * Math.cos(t * sw);
     this.flyRef = target;
     const vUp = -core.vy;
     let up = m * g + m * (FLY_KP * (target - core.height) + FLY_KD * (vTarget - vUp));
@@ -773,7 +730,7 @@ export class Creature {
     body.applyImpulseAtPoint({ x: 0, y: -up * dt }, { x: cx, y: core.y }, true);
     // Forward flight needs wings too; a wing short, it no longer hurries, and
     // the air soon slows it to a glide.
-    const cruise = wingsUp < f.wings.length ? this.spec.gait.speed * lift : goal ? -goal.vx : speed;
+    const cruise = wingsUp < f.wings.length ? this.spec.gait.speed * lift : speed;
     const fx = clamp(m * 3 * (-cruise - core.vx), -m * 3 * lift, m * 3 * Math.min(1, lift * 2));
     body.applyImpulse({ x: fx * dt, y: 0 }, true);
     // Keep the body level, as far as the wings allow; gliding down on one wing,
@@ -789,11 +746,7 @@ export class Creature {
     body.applyTorqueImpulse(tau * dt, true);
     // Down on the ground = stopped.
     if (this.state === 'spawning') return;
-    let grounded = this.core.height - this.core.halfHeightNow < 0.8;
-    for (const n of f.gear ?? []) {
-      const p = this.structure.part(n);
-      if (p && !p.removed && this.connected.has(p) && p.height - p.halfHeightNow < 0.3) grounded = true;
-    }
+    const grounded = this.core.height - this.core.halfHeightNow < 0.8;
     if (grounded || lift <= 0) {
       this.immobileTime += dt;
       this.state = 'immobilized';
@@ -825,7 +778,7 @@ export class Creature {
     this.capacity = whole ? 1 : 0;
     this.grounded = w.grounded;
     const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
-    const speed = this.spec.gait.speed * this.capacity * this.power * ramp * this.speedBoost * this.speedMul;
+    const speed = this.spec.gait.speed * this.capacity * this.power * ramp * this.speedBoost;
     if (whole && this.age > SPAWN_SETTLE) w.drive(speed, this.spec.drive ?? 1, this.ctx.physics.gravity, dt);
     this.downedTime = !whole || w.flat ? this.downedTime + dt : 0;
     if (this.state === 'spawning') {
@@ -841,78 +794,6 @@ export class Creature {
     }
     if (immobile) this.neutralize(immobile);
     else this.state = 'walking';
-  }
-
-  /**
-   * Hopping: on the ground it waits a random moment, rocks (the tell), then
-   * kicks off in a random hop and tumbles through the air. The hop lengths
-   * are drawn so that, averaged over hops, it keeps its travel speed.
-   */
-  private hopStep(dt: number): void {
-    this.age += dt;
-    for (const v of this.vitals) {
-      if (v.removed || v.wrecked || v.integrity <= 0 || !this.connected.has(v)) {
-        this.neutralize('killed');
-        break;
-      }
-    }
-    if (this.state === 'neutralized') return;
-    const h = this.spec.hop!;
-    const c = this.core;
-    const b = c.body;
-    const rng = this.ctx.rng;
-    const onGround = c.height - c.halfHeightNow < 0.3 && Math.abs(c.vy) < 1.5;
-    this.grounded = onGround;
-    if (this.state === 'spawning') {
-      if (this.age <= SPAWN_SETTLE) return;
-      this.state = 'walking';
-      this.hopTimer = h.wait[0];
-    }
-    if (onGround) {
-      this.hopTimer -= dt;
-      const tell = h.tell ?? 0.45;
-      if (this.hopTimer > 0 && this.hopTimer < tell) {
-        // The tell: it rocks and twitches as the thing inside winds up.
-        const rock = Math.sin((tell - this.hopTimer) * 38) * c.mass * c.extent * (h.twitch ?? 3);
-        b.applyTorqueImpulse(rock * dt, true);
-      }
-      if (this.hopTimer <= 0) {
-        const g = this.ctx.physics.gravity;
-        const vUp = h.up[0] + (h.up[1] - h.up[0]) * rng.next();
-        const air = (2 * vUp) / g;
-        const wait = h.wait[0] + (h.wait[1] - h.wait[0]) * rng.next();
-        const back = h.back ?? 0.12;
-        // Forward hops cover 0.6-1.6x their share of the way (a few backward ones cost a bit).
-        const reach = rng.next() < back ? -(0.2 + 0.3 * rng.next()) : 0.6 + rng.next() + back * 0.35;
-        const vx = -(this.travelSpeed * (air + wait) * reach) / air;
-        const w = (rng.next() * 2 - 1) * (h.spin ?? 5);
-        // The whole body kicks off as one (a welded part yanked after it would tear loose).
-        for (const p of this.connected) {
-          if (p.removed) continue;
-          p.body.setLinvel({ x: vx - w * (p.y - c.y), y: -vUp + w * (p.x - c.x) }, true);
-          p.body.setAngvel(w, true);
-        }
-        this.hopTimer = wait;
-      }
-    }
-    this.stuckTimer += dt;
-    if (this.stuckTimer >= STUCK_WINDOW) {
-      const stuck = Math.abs(c.x - this.stuckRefX) < STUCK_DISTANCE;
-      this.stuckTimer = 0;
-      this.stuckRefX = c.x;
-      if (stuck) this.neutralize('stuck');
-    }
-  }
-
-  /** A hopper is stopped: what was kicking inside pops out. */
-  private popOut(): void {
-    const h = this.spec.hop;
-    const p = h?.popOut ? this.structure.part(h.popOut) : undefined;
-    if (!p || p.removed) return;
-    for (let i = p.joints.length - 1; i >= 0; i--) this.ctx.physics.breakJoint(p.joints[i]!, 'damage');
-    const sp = h!.popSpeed ?? 6;
-    p.body.setLinvel({ x: (this.ctx.rng.next() - 0.5) * sp, y: -sp }, true);
-    p.body.setAngvel((this.ctx.rng.next() - 0.5) * 12, true);
   }
 
   /** Hand a kinematic floater part over to physics, keeping its current motion. */
@@ -947,7 +828,6 @@ export class Creature {
     this.ctx.events.emit('creatureNeutralized', { creature: this, cause, x: this.core.x, y: this.core.y });
     // (After the event: listeners see the whole ring where it stopped, not the plank alone.)
     if (this.wheel) this.wheel.burst(this.ctx, this.spec.roll?.burst ?? 3);
-    if (this.spec.hop) this.popOut();
   }
 }
 

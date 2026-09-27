@@ -3,7 +3,10 @@
  * The roster grows more complex (armour, engines, abilities, odd gaits) as
  * the campaign goes on. Speeds are base values: creatures spawn at
  * CREATURE_SPEED (flyers FLYER_SPEED) times them. A wave's `hint` shows
- * when that creature arrives (where a new kind first appears).
+ * when that creature arrives (where a new kind first appears). From Shield
+ * Wall on, the easier creatures come with a share of their wooden parts
+ * swapped for steel (param `steel`, growing level by level; which parts is
+ * random for each one).
  */
 import type { AssaultLevelDef } from '../../game/AssaultLevel';
 
@@ -70,7 +73,23 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'beetle', at: 1, params: { speed: 0.7 } },
       { creature: 'stickman', at: 26, params: { speed: 0.95 } },
-      { creature: 'mender', at: 14, params: { heal: 1.5 }, hint: 'Its green lamp heals whatever it shines on: shoot the lamp first.' },
+    ],
+  },
+  {
+    id: 'a05s',
+    name: 'Geometry',
+    subtitle: 'A wooden triangle is tumbling toward your line. A square is behind it. Then more sides.',
+    lesson: 'A rolling shape turns a new wedge toward you all the time, so every extra side spreads your rounds thinner. Break any one wedge and it falls apart.',
+    hint: 'Hold fire on the wedge facing you. The octagon only hurts where it glows.',
+    seed: 125,
+    reward: 230,
+    waves: [
+      { creature: 'triangle', at: 1, hint: 'Break any one wedge and the whole shape bursts apart.' },
+      { creature: 'square', at: 10 },
+      { creature: 'pentagon', at: 20 },
+      { creature: 'hexagon', at: 30 },
+      { creature: 'heptagon', at: 41 },
+      { creature: 'octagon', at: 53, hint: 'Only the glowing wedge can be hurt, and the glow keeps moving. Shoot it while it faces you.' },
     ],
   },
   {
@@ -104,7 +123,6 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'engine', at: 26, params: { speed: 1.05 } },
       { creature: 'hound', at: 34, params: { speed: 1.6 } },
       { creature: 'bird', at: 40, params: { speed: 3.2, height: 3 } },
-      { creature: 'bean', at: 16, hint: 'Catch it while it sits and rocks between hops. Its glowing peephole is weak.' },
     ],
   },
   {
@@ -116,14 +134,13 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 107,
     reward: 300,
     waves: [
-      { creature: 'shield', at: 1, params: { speed: 0.85 } },
-      { creature: 'shield', at: 10, params: { speed: 0.9 } },
-      { creature: 'thrower', at: 24, params: { speed: 0.8 } },
-      { creature: 'hound', at: 36, params: { speed: 1.6 } },
+      { creature: 'shield', at: 1, params: { speed: 0.85, steel: 0.15 }, hint: 'From here on, some wooden parts come in steel. Look for the wood.' },
+      { creature: 'shield', at: 10, params: { speed: 0.9, steel: 0.15 } },
+      { creature: 'thrower', at: 24, params: { speed: 0.8, steel: 0.15 } },
+      { creature: 'hound', at: 36, params: { speed: 1.6, steel: 0.15 } },
       { creature: 'bird', at: 16, params: { speed: 3, height: 3.2 } },
-      { creature: 'bomber', at: 31 },
+      { creature: 'bomber', at: 31, params: { steel: 0.15 } },
       { creature: 'shifter', at: 40, params: { hp: 0.9 } },
-      { creature: 'hastener', at: 12, params: { cap: 1.4 }, hint: 'Its violet beam makes a creature faster for good: shoot its crystal first.' },
     ],
   },
   {
@@ -136,9 +153,8 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 280,
     waves: [
       { creature: 'centipede', at: 1 },
-      { creature: 'hound', at: 28, params: { speed: 1.6 } },
+      { creature: 'hound', at: 28, params: { speed: 1.6, steel: 0.2 } },
       { creature: 'bird', at: 20, params: { speed: 3.2, height: 2.8 } },
-      { creature: 'mender', at: 22, params: { heal: 2 } },
       { creature: 'wheel', at: 34 },
     ],
   },
@@ -152,16 +168,14 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 360,
     waves: [
       { creature: 'beetle', at: 1 },
-      { creature: 'hound', at: 4, params: { speed: 1.5 } },
+      { creature: 'hound', at: 4, params: { speed: 1.5, steel: 0.25 } },
       { creature: 'engine', at: 12 },
-      { creature: 'shield', at: 22 },
-      { creature: 'hound', at: 30, params: { speed: 1.6 } },
-      { creature: 'stickman', at: 34, params: { speed: 1 } },
+      { creature: 'shield', at: 22, params: { steel: 0.25 } },
+      { creature: 'hound', at: 30, params: { speed: 1.6, steel: 0.25 } },
+      { creature: 'stickman', at: 34, params: { speed: 1, steel: 0.25 } },
       { creature: 'bird', at: 18, params: { speed: 3.2, height: 3.2 } },
       { creature: 'bird', at: 26, params: { speed: 3.4, height: 2.5 } },
-      { creature: 'mender', at: 24, params: { heal: 2.5 } },
       { creature: 'shifter', at: 40, params: { hp: 1.1 } },
-      { creature: 'bean', at: 20 },
     ],
   },
   {
@@ -174,10 +188,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 420,
     waves: [
       { creature: 'triceratops', at: 1, params: { speed: 0.6, hipsHp: 4 } },
-      { creature: 'hound', at: 8, params: { speed: 1.6 } },
+      { creature: 'hound', at: 8, params: { speed: 1.6, steel: 0.25 } },
       { creature: 'bird', at: 38, params: { speed: 3.2, height: 3 } },
-      { creature: 'hound', at: 40, params: { speed: 1.7 } },
-      { creature: 'bomber', at: 30 },
+      { creature: 'hound', at: 40, params: { speed: 1.7, steel: 0.25 } },
+      { creature: 'bomber', at: 30, params: { steel: 0.25 } },
     ],
   },
   {
@@ -190,11 +204,10 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 500,
     waves: [
       { creature: 'strider', at: 1, params: { speed: 0.4 } },
-      { creature: 'hound', at: 20, params: { speed: 1.5 } },
-      { creature: 'hound', at: 45, params: { speed: 1.5 } },
+      { creature: 'hound', at: 20, params: { speed: 1.5, steel: 0.3 } },
+      { creature: 'hound', at: 45, params: { speed: 1.5, steel: 0.3 } },
       { creature: 'bird', at: 42, params: { speed: 3, height: 3.4 } },
       { creature: 'bird', at: 50, params: { speed: 3, height: 2.6 } },
-      { creature: 'mender', at: 24, params: { heal: 2.5 } },
       { creature: 'shifter', at: 32, params: { hp: 1.2 } },
       { creature: 'wheel', at: 56, params: { plankHp: 1.8 } },
     ],
@@ -219,14 +232,11 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 600,
     waves: [
       { creature: 'trex', at: 1, params: { speed: 0.55, legHp: 2.1 } },
-      { creature: 'hound', at: 14, params: { speed: 1.6 } },
+      { creature: 'hound', at: 14, params: { speed: 1.6, steel: 0.35 } },
       { creature: 'bird', at: 36, params: { speed: 3.4, height: 3.2 } },
-      { creature: 'hound', at: 34, params: { speed: 1.6 } },
+      { creature: 'hound', at: 34, params: { speed: 1.6, steel: 0.35 } },
       { creature: 'bird', at: 54, params: { speed: 3.4, height: 2.6 } },
-      { creature: 'bomber', at: 20 },
-      { creature: 'mender', at: 34, params: { heal: 2.5 } },
-      { creature: 'hastener', at: 24 },
-      { creature: 'bean', at: 44 },
+      { creature: 'bomber', at: 20, params: { steel: 0.35 } },
     ],
   },
 ];

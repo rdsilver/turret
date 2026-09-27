@@ -85,6 +85,8 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   private massScale = 1;
   private endTimer = -1;
   private hinted = false;
+  /** Levels started so far (each attempt builds its creatures a little differently). */
+  private attempts = 0;
   /** Wave hints already shown this attempt. */
   private readonly waveHints = new Set<WaveEntry>();
   private offs: Array<() => void> = [];
@@ -180,7 +182,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.sim.creatures.clear();
     this.sim.projectiles.clear();
     for (const e of [...this.sim.physics.entities.values()]) if (e instanceof StructurePart) this.sim.physics.removeEntity(e);
-    this.session = new AssaultSession(this.sim, this.level);
+    this.session = new AssaultSession(this.sim, this.level, this.attempts++);
     this.flow = 'playing';
     this.endTimer = -1;
     this.hinted = false;

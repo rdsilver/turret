@@ -416,59 +416,6 @@ const collapseSting: Recipe = (r) => {
   return done(b, 0.85);
 };
 
-// ------------------------------------------------------------------ creatures
-
-/**
- * A healer's lamp at work: a soft, falling shimmer (glassy partials drifting
- * down with a slow swell and a breath of air) — calm and a little eerie, not
- * the rising bell of a purchase.
- */
-const mend: Recipe = (r) => {
-  const b = buffer(1.2);
-  const f = 1250 * r.vary(0.03);
-  const partials = [1, 1.5, 2.01, 2.52];
-  for (let i = 0; i < partials.length; i++) {
-    const fr = f * partials[i]!;
-    addTone(b, {
-      start: i * 0.05 * r.vary(0.25),
-      f0: fr * 1.07,
-      f1: fr * 0.93,
-      glide: 0.4,
-      amp: 0.4 / (1 + i * 0.7),
-      attack: 0.05,
-      decay: 0.3 - i * 0.04,
-      vibRate: 5.5 + i,
-      vibDepth: 0.004,
-    });
-  }
-  addNoise(b, r, { dur: 0.7, amp: 0.1, attack: 0.1, decay: 0.2, type: 'bandpass', freq: 5200, freqEnd: 2400, glide: 0.35, q: 1.4 });
-  filter(b, 'lowpass', 6500, 0.7);
-  reverb(b, 0.32, 0.8, 0.4, 0.9);
-  return done(b, 0.6);
-};
-
-/**
- * A hastener's beam taking hold: a rising, warbling whirr (two detuned tones
- * sweeping up an octave with a fast shimmer) over a breath of air rushing
- * upward — quick and eager, where the mender's shimmer falls calmly.
- */
-const haste: Recipe = (r) => {
-  const b = buffer(1.0);
-  const f = 420 * r.vary(0.04);
-  for (const [k, amp] of [
-    [1, 0.4],
-    [1.498, 0.22],
-    [2.005, 0.14],
-  ] as const) {
-    addTone(b, { f0: f * k, f1: f * k * 2.1, glide: 0.22, amp, attack: 0.04, decay: 0.2, dur: 0.55, vibRate: 17 + 3 * k, vibDepth: 0.02, shape: 0.15 });
-    addTone(b, { f0: f * k * 1.012, f1: f * k * 2.12, glide: 0.24, amp: amp * 0.6, attack: 0.05, decay: 0.18, dur: 0.5, vibRate: 13 + 2 * k, vibDepth: 0.015 });
-  }
-  addNoise(b, r, { dur: 0.45, amp: 0.16, attack: 0.08, decay: 0.14, type: 'bandpass', freq: 900, freqEnd: 4200, glide: 0.18, q: 1.8 });
-  filter(b, 'lowpass', 7000, 0.7);
-  reverb(b, 0.25, 0.75, 0.4, 0.8);
-  return done(b, 0.6);
-};
-
 export const RECIPES: Record<SoundId, Recipe> = {
   cannon,
   gunshot,
@@ -494,8 +441,6 @@ export const RECIPES: Record<SoundId, Recipe> = {
   ui_deny: uiDeny,
   cash,
   collapse_sting: collapseSting,
-  mend,
-  haste,
 };
 
 /** Synthesis priority: gameplay-critical sounds first (they become playable as soon as rendered). */
@@ -524,8 +469,6 @@ export const SYNTH_PRIORITY: SoundId[] = [
   'ui_deny',
   'cash',
   'collapse_sting',
-  'mend',
-  'haste',
 ];
 
 function seedFor(id: string, variant: number): number {

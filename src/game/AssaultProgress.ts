@@ -22,37 +22,37 @@ const ENDLESS_ROSTER: Array<[string, number]> = [
   ['bird', 3.0],
 ];
 
+/** The easier walkers: late waves swap some of their wooden parts for steel (not birds: speed is their thing). */
+const STEEL_SWAPPED = new Set(['stickman', 'thrower', 'hound', 'shield', 'bomber']);
+
 /**
  * Endless waves after the campaign: more, faster, mixed creatures (a boss every
  * fifth wave: the strider and the tyrant take turns; the triceratops every
  * fifth from the eighth; a sapper every third from the fourth; a shifter every
- * third from the second, tougher as the waves go on; a roller every third
- * from the third; and from the fourth, every other wave, a mender arriving
- * behind the second creature so it always has someone to heal, plus from the
- * sixth, every fourth wave, a hastener; and a jumping bean every fourth from
- * the fourth). The new creatures are extra entries, so the base
- * waves are the same as before they existed.
+ * third from the second, tougher as the waves go on; and a roller every
+ * third from the third). The new creatures are extra entries, so the base
+ * waves are the same as before they existed. The easier creatures carry
+ * steel in place of some of their wood (a third of it, more as the waves go
+ * on, up to half), as in the last campaign levels.
  */
 export function endlessAssault(k: number): AssaultLevelDef {
   const n = 3 + Math.floor(k * 0.8);
   const faster = 1 + Math.min(0.5, k * 0.05);
+  const steel = Math.min(0.5, 0.3 + k * 0.02);
+  const withSteel = (creature: string, params: Record<string, number>) => (STEEL_SWAPPED.has(creature) ? { ...params, steel } : params);
   const waves: AssaultLevelDef['waves'] = [];
   for (let i = 0; i < n; i++) {
     const [creature, speed] = ENDLESS_ROSTER[(i * 3 + k) % ENDLESS_ROSTER.length]!;
-    waves.push({ creature, at: 1 + i * Math.max(4, 9 - k * 0.3), params: { speed: speed * faster } });
+    waves.push({ creature, at: 1 + i * Math.max(4, 9 - k * 0.3), params: withSteel(creature, { speed: speed * faster }) });
   }
   if (k % 5 === 4) {
     const rex = Math.floor(k / 5) % 2 === 1;
     waves.push(rex ? { creature: 'trex', at: 2, params: { speed: 0.5 * faster } } : { creature: 'strider', at: 2, params: { speed: 0.45 * faster } });
   }
   if (k >= 7 && k % 5 === 2) waves.push({ creature: 'triceratops', at: 2, params: { speed: 0.6 * faster } });
-  if (k >= 2 && k % 3 === 0) waves.push({ creature: 'bomber', at: 4, params: { speed: 0.75 * faster } });
+  if (k >= 2 && k % 3 === 0) waves.push({ creature: 'bomber', at: 4, params: withSteel('bomber', { speed: 0.75 * faster }) });
   if (k >= 1 && k % 3 === 1) waves.push({ creature: 'shifter', at: 6, params: { speed: 0.65 * faster, hp: Math.min(1.4, 1 + k * 0.03) } });
   if (k >= 2 && k % 3 === 2) waves.push({ creature: 'wheel', at: 10, params: { speed: 0.85 * faster, plankHp: Math.min(2, 1.3 + k * 0.05) } });
-  // (Its boost stacks on the endless speed-up: smaller caps as waves get faster, so gaits hold.)
-  if (k >= 5 && k % 4 === 1) waves.push({ creature: 'hastener', at: 1 + Math.max(4, 9 - k * 0.3) + 3, params: { cap: 1 + 0.4 / faster } });
-  if (k >= 3 && k % 4 === 3) waves.push({ creature: 'bean', at: 5, params: { speed: 0.9 * faster } });
-  if (k >= 3 && k % 2 === 1) waves.push({ creature: 'mender', at: 1 + Math.max(4, 9 - k * 0.3) + 6, params: { heal: Math.min(3, 1.5 + k * 0.1) } });
   return {
     id: `assault-endless-${k}`,
     name: `Endless Wave ${String(k + 1).padStart(2, '0')}`,

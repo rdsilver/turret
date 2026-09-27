@@ -21,15 +21,27 @@
  * rotation (if the spot was on it, it moves on at once). Once the creature is
  * stopped every part is vulnerable again, so its wreck behaves like any other.
  *
+ * On a rolling creature with `facing` set, the spot only moves to parts
+ * turned toward the turret (any part, when none is), and a spot the roll has
+ * carried away from the turret moves on after a moment: whatever glows can be
+ * shot, for as long as it faces you.
+ *
  * Params: parts (comma-separated part ids), period, jitter, warn, delay (s
- * before the first move), burnout (integrity per visit, 0 = no limit). The
- * organ should be the core: the ability then lasts as long as the creature.
+ * before the first move), burnout (integrity per visit, 0 = no limit), facing
+ * (1 = rolling creatures: see above). The organ should be the core: the
+ * ability then lasts as long as the creature.
  */
 import { registerAbility } from './abilities';
 import type { Creature } from './Creature';
 import type { AbilitySpec } from './CreatureTypes';
 import type { StructurePart } from '../StructurePart';
 import { Random } from '../../core/Random';
+import { TURRET } from '../../config/constants';
+
+/** How squarely a part must face the turret to count as turned toward it (cosine; see Wheel.faces). */
+const FACING = 0.35;
+/** Seconds a `facing` spot stays lit once it has turned away from the turret. */
+const AWAY_FOR = 0.6;
 
 interface RoamState {
   /** Every part the spot can visit. */
@@ -46,6 +58,10 @@ interface RoamState {
   jitter: number;
   warn: number;
   burnout: number;
+  /** Rolling creatures: visit parts turned toward the turret (see the header). */
+  facing: boolean;
+  /** Seconds the current spot has been turned away (facing only). */
+  away: number;
   rng: Random;
   off: () => void;
 }
@@ -62,8 +78,25 @@ function inPlay(c: Creature, p: StructurePart): boolean {
   return !p.removed && !p.wrecked && c.owns(p);
 }
 
-/** Next part from the shuffled round (a fresh round when it runs dry), never `not`; null if nothing else is left. */
+/** Turned toward the turret (a rolling creature's part; anything else always is). */
+function facesGun(c: Creature, p: StructurePart): boolean {
+  return !c.wheel || c.wheel.faces(p, TURRET.x, -TURRET.pivotHeight, FACING);
+}
+
+/**
+ * Next part from the shuffled round (a fresh round when it runs dry), never
+ * `not`; null if nothing else is left. With `facing`, one turned toward the
+ * turret if any is (a fresh round when none left in this one is).
+ */
 function draw(c: Creature, st: RoamState, not: StructurePart | null): StructurePart | null {
+  if (st.facing && c.wheel) {
+    const p = drawWhere(c, st, not, (q) => facesGun(c, q));
+    if (p) return p;
+  }
+  return drawWhere(c, st, not, () => true);
+}
+
+function drawWhere(c: Creature, st: RoamState, not: StructurePart | null, ok: (p: StructurePart) => boolean): StructurePart | null {
   for (let round = 0; round < 2; round++) {
     for (let i = st.bag.length - 1; i >= 0; i--) {
       const p = st.bag[i]!;
@@ -71,7 +104,7 @@ function draw(c: Creature, st: RoamState, not: StructurePart | null): StructureP
         st.bag.splice(i, 1);
         continue;
       }
-      if (p === not) continue;
+      if (p === not || !ok(p)) continue;
       st.bag.splice(i, 1);
       return p;
     }
@@ -89,6 +122,7 @@ function draw(c: Creature, st: RoamState, not: StructurePart | null): StructureP
 function moveTo(st: RoamState, p: StructurePart | null): void {
   if (p) st.current = p;
   st.next = null;
+  st.away = 0;
   st.startIntegrity = st.current?.integrity ?? 1;
   st.timer = st.period + (st.rng.next() * 2 - 1) * st.jitter;
 }
@@ -126,6 +160,8 @@ registerAbility('roamingWeakSpot', {
       jitter: num(spec, 'jitter', 0),
       warn: num(spec, 'warn', 0.8),
       burnout: num(spec, 'burnout', 0),
+      facing: num(spec, 'facing', 0) > 0,
+      away: 0,
       // Its own stream (seeded from the sim's), so the route doesn't depend on what else draws numbers.
       rng: new Random(Math.floor(ctx.rng.next() * 0x7fffffff)),
       off: () => {},
@@ -162,6 +198,9 @@ registerAbility('roamingWeakSpot', {
     } else if (st.burnout > 0 && st.startIntegrity - cur.integrity >= st.burnout) {
       // Spent for this visit.
       moveTo(st, st.next ?? draw(c, st, cur));
+    } else if (st.facing && (st.away = facesGun(c, cur) ? 0 : st.away + dt) > AWAY_FOR) {
+      // Rolled out of the turret's sight: on to a part that faces it.
+      moveTo(st, draw(c, st, cur));
     } else {
       if (!st.next && st.timer <= st.warn) st.next = draw(c, st, cur);
       // (Nothing else left in play: it stays where it is.)

@@ -5,12 +5,11 @@
  * the creatures get.
  *
  *   npx tsx tools/assault-lab.ts a01 [--stats mg|mg2|mg3 | --tier 1|4|5|...] [--top 0..3] [--aim shinL|torso|sling|...] [--aimError 0.3] [--seconds 150] [--png path]
- *        [--seed N]   (0 = the default run; other values vary the sim and the bot's aim)
+ *        [--seed N]   (0 = the default run; other values vary the sim, the bot's aim and the creatures' random builds)
  *        [--react 0.35]   (s the bot takes to notice a roaming weak spot has moved; --aim auto chases it)
  *        [--bombs 1|0] (1 = default: shoot a ticking shield bomb first, as a player would, unless a creature is about to cross)
- *        [--noPriority]   (the bot leaves support creatures (spec.targetPriority, e.g. healers) alone while anything else is on the field)
  *        [--add creature@at[:k=v,k=v...]]   (repeatable: extra wave entries, to try a placement without editing levels.ts,
- *                                            e.g. --add mender@12:heal=2)
+ *                                            e.g. --add shifter@12:hp=0.8)
  *   (--top: top turret level; defaults to what the tier owns)
  *   (A wheel whose weak point is turned away is left until it comes round, as a player would time it:
  *    the bot shoots something else meanwhile, or waits on it with the trigger released.)
@@ -30,6 +29,7 @@ import { Random } from '../src/core/Random';
 import type { Creature } from '../src/sim/creature/Creature';
 import type { StructurePart } from '../src/sim/StructurePart';
 import { bombFuseLeft, liveShieldBombs, standingShieldWalls } from '../src/sim/creature/shieldBomb';
+import { exposedWeakPoints } from '../src/sim/creature/rolling';
 
 await initRapier();
 const args = process.argv.slice(2);
@@ -66,7 +66,7 @@ const seed = Number(opt('seed', '0'));
 const sim = new Simulation({ seed: seed || 3, weaponStats: stats, ammo: AMMO.bullet });
 const topLvl = args.includes('--top') ? Number(opt('top', '0')) : tier ? topTurretLevel(tier) : 0;
 if (topLvl > 0) sim.setTopTurret(topTurretStats(topLvl, stats));
-const session = new AssaultSession(sim, level);
+const session = new AssaultSession(sim, level, seed);
 const frames: FrameSnap[] = [];
 const log: string[] = [];
 const ev = (s: string) => log.push(`${session.elapsed.toFixed(1)}s ${s}`);
@@ -91,20 +91,6 @@ sim.events.on('shieldBomb', (e) => {
 // or a creature is within BOMB_TRIAGE_M of the line).
 const shootBombs = opt('bombs', '1') !== '0';
 const BOMB_TRIAGE_M = 8;
-let healed = 0;
-let firstHeal = -1;
-sim.events.on('partHealed', (e) => {
-  // (Only while the level is on: the sim runs on after it is won or lost.)
-  if (session.state !== 'running') return;
-  if (firstHeal < 0) firstHeal = session.elapsed;
-  healed += e.amount;
-});
-// Hasteners: how fast they made what (each creature's speedMul when the level ended).
-const hasted = new Set<Creature>();
-sim.events.on('creatureHasted', (e) => {
-  if (session.state === 'running') hasted.add(e.creature);
-});
-const priority = !args.includes('--noPriority');
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
 const aimError = Number(opt('aimError', '0'));
@@ -123,27 +109,13 @@ run(sim, Number(opt('seconds', '150')), () => {
   let target = null as null | { x: number; y: number; vx: number; vy: number };
   let best = Infinity;
   const live = session.creatures.filter((c) => c.active && !c.core.removed && c.age >= 0.5);
-  const others = live.filter((c) => !c.spec.targetPriority).length;
   const muzzle = sim.weapon.muzzle();
-  const turned = (c: Creature) =>
-    !!c.wheel && !(c.spec.weakPoints ?? []).some((n) => {
-      const q = c.structure.part(n);
-      return !!q && !q.removed && !q.wrecked && c.owns(q) && c.wheel!.faces(q, muzzle.x, muzzle.y);
-    });
+  const turned = (c: Creature) => !!c.wheel && !exposedWeakPoints(c, muzzle.x, muzzle.y).length;
   const waiting = live.filter(turned);
   let hold = false;
   for (const c of live) {
     if (waiting.includes(c) && waiting.length < live.length) continue;
-    let cx = c.x;
-    if (c.spec.targetPriority && others > 0) {
-      // Support creatures (healers): --noPriority, a player who ignores them
-      // until nothing else is left; otherwise, one who shoots one exactly when
-      // the top turret would (counting its Creature.targetPriority, by fronts).
-      if (!priority) continue;
-      const ahead = live.every((o) => o === c || c.frontX - c.targetPriority < o.frontX);
-      if (!ahead) continue;
-      cx = -Infinity;
-    }
+    const cx = c.x;
     if (cx >= best) continue;
     best = cx;
     const names = aimPart === 'auto' ? (c.spec.weakPoints ?? []) : [aimPart];
@@ -155,6 +127,8 @@ run(sim, Number(opt('seconds', '150')), () => {
         break;
       }
     }
+    // A wheel: a weak point that faces the gun (rounds at the others hit the ring in front).
+    if (aimPart === 'auto' && c.wheel) p = exposedWeakPoints(c, muzzle.x, muzzle.y)[0] ?? p;
     if (aimPart === 'auto' && c.weakSpot) {
       let k = chase.get(c);
       if (!k) chase.set(c, (k = { spot: c.weakSpot, aim: c.weakSpot, at: -Infinity }));
@@ -215,8 +189,6 @@ const r = scoreAssault(o);
 console.log(log.join('\n'));
 if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
 if (bombStats.defused + bombStats.walls > 0) console.log(`shield bombs: ${bombStats.defused} shot apart, ${bombStats.walls} walls (${bombStats.shotDown} shot down, ${bombStats.stopped} rounds stopped)`);
-if (healed > 0) console.log(`healers mended ${healed.toFixed(1)} HP (first at ${firstHeal.toFixed(1)}s)`);
-if (hasted.size) console.log(`hasteners sped up ${[...hasted].map((c) => `${c.spec.name} x${c.speedMul.toFixed(2)}`).join(', ')}`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));

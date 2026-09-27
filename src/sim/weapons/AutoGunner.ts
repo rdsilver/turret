@@ -1,19 +1,19 @@
 /**
  * Automatic gunner for a secondary gun (the top turret): picks the creature
- * closest to the line (moved up or down that order by the creature's
- * targetPriority: a healer at work counts as closer), aims at its first
- * remaining weak point (those open from above first; a roaming weak spot,
+ * closest to the line, aims at its first remaining weak point (those open from above first; a roaming weak spot,
  * Creature.weakSpot, before anything), leading it by the flight time, and
  * holds the trigger for as long as it has a target. A weak point it has been firing at without landing
  * a round (something in front of it soaks them up) is skipped for a while.
  * A wheel (Creature.wheel) whose weak points are all turned away from the gun
- * waits: it shoots the next creature meanwhile (if there is one).
+ * waits: it shoots the next creature meanwhile (if there is one); on a wheel
+ * it aims at a weak point that faces the gun.
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
 import type { Creature } from '../creature/Creature';
 import type { StructurePart } from '../StructurePart';
 import { solveAim } from '../ballistics';
+import { exposedWeakPoints } from '../creature/rolling';
 
 /** Seconds between target re-evaluations. */
 const RETARGET = 0.35;
@@ -101,9 +101,9 @@ export class AutoGunner {
     const m = this.weapon.muzzle();
     for (const c of this.ctx.creatures.list) {
       if (!c.active || c.core.removed || c.age < 0.5) continue;
-      const x = c.frontX - c.targetPriority;
+      const x = c.frontX;
       // A wheel with its weak point turned away can't be hurt from here: something else first, meanwhile.
-      if (c.wheel && !this.showing(c, m.x, m.y)) {
+      if (c.wheel && !exposedWeakPoints(c, m.x, m.y).length) {
         if (x < turnedX) {
           turnedX = x;
           turned = c;
@@ -126,6 +126,14 @@ export class AutoGunner {
       this.part = spot;
       return;
     }
+    // A wheel: the first weak point turned toward the gun (the ring soaks up rounds aimed at the others).
+    if (best.wheel) {
+      const open = exposedWeakPoints(best, m.x, m.y).find((q) => !this.blocked.has(q));
+      if (open) {
+        this.part = open;
+        return;
+      }
+    }
     let part: StructurePart = best.core;
     for (const n of [...(best.spec.weakPointsFromAbove ?? []), ...(best.spec.weakPoints ?? [])]) {
       const q = best.structure.part(n);
@@ -135,14 +143,5 @@ export class AutoGunner {
       }
     }
     this.part = part;
-  }
-
-  /** Does any of this wheel's weak points face the gun at (x, y)? */
-  private showing(c: Creature, x: number, y: number): boolean {
-    for (const n of c.spec.weakPoints ?? []) {
-      const q = c.structure.part(n);
-      if (q && !q.removed && !q.wrecked && c.owns(q) && c.wheel!.faces(q, x, y)) return true;
-    }
-    return false;
   }
 }

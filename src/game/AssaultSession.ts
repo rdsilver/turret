@@ -47,9 +47,15 @@ export class AssaultSession {
   endedAt = -1;
   private offs: Array<() => void> = [];
 
+  /**
+   * `variant` reshuffles each creature's build-time randomness (which hound leg
+   * part is steel, which parts a level swaps to steel): 0 = the level's own
+   * seeds; the game passes its attempt count so a retry isn't a copy.
+   */
   constructor(
     readonly sim: Simulation,
     readonly level: AssaultLevelDef,
+    readonly variant = 0,
   ) {
     this.startedAt = sim.physics.simTime;
     this.queue = [...level.waves].sort((a, b) => a.at - b.at);
@@ -95,7 +101,7 @@ export class AssaultSession {
     const t = this.elapsed;
     while (this.queue.length && this.queue[0]!.at <= t) {
       const w = this.queue.shift()!;
-      const c = this.sim.creatures.spawn(w.creature, w.x ?? SPAWN_X, w.params ?? {}, this.level.seed + this.spawned * 101);
+      const c = this.sim.creatures.spawn(w.creature, w.x ?? SPAWN_X, w.params ?? {}, this.level.seed + this.spawned * 101 + this.variant * 7919);
       this.spawned++;
       this.creatures.push(c);
     }

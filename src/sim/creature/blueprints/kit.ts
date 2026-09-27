@@ -6,7 +6,9 @@
 import type { CreatureSpec, MuscleGait } from '../CreatureTypes';
 import type { StructureDraft } from '../../generator/StructureDraft';
 import type { MaterialId } from '../../Materials';
-import type { PartShapeDef } from '../../StructureDefinition';
+import type { PartDef, PartShapeDef } from '../../StructureDefinition';
+import { MATERIALS } from '../../Materials';
+import type { Random } from '../../../core/Random';
 
 export const G = 12;
 
@@ -69,6 +71,34 @@ export function draftMass(d: StructureDraft): number {
     m += area * dens * (p.densityScale ?? 1);
   }
   return m;
+}
+
+/** Make a wooden draft part steel that weighs what the wood did (a gait doesn't notice). */
+export function steelInWood(p: PartDef): void {
+  p.material = 'steel';
+  p.densityScale = ((p.densityScale ?? 1) * MATERIALS.wood.density) / MATERIALS.steel.density;
+}
+
+/**
+ * Swap a random `share` of a creature's wooden parts (at least one) for steel
+ * that weighs what they did. Weak points still of wood move ahead of the
+ * swapped ones, so gunners go for the wood first.
+ */
+export function swapWoodForSteel(d: StructureDraft, spec: CreatureSpec, share: number, rng: Random): void {
+  const wood = d.parts.filter((p) => p.material === 'wood');
+  if (!wood.length || share <= 0) return;
+  const exact = wood.length * Math.min(1, share);
+  const n = Math.max(1, Math.floor(exact) + (rng.next() < exact - Math.floor(exact) ? 1 : 0));
+  for (let i = wood.length - 1; i > 0; i--) {
+    const k = Math.floor(rng.next() * (i + 1));
+    [wood[i], wood[k]] = [wood[k]!, wood[i]!];
+  }
+  const swapped = new Set<string>();
+  for (const p of wood.slice(0, n)) {
+    steelInWood(p);
+    if (p.id) swapped.add(p.id);
+  }
+  if (spec.weakPoints) spec.weakPoints = [...spec.weakPoints.filter((w) => !swapped.has(w)), ...spec.weakPoints.filter((w) => swapped.has(w))];
 }
 
 /**

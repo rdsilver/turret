@@ -95,7 +95,7 @@ run(sim, seconds, (t) => {
   }
   if (!c.core.removed) {
     const f = c.spec.fly;
-    // What the controller aimed for this step (the swoop around its cruising height, or an escort goal).
+    // What the controller aimed for this step (the swoop around its cruising height).
     const ref = f ? c.flyRef : c.core.height;
     samples.push({ t, x: c.core.x, h: c.core.height, ref, vx: c.core.vx, vy: -c.core.vy, deg: -c.core.angle * DEGS, av: -c.core.av * DEGS, state: c.state });
   }

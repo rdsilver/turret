@@ -74,8 +74,6 @@ export interface FlySpec {
   /** Gentle altitude swoops around the spawn height (m, s). */
   swoop: number;
   swoopPeriod: number;
-  /** Parts hanging below the body whose touching the ground also counts as landing (a slung lamp). */
-  gear?: string[];
 }
 
 export interface RollSpec {
@@ -83,24 +81,12 @@ export interface RollSpec {
   rim: string[];
   /** Speed (m/s) the rim parts fly apart with when it is stopped (default 3). */
   burst?: number;
-}
-
-/** Hopping creatures (the jumping bean): world units, not scaled with the creature. */
-export interface HopSpec {
-  /** Kick-off speed upward (m/s): random in [min, max] each hop. */
-  up: [number, number];
-  /** Seconds it rests on the ground between hops: random in [min, max]. */
-  wait: [number, number];
-  /** Chance a hop goes backwards (default 0.12). */
-  back?: number;
-  /** Most spin (rad/s) it tumbles with (default 5). */
-  spin?: number;
-  /** Seconds of rocking before each hop, the tell (default 0.45), and how hard it rocks (default 3). */
-  tell?: number;
-  twitch?: number;
-  /** Part that pops out when it is stopped (the grub), and how fast (m/s, default 6). */
-  popOut?: string;
-  popSpeed?: number;
+  /**
+   * A polygon, not a round wheel: on a flat face it must be tipped over its
+   * leading corner, so the drive adds the torque that takes (gravity's pull
+   * about that corner) to its spin control.
+   */
+  tip?: boolean;
 }
 
 export interface CreatureSpec {
@@ -165,12 +151,6 @@ export interface CreatureSpec {
    */
   split?: { tag: string; min: number };
   /**
-   * Support creatures worth shooting first: while its abilities say it is at
-   * work they set Creature.targetPriority to this, and gunners (the top turret)
-   * treat it as that many metres closer to the line than it is.
-   */
-  targetPriority?: number;
-  /**
    * Rolling creatures are a wheel: a closed ring of rim parts that spins
    * itself along the ground toward the turret. The drive is a torque inside
    * the ring (no push), so it only gets anywhere by rolling (gait.speed is its
@@ -179,18 +159,6 @@ export interface CreatureSpec {
    * either way the ring bursts apart.
    */
   roll?: RollSpec;
-  /**
-   * Hopping creatures jump along: resting, rocking (the tell), then a random
-   * hop — mostly forward, now and then a big leap or a skip backwards —
-   * tumbling through the air. Averaged over hops they keep their travel speed.
-   */
-  hop?: HopSpec;
-  /**
-   * The most a hastener's beam can raise this creature's lasting speed
-   * multiplier (Creature.speedMul) to, for a body that can't walk any faster
-   * without falling over (default: whatever the beam goes up to; 1 = never).
-   */
-  maxSpeedMul?: number;
 }
 
 export interface CreatureParams {

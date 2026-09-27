@@ -8,7 +8,7 @@
  */
 import type { SimContext } from '../SimContext';
 import type { Structure } from '../Structure';
-import { Random } from '../../core/Random';
+import { Random, hashString } from '../../core/Random';
 import { StructureDraft } from '../generator/StructureDraft';
 import { buildStructure } from '../StructureBuilder';
 import { Creature } from './Creature';
@@ -16,7 +16,7 @@ import { getCreatureBlueprint, type CreatureParams, type CreatureSpec } from './
 import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
 import { CREATURE_SCALE, CREATURE_SPEED, FLYER_SPEED, GROUP, interactionGroups } from '../../config/constants';
-import { scaleCreature } from './blueprints/kit';
+import { scaleCreature, swapWoodForSteel } from './blueprints/kit';
 import type { BreakableJoint } from '../BreakableJoint';
 
 /** Velocity change (m/s) a torn-off piece gets from its pop. */
@@ -74,6 +74,8 @@ export class CreatureManager {
     const rng = new Random(seed);
     const draft = new StructureDraft(rng);
     const spec = getCreatureBlueprint(blueprintId)(draft, rng, params);
+    // Later levels swap some wooden parts for steel (param `steel`: the share of them), each build its own.
+    if (typeof params.steel === 'number') swapWoodForSteel(draft, spec, params.steel, new Random(hashString(`steel:${seed}`)));
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
     spec.gait.speed *= spec.fly ? FLYER_SPEED : CREATURE_SPEED;
     const def = draft.toDef(x, spec.name);
@@ -89,8 +91,6 @@ export class CreatureManager {
     // Parts only ever pass from an older creature to a newer one (a split), so this is who carries each now.
     for (const p of structure.parts) if (creature.owns(p)) this.ownerOf.set(p, creature);
     creature.kind = kind;
-    // A cut-off piece is as hastened as the body it came from.
-    if (parent) creature.speedMul = parent.speedMul;
     this.list.push(creature);
     let cs = this.byStructure.get(structure);
     if (!cs) this.byStructure.set(structure, (cs = []));
@@ -297,7 +297,7 @@ export class CreatureManager {
           vitals: [lead.name],
           bounty: Math.round((base.spec.bounty ?? 50) * 0.25),
         };
-        // Its parent is the creature that carried it until the cut (as hastened as that one).
+        // Its parent is the creature that carried it until the cut.
         this.adopt(structure, spec, base.kind, this.ownerOf.get(lead) ?? base);
       }
     }

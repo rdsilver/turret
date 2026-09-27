@@ -17,10 +17,6 @@
  * the grain; steel = bright dented pits with dark centres; armour = shallow
  * scuffs that rarely chip; rubber = dull smudges, never chips; glass = star
  * cracks; core = pits glowing from inside; stone/concrete = dusty chips.
- *
- * Healing (Crater.life < 1): a crater a mender is closing up paints smaller
- * and fainter — a pit fades out; a chip shrinks and its notch fills back in
- * (a small one close to the edge may end as a faint pit before it goes).
  */
 import type { MaterialDef } from '../../sim/Materials';
 import { css, lerpColor, scaleColor } from './color';
@@ -40,12 +36,6 @@ export interface Crater {
   clear: number;
   /** Shape seed: the same crater always gets the same ragged outline. */
   seed: number;
-  /**
-   * Healing (see PartCraters.healed): 1 = as the rounds left it; lower while
-   * a mender closes it up (quantised, so it repaints in a few steps): the
-   * crater paints smaller and fainter.
-   */
-  life: number;
 }
 
 export type CraterDetail = 'none' | 'splinters' | 'scratches' | 'cracks';
@@ -181,18 +171,9 @@ function buildStyle(m: MaterialDef): CraterStyle {
   }
 }
 
-/** Radius a healing crater keeps just before it is gone (fraction of its full radius). */
-const HEALED_SCALE = 0.35;
-
-/** Effective radius of a crater at a damage growth factor (smaller while it heals). */
+/** Effective radius of a crater at a damage growth factor. */
 export function craterRadius(c: Crater, grow: number, maxR: number): number {
-  const r = Math.min(maxR, c.r * grow);
-  return c.life < 1 ? r * (HEALED_SCALE + (1 - HEALED_SCALE) * Math.max(0, c.life)) : r;
-}
-
-/** Opacity of a crater's paint (a healing crater fades out as it shrinks). */
-function craterAlpha(c: Crater): number {
-  return c.life < 1 ? 0.2 + 0.8 * Math.max(0, c.life) : 1;
+  return Math.min(maxR, c.r * grow);
 }
 
 /**
@@ -222,7 +203,6 @@ export function paintCraters(
     for (let j = 0; j < n; j++) {
       const c = at(j);
       const r = craterRadius(c, grow, maxR) * 1.9;
-      ctx.globalAlpha = craterAlpha(c);
       const grad = ctx.createRadialGradient(c.x, c.y, r * 0.3, c.x, c.y, r);
       grad.addColorStop(0, st.scorch);
       grad.addColorStop(1, st.scorchClear);
@@ -239,7 +219,6 @@ export function paintCraters(
       bites++;
       continue;
     }
-    ctx.globalAlpha = craterAlpha(c);
     paintPit(ctx, c, r, st, g);
   }
   if (bites > 0) {
@@ -250,7 +229,6 @@ export function paintCraters(
       const c = at(j);
       const r = craterRadius(c, grow, maxR);
       if (!isBite(c, r, st, g)) continue;
-      ctx.globalAlpha = craterAlpha(c);
       biteSubpaths(ctx, c, r, st, g);
       ctx.fill();
     }
@@ -261,7 +239,6 @@ export function paintCraters(
       const c = at(j);
       const r = craterRadius(c, grow, maxR);
       if (!isBite(c, r, st, g)) continue;
-      ctx.globalAlpha = craterAlpha(c);
       biteSubpaths(ctx, c, r, st, g);
       ctx.strokeStyle = st.rim;
       ctx.lineWidth = (g.lw + hl) * 2;

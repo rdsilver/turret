@@ -3,7 +3,8 @@
  * Positive muscle angles swing a limb forward (toward the turret).
  */
 import { registerCreature, type CreatureSpec, type MuscleGait } from '../CreatureTypes';
-import { G, buildLeg, draftMass, walkerGait } from './kit';
+import { G, buildLeg, draftMass, steelInWood, walkerGait } from './kit';
+import { Random, hashString } from '../../../core/Random';
 
 /**
  * STICK WALKER — level 1. A tall wooden stick figure. Knees are the obvious
@@ -100,10 +101,10 @@ registerCreature('thrower', (d, _rng, params) => {
 /**
  * HOUND — a fast quadruped. Trots (diagonal legs move together). It keeps
  * coming on three legs; take out a front pair (or a back pair) and it goes
- * down. Its front legs are three-quarters steel (only the top of each thigh
- * is wood): that wooden band, or the back legs, give way sooner.
+ * down. One of the four parts of its front legs (a thigh or a shin, picked
+ * at random) is steel.
  */
-registerCreature('hound', (d, _rng, params) => {
+registerCreature('hound', (d, rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
   const density = P('density', 0.5);
   const legLen = P('legLen', 0.62);
@@ -126,32 +127,11 @@ registerCreature('hound', (d, _rng, params) => {
   for (const [side, x] of hips) {
     buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * P('hipK', 2.5), kneeTorque: tref * P('kneeK', 3), hp: P('legHp', 0.8), omega: P('omega', 90) }, 'body');
   }
-  // Front legs three-quarters steel: everything below the middle of the thigh
-  // (lower thigh, shin, foot), weighing what wood would, so the gait doesn't
-  // notice. The top half of each front thigh stays wood.
-  const asWood = (density * 520) / 7000;
-  const footH = 0.12;
-  const kneeY = footH + legLen;
-  const midY = kneeY + (hipY - kneeY) / 2;
-  for (const [side, x] of hips.slice(0, 2)) {
-    const far = side.endsWith('R') ? ['back'] : [];
-    const thigh = d.parts.find((q) => q.id === `thigh${side}`)!;
-    const top = hipY + 0.04;
-    thigh.y = (midY + top) / 2;
-    thigh.shape = { kind: 'box', w: 0.16, h: top - midY };
-    d.box(x, (kneeY - 0.04 + midY) / 2, 0.16, midY - (kneeY - 0.04), 'steel', { id: `thighLo${side}`, densityScale: asWood, tags: ['limb', ...far], hpScale: P('legHp', 0.8) });
-    // A stiff, strong seam: the hip and knee torques both go through it, and a
-    // wood-bonded weld would bend under them (the leg comes off only when the
-    // wooden half is shot away).
-    d.weld(`thigh${side}`, `thighLo${side}`, { at: [x, midY], seam: 0.16, strength: 20, bond: 'armor' });
-    // The knee now hinges on the steel half.
-    d.joints.find((j) => j.id === `knee${side}`)!.a = `thighLo${side}`;
-    for (const id of [`shin${side}`, `foot${side}`]) {
-      const q = d.parts.find((k) => k.id === id)!;
-      q.material = 'steel';
-      q.densityScale = asWood;
-    }
-  }
+  // One front-leg part in steel, weighing what wood would (the gait doesn't notice).
+  const front = ['shinFL', 'thighFL', 'shinFR', 'thighFR'];
+  // (Its own stream: builds from nearby seeds would draw alike from the shared one.)
+  const steel = front[new Random(hashString(`hound:${rng.seed}`)).int(0, front.length - 1)]!;
+  steelInWood(d.parts.find((q) => q.id === steel)!);
   const amp = P('amp', 0.6);
   const gait: Record<string, MuscleGait> = {};
   // Trot: FL+BR together, FR+BL half a cycle later.
@@ -162,14 +142,10 @@ registerCreature('hound', (d, _rng, params) => {
   }
   return {
     name: 'Hound',
-    weakPoints: ['thighFL', 'thighFR', 'shinBL', 'shinBR', 'shinFL', 'shinFR', 'head', 'body'],
+    // The wooden front-leg parts first (every front leg keeps at least one).
+    weakPoints: [...front.filter((n) => n !== steel), steel, 'head', 'body'],
     core: 'body',
-    legs: hips.map(([side]) => ({
-      name: side,
-      joints: [`hip${side}`, `knee${side}`],
-      parts: side.startsWith('F') ? [`thigh${side}`, `thighLo${side}`, `shin${side}`, `foot${side}`] : [`thigh${side}`, `shin${side}`, `foot${side}`],
-      foot: `foot${side}`,
-    })),
+    legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     gait: { speed, stride: P('stride', 3), muscles: gait },
     legGroups: [
       ['FL', 'FR'],
