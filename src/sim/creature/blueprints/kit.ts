@@ -16,20 +16,26 @@ export interface LegBuild {
   thigh: string;
   shin: string;
   foot: string;
+  /** The ankle muscle (only with `ankle`; otherwise the foot is welded on). */
+  ankle: string;
 }
 
-/** Thigh + shin + foot hanging from a hip point; returns part/joint ids. */
+/**
+ * Thigh + shin + foot hanging from a hip point; returns part/joint ids. The
+ * foot is welded to the shin, or with `ankle` hinged on an ankle muscle
+ * (drive it with a gait term to tip the toe up while the foot is in the air).
+ */
 export function buildLeg(
   d: StructureDraft,
   side: string,
   hipX: number,
   hipY: number,
-  o: { thigh: number; shin: number; w: number; mat: MaterialId; density: number; hipTorque: number; kneeTorque: number; hp?: number; footW?: number; omega?: number; strength?: number },
+  o: { thigh: number; shin: number; w: number; mat: MaterialId; density: number; hipTorque: number; kneeTorque: number; hp?: number; footW?: number; omega?: number; strength?: number; ankle?: { torque: number; omega?: number } },
   body: string,
 ): LegBuild {
   const footH = 0.12;
   const kneeY = footH + o.shin;
-  const ids = { thigh: `thigh${side}`, shin: `shin${side}`, foot: `foot${side}`, hip: `hip${side}`, knee: `knee${side}` };
+  const ids = { thigh: `thigh${side}`, shin: `shin${side}`, foot: `foot${side}`, hip: `hip${side}`, knee: `knee${side}`, ankle: `ankle${side}` };
   // Far-side limbs (names ending in R) are drawn darker in the side view.
   const far = side.endsWith('R') ? ['back'] : [];
   d.box(hipX, kneeY + (hipY - kneeY) / 2, o.w, hipY - kneeY + 0.08, o.mat, { id: ids.thigh, densityScale: o.density, tags: ['limb', ...far], hpScale: o.hp });
@@ -37,7 +43,8 @@ export function buildLeg(
   d.box(hipX - 0.1, footH / 2, o.footW ?? 0.46, footH, o.mat, { id: ids.foot, densityScale: o.density, friction: 1.2, tags: ['limb', 'foot', ...far] });
   d.joints.push({ kind: 'muscle', id: ids.hip, a: body, b: ids.thigh, at: [hipX, hipY], seam: o.w, strength: o.strength ?? 2.5, muscle: { torque: o.hipTorque, min: -65, max: 80, omega: o.omega ?? 42 } });
   d.joints.push({ kind: 'muscle', id: ids.knee, a: ids.thigh, b: ids.shin, at: [hipX, kneeY], seam: o.w, strength: o.strength ?? 2.5, muscle: { torque: o.kneeTorque, min: -140, max: 6, omega: o.omega ?? 42 } });
-  d.weld(ids.foot, ids.shin, { at: [hipX, footH], seam: o.w * 0.8, strength: 3 });
+  if (o.ankle) d.joints.push({ kind: 'muscle', id: ids.ankle, a: ids.shin, b: ids.foot, at: [hipX, footH], seam: o.w * 0.8, strength: 3, muscle: { torque: o.ankle.torque, min: -40, max: 70, omega: o.ankle.omega ?? 42 } });
+  else d.weld(ids.foot, ids.shin, { at: [hipX, footH], seam: o.w * 0.8, strength: 3 });
   return ids;
 }
 

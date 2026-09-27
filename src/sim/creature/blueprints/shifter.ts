@@ -51,9 +51,23 @@ registerCreature('shifter', (d, _rng, params) => {
   const tref = (draftMass(d) + legMass) * G * 0.5;
   for (const side of ['L', 'R']) {
     d.joints.push({ kind: 'muscle', id: `shoulder${side}`, a: 'torso', b: `arm${side}`, at: [shoulderX, shoulderY], seam: 0.26, strength: 3, muscle: { torque: tref * 0.2, min: -120, max: 150, omega: 18 } });
-    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: legW, mat: 'stone', density, hipTorque: tref * P('hipK', 3), kneeTorque: tref * P('kneeK', 2.6), hp: P('legHp', 0.8) * hp, footW: 0.56, strength: 3 }, 'torso');
+    // A stiff ankle: it holds the foot square in stance (so the heel lifts and the
+    // stride pushes off the toe) and only tips it while the foot is in the air.
+    const ankle = { torque: tref * 2, omega: 150 };
+    buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: legW, mat: 'stone', density, hipTorque: tref * P('hipK', 3), kneeTorque: tref * P('kneeK', 2.6), hp: P('legHp', 0.8) * hp, footW: 0.56, strength: 3, ankle }, 'torso');
   }
-  const gait = walkerGait(P('amp', 0.4));
+  // A heavy, deliberate stride. The feet are long stone slabs: in a plain walker
+  // gait the folding knee pitched the toe into the ground mid-swing, so the foot
+  // dragged, the thigh never got forward and the foot came down behind the body,
+  // where the stance hip then shoved the golem backwards (with its hips worn it
+  // rocked on the spot, legs intact, until it counted as stuck). So the hip leads
+  // the knee (the thigh is already swinging forward as the knee folds), the ankle
+  // tips the toe up while the foot is in the air, and the steps are shorter.
+  const gait = walkerGait(P('amp', 0.32));
+  for (const [side, phase] of [['L', 0], ['R', 0.5]] as const) {
+    gait[`hip${side}`] = { ...gait[`hip${side}`]!, phase: phase + 0.05 };
+    gait[`ankle${side}`] = { shape: 'swing', amp: 0.6, bias: -0.06, phase: phase + 0.27 };
+  }
   gait.shoulderL = { ...gait.shoulderL!, amp: 0.18 };
   gait.shoulderR = { ...gait.shoulderR!, amp: 0.18 };
   return {
