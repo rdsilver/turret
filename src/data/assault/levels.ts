@@ -104,6 +104,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'engine', at: 26, params: { speed: 1.05 } },
       { creature: 'hound', at: 34, params: { speed: 1.6 } },
       { creature: 'bird', at: 40, params: { speed: 3.2, height: 3 } },
+      { creature: 'bean', at: 16, hint: 'Catch it while it sits and rocks between hops. Its glowing peephole is weak.' },
     ],
   },
   {
@@ -160,6 +161,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 26, params: { speed: 3.4, height: 2.5 } },
       { creature: 'mender', at: 24, params: { heal: 2.5 } },
       { creature: 'shifter', at: 40, params: { hp: 1.1 } },
+      { creature: 'bean', at: 20 },
     ],
   },
   {
@@ -224,6 +226,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bomber', at: 20 },
       { creature: 'mender', at: 34, params: { heal: 2.5 } },
       { creature: 'hastener', at: 24 },
+      { creature: 'bean', at: 44 },
     ],
   },
 ];

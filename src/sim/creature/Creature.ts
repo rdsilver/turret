@@ -156,6 +156,8 @@ export class Creature {
   private downedTime = 0;
   private stuckRefX = 0;
   private stuckTimer = 0;
+  /** Hopping: seconds left on the ground before the next hop. */
+  private hopTimer = 0;
   /** Parts still connected to the core through intact joints (abilities need their organ attached). */
   private connected = new Set<StructurePart>();
   private connectedDirty = true;
@@ -407,6 +409,10 @@ export class Creature {
     }
     if (this.wheel) {
       this.rollStep(dt);
+      return;
+    }
+    if (this.spec.hop) {
+      this.hopStep(dt);
       return;
     }
     this.age += dt;
@@ -837,6 +843,78 @@ export class Creature {
     else this.state = 'walking';
   }
 
+  /**
+   * Hopping: on the ground it waits a random moment, rocks (the tell), then
+   * kicks off in a random hop and tumbles through the air. The hop lengths
+   * are drawn so that, averaged over hops, it keeps its travel speed.
+   */
+  private hopStep(dt: number): void {
+    this.age += dt;
+    for (const v of this.vitals) {
+      if (v.removed || v.wrecked || v.integrity <= 0 || !this.connected.has(v)) {
+        this.neutralize('killed');
+        break;
+      }
+    }
+    if (this.state === 'neutralized') return;
+    const h = this.spec.hop!;
+    const c = this.core;
+    const b = c.body;
+    const rng = this.ctx.rng;
+    const onGround = c.height - c.halfHeightNow < 0.3 && Math.abs(c.vy) < 1.5;
+    this.grounded = onGround;
+    if (this.state === 'spawning') {
+      if (this.age <= SPAWN_SETTLE) return;
+      this.state = 'walking';
+      this.hopTimer = h.wait[0];
+    }
+    if (onGround) {
+      this.hopTimer -= dt;
+      const tell = h.tell ?? 0.45;
+      if (this.hopTimer > 0 && this.hopTimer < tell) {
+        // The tell: it rocks and twitches as the thing inside winds up.
+        const rock = Math.sin((tell - this.hopTimer) * 38) * c.mass * c.extent * (h.twitch ?? 3);
+        b.applyTorqueImpulse(rock * dt, true);
+      }
+      if (this.hopTimer <= 0) {
+        const g = this.ctx.physics.gravity;
+        const vUp = h.up[0] + (h.up[1] - h.up[0]) * rng.next();
+        const air = (2 * vUp) / g;
+        const wait = h.wait[0] + (h.wait[1] - h.wait[0]) * rng.next();
+        const back = h.back ?? 0.12;
+        // Forward hops cover 0.6-1.6x their share of the way (a few backward ones cost a bit).
+        const reach = rng.next() < back ? -(0.2 + 0.3 * rng.next()) : 0.6 + rng.next() + back * 0.35;
+        const vx = -(this.travelSpeed * (air + wait) * reach) / air;
+        const w = (rng.next() * 2 - 1) * (h.spin ?? 5);
+        // The whole body kicks off as one (a welded part yanked after it would tear loose).
+        for (const p of this.connected) {
+          if (p.removed) continue;
+          p.body.setLinvel({ x: vx - w * (p.y - c.y), y: -vUp + w * (p.x - c.x) }, true);
+          p.body.setAngvel(w, true);
+        }
+        this.hopTimer = wait;
+      }
+    }
+    this.stuckTimer += dt;
+    if (this.stuckTimer >= STUCK_WINDOW) {
+      const stuck = Math.abs(c.x - this.stuckRefX) < STUCK_DISTANCE;
+      this.stuckTimer = 0;
+      this.stuckRefX = c.x;
+      if (stuck) this.neutralize('stuck');
+    }
+  }
+
+  /** A hopper is stopped: what was kicking inside pops out. */
+  private popOut(): void {
+    const h = this.spec.hop;
+    const p = h?.popOut ? this.structure.part(h.popOut) : undefined;
+    if (!p || p.removed) return;
+    for (let i = p.joints.length - 1; i >= 0; i--) this.ctx.physics.breakJoint(p.joints[i]!, 'damage');
+    const sp = h!.popSpeed ?? 6;
+    p.body.setLinvel({ x: (this.ctx.rng.next() - 0.5) * sp, y: -sp }, true);
+    p.body.setAngvel((this.ctx.rng.next() - 0.5) * 12, true);
+  }
+
   /** Hand a kinematic floater part over to physics, keeping its current motion. */
   private release(part: StructurePart): void {
     if (part.removed) return;
@@ -869,6 +947,7 @@ export class Creature {
     this.ctx.events.emit('creatureNeutralized', { creature: this, cause, x: this.core.x, y: this.core.y });
     // (After the event: listeners see the whole ring where it stopped, not the plank alone.)
     if (this.wheel) this.wheel.burst(this.ctx, this.spec.roll?.burst ?? 3);
+    if (this.spec.hop) this.popOut();
   }
 }
 

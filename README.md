@@ -76,7 +76,7 @@ hits near an edge chip pieces out of the silhouette.
 | 4 | The Hound | fast quadruped, front legs three-quarters steel; first Shifter | the wooden tops of the front legs, or both back legs; chase the Shifter's glow |
 | 5 | Shell Game | armoured beetle, six steel legs; first Mender | legs under the shell; armour-piercing rounds; the Mender's lamp |
 | 6 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 7 | Overheat | engine walker; first Jumping Bean | the engine: it stalls when hot, explodes when destroyed; catch the bean between hops |
 | 8 | Shield Wall | shield-bearers; first Hastener | the arm holding the plate, the head above, the shins below; the Hastener's crystal |
 | 9 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
 | 10 | Stampede | everything | triage |
@@ -85,7 +85,7 @@ hits near an edge chip pieces out of the silhouette.
 | 13 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
 | 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
-From level 3 on, five more creatures join the existing levels:
+From level 3 on, six more creatures join the existing levels:
 
 - **Sapper** lobs big shield bombs ahead of itself. A bomb's light blinks faster
   and faster; hit it 15 times before it runs out (any round counts), or it
@@ -111,6 +111,10 @@ From level 3 on, five more creatures join the existing levels:
   good: up to about 1.6x, even after the Hastener is gone. Then it moves on to
   the next. Shoot the crystal to stop it; hastened creatures trail speed
   streaks.
+- **Jumping Bean**, a big seed pod with a grub inside. It never walks: it
+  rests, rocks (the tell), then kicks off in a random hop, mostly forward,
+  sometimes a big leap or a skip backwards, tumbling through the air. Grind
+  the shell down or hit its glowing peephole; stopped, the grub pops out.
 
 Every creature is 30% faster than its level's base speed; flyers (birds, the
 Mender and the Hastener) are twice as fast.
@@ -118,7 +122,7 @@ Mender and the Hastener) are twice as fast.
 After level 14 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
 joins every fifth wave too, with shifters, menders, sappers, rollers and
-hasteners mixed in). Between levels the
+hasteners and jumping beans mixed in). Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
 automatic gun on a tall mast that picks the creature closest to the line and

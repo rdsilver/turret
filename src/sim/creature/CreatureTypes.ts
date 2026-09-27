@@ -85,6 +85,24 @@ export interface RollSpec {
   burst?: number;
 }
 
+/** Hopping creatures (the jumping bean): world units, not scaled with the creature. */
+export interface HopSpec {
+  /** Kick-off speed upward (m/s): random in [min, max] each hop. */
+  up: [number, number];
+  /** Seconds it rests on the ground between hops: random in [min, max]. */
+  wait: [number, number];
+  /** Chance a hop goes backwards (default 0.12). */
+  back?: number;
+  /** Most spin (rad/s) it tumbles with (default 5). */
+  spin?: number;
+  /** Seconds of rocking before each hop, the tell (default 0.45), and how hard it rocks (default 3). */
+  tell?: number;
+  twitch?: number;
+  /** Part that pops out when it is stopped (the grub), and how fast (m/s, default 6). */
+  popOut?: string;
+  popSpeed?: number;
+}
+
 export interface CreatureSpec {
   name: string;
   /** Part id of the body the controller balances and propels. */
@@ -161,6 +179,12 @@ export interface CreatureSpec {
    * either way the ring bursts apart.
    */
   roll?: RollSpec;
+  /**
+   * Hopping creatures jump along: resting, rocking (the tell), then a random
+   * hop — mostly forward, now and then a big leap or a skip backwards —
+   * tumbling through the air. Averaged over hops they keep their travel speed.
+   */
+  hop?: HopSpec;
   /**
    * The most a hastener's beam can raise this creature's lasting speed
    * multiplier (Creature.speedMul) to, for a body that can't walk any faster

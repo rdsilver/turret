@@ -18,3 +18,4 @@ import './blueprints/sapper';
 import './blueprints/mender';
 import './blueprints/wheel';
 import './blueprints/hastener';
+import './blueprints/bean';
