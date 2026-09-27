@@ -15,3 +15,4 @@ import './blueprints/trex';
 import './blueprints/shifter';
 import './blueprints/sapper';
 import './blueprints/mender';
+import './blueprints/wheel';

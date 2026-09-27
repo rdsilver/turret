@@ -27,6 +27,7 @@ import type { CreatureSpec, LegSpec, MuscleGait } from './CreatureTypes';
 import { DEG, clamp, wrapAngle } from '../../core/math';
 import { R } from '../RapierModule';
 import { GROUP, interactionGroups } from '../../config/constants';
+import { Wheel } from './rolling';
 
 export type CreatureState = 'spawning' | 'walking' | 'crippled' | 'immobilized' | 'neutralized';
 export type NeutralizeCause = 'legs' | 'downed' | 'power' | 'killed' | 'stuck';
@@ -175,6 +176,8 @@ export class Creature {
   private flyHeight = NaN;
   /** Flyers: altitude (m) commanded this step (for traces). */
   flyRef = 0;
+  /** Rolling creatures (spec.roll): the ring it rolls on. */
+  readonly wheel: Wheel | null = null;
 
   constructor(
     private readonly ctx: SimContext,
@@ -236,6 +239,10 @@ export class Creature {
     this.bodyHeight0 = core.h0;
     this.stuckRefX = core.x;
     if (spec.float) this.initFloat(spec);
+    if (spec.roll) {
+      this.wheel = new Wheel(structure, spec.roll);
+      this.stuckRefX = this.wheel.hubX;
+    }
     this.refreshBody();
   }
 
@@ -256,7 +263,8 @@ export class Creature {
   }
 
   get x(): number {
-    return this.core.x;
+    // A wheel is where its hub is (its core turns round the rim).
+    return this.wheel ? this.wheel.hubX : this.core.x;
   }
 
   /** Front-most point (smallest x, m) of the body still attached to it: what reaches the line first. */
@@ -380,6 +388,10 @@ export class Creature {
     }
     if (this.spec.fly) {
       this.flyStep(dt);
+      return;
+    }
+    if (this.wheel) {
+      this.rollStep(dt);
       return;
     }
     this.age += dt;
@@ -770,6 +782,44 @@ export class Creature {
     }
   }
 
+  /**
+   * Rolling: spin the ring along the ground toward the turret. An open ring (a
+   * torn seam, a lost rim part) or one squashed flat is downed at once; no
+   * progress for a long while is stuck.
+   */
+  private rollStep(dt: number): void {
+    this.age += dt;
+    const w = this.wheel!;
+    for (const v of this.vitals) {
+      if (v.removed || v.wrecked || v.integrity <= 0 || !this.connected.has(v)) {
+        this.neutralize('killed');
+        break;
+      }
+    }
+    if (this.state === 'neutralized') return;
+    w.measure();
+    const whole = w.intact();
+    this.capacity = whole ? 1 : 0;
+    this.grounded = w.grounded;
+    const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
+    const speed = this.spec.gait.speed * this.capacity * this.power * ramp * this.speedBoost;
+    if (whole && this.age > SPAWN_SETTLE) w.drive(speed, this.spec.drive ?? 1, this.ctx.physics.gravity, dt);
+    this.downedTime = !whole || w.flat ? this.downedTime + dt : 0;
+    if (this.state === 'spawning') {
+      if (this.age <= SPAWN_SETTLE) return;
+      this.state = 'walking';
+    }
+    let immobile: NeutralizeCause | null = this.downedTime > 0.25 ? 'downed' : null;
+    this.stuckTimer += dt;
+    if (this.stuckTimer >= STUCK_WINDOW) {
+      if (!immobile && Math.abs(w.hubX - this.stuckRefX) < STUCK_DISTANCE) immobile = 'stuck';
+      this.stuckTimer = 0;
+      this.stuckRefX = w.hubX;
+    }
+    if (immobile) this.neutralize(immobile);
+    else this.state = 'walking';
+  }
+
   /** Hand a kinematic floater part over to physics, keeping its current motion. */
   private release(part: StructurePart): void {
     if (part.removed) return;
@@ -799,6 +849,7 @@ export class Creature {
     this.cause = cause;
     this.neutralizedAt = this.age;
     if (this.floatParts) this.dropFloat();
+    if (this.wheel) this.wheel.burst(this.ctx, this.spec.roll?.burst ?? 3);
     this.ctx.events.emit('creatureNeutralized', { creature: this, cause, x: this.core.x, y: this.core.y });
   }
 }

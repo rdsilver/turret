@@ -6,6 +6,8 @@
  * Creature.weakSpot, before anything), leading it by the flight time, and
  * holds the trigger for as long as it has a target. A weak point it has been firing at without landing
  * a round (something in front of it soaks them up) is skipped for a while.
+ * A wheel (Creature.wheel) whose weak points are all turned away from the gun
+ * waits: it shoots the next creature meanwhile (if there is one).
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
@@ -94,14 +96,26 @@ export class AutoGunner {
   private pick(): void {
     let best: Creature | null = null;
     let bestX = Infinity;
+    let turned: Creature | null = null;
+    let turnedX = Infinity;
+    const m = this.weapon.muzzle();
     for (const c of this.ctx.creatures.list) {
       if (!c.active || c.core.removed || c.age < 0.5) continue;
       const x = c.frontX - c.targetPriority;
+      // A wheel with its weak point turned away can't be hurt from here: something else first, meanwhile.
+      if (c.wheel && !this.showing(c, m.x, m.y)) {
+        if (x < turnedX) {
+          turnedX = x;
+          turned = c;
+        }
+        continue;
+      }
       if (x < bestX) {
         bestX = x;
         best = c;
       }
     }
+    best ??= turned;
     this.creature = best;
     this.part = null;
     if (!best) return;
@@ -121,5 +135,14 @@ export class AutoGunner {
       }
     }
     this.part = part;
+  }
+
+  /** Does any of this wheel's weak points face the gun at (x, y)? */
+  private showing(c: Creature, x: number, y: number): boolean {
+    for (const n of c.spec.weakPoints ?? []) {
+      const q = c.structure.part(n);
+      if (q && !q.removed && !q.wrecked && c.owns(q) && c.wheel!.faces(q, x, y)) return true;
+    }
+    return false;
   }
 }

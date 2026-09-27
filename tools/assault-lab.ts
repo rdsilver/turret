@@ -12,6 +12,8 @@
  *        [--add creature@at[:k=v,k=v...]]   (repeatable: extra wave entries, to try a placement without editing levels.ts,
  *                                            e.g. --add mender@12:heal=2)
  *   (--top: top turret level; defaults to what the tier owns)
+ *   (A wheel whose weak point is turned away is left until it comes round, as a player would time it:
+ *    the bot shoots something else meanwhile, or waits on it with the trigger released.)
  */
 import { initRapier, run, snapshot, renderFilmstrip, type FrameSnap } from './lib/headless';
 import { Simulation } from '../src/sim/Simulation';
@@ -117,7 +119,16 @@ run(sim, Number(opt('seconds', '150')), () => {
   let best = Infinity;
   const live = session.creatures.filter((c) => c.active && !c.core.removed && c.age >= 0.5);
   const others = live.filter((c) => !c.spec.targetPriority).length;
+  const muzzle = sim.weapon.muzzle();
+  const turned = (c: Creature) =>
+    !!c.wheel && !(c.spec.weakPoints ?? []).some((n) => {
+      const q = c.structure.part(n);
+      return !!q && !q.removed && !q.wrecked && c.owns(q) && c.wheel!.faces(q, muzzle.x, muzzle.y);
+    });
+  const waiting = live.filter(turned);
+  let hold = false;
   for (const c of live) {
+    if (waiting.includes(c) && waiting.length < live.length) continue;
     let cx = c.x;
     if (c.spec.targetPriority && others > 0) {
       // Support creatures (healers): --noPriority, a player who ignores them
@@ -153,6 +164,7 @@ run(sim, Number(opt('seconds', '150')), () => {
     // Lead a beating wing by the bird's flight, as a player would, not by its stroke.
     const v = p.hasTag('wing') ? c.core : p;
     target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
+    hold = waiting.includes(c);
   }
   // A ticking bomb comes first, unless something is about to cross the line (a player deals with that first).
   const urgent = session.creatures.some((c) => c.active && c.frontX - DEFENSE_LINE_X < BOMB_TRIAGE_M);
@@ -167,7 +179,10 @@ run(sim, Number(opt('seconds', '150')), () => {
       if (left === Infinity || p.x > 50 || walls.some((x) => x < p.x)) continue;
       if (!bomb || left < bomb.left) bomb = { x: p.x, y: p.y, left };
     }
-    if (bomb) target = { x: bomb.x, y: bomb.y, vx: 0, vy: 0 };
+    if (bomb) {
+      target = { x: bomb.x, y: bomb.y, vx: 0, vy: 0 };
+      hold = false;
+    }
   }
   const w = sim.weapon;
   if (w.heat > 0.92) cooling = true;
@@ -183,7 +198,7 @@ run(sim, Number(opt('seconds', '150')), () => {
     const tof = Math.hypot(target.x - m.x, target.y - m.y) / w.speed;
     const sol = solveAim(m.x, m.y, target.x + target.vx * tof + errX, target.y + target.vy * tof + errY, w.speed, sim.physics.gravity);
     if (sol.length) w.setAngle(sol[0]!);
-    w.triggerHeld = true;
+    w.triggerHeld = !hold;
   } else w.triggerHeld = false;
   if (session.elapsed - lastFrame > 8) {
     lastFrame = session.elapsed;
