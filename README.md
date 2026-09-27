@@ -57,9 +57,9 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. (Impact craters, where every hit pits the part it
-strikes, are switched off for now: `IMPACT_CRATERS` in
-`src/config/constants.ts`.)
+limb stops obeying it. Hits also chip pieces out of a part's outline, eating
+further in as it wears down (no bullet holes inside it: `IMPACT_DAMAGE` in
+`src/config/constants.ts` switches between edges only, full craters and off).
 
 | Input | Action |
 | --- | --- |
@@ -117,6 +117,7 @@ shins like any walker.
 - **Smoker**: a walker with a boiler and a tall smokestack, trailing a wall
   of thick smoke that hides whatever walks behind it, from you and from the
   top turret (rounds still go through). Shoot the stack and the smoke stops.
+  Half its wooden parts (picked at random) are steel.
 - **Blob**: a rolling lump of green jelly. Shoot it anywhere and it bursts
   into two smaller, faster blobs, and those into two more, which just pop:
   seven blobs from one.
@@ -126,10 +127,10 @@ shins like any walker.
   and drags itself on at the line on its arms. Finish the core (or take both
   arms). Cutting its legs down the long way sends it crawling too.
 
-**Steel swaps**: from Shield Wall (level 11) on, the easier walkers (stick
+**Steel swaps**: from Shell Game (level 5) on, the easier walkers (stick
 walkers, throwers, hounds, shield-bearers, sappers) come with some of their
-wooden parts swapped for steel of the same weight: 15% of them in Shield
-Wall, rising to 35% in Tyrant. Which parts is random for each creature, and
+wooden parts swapped for steel of the same weight: 10% of them at first,
+rising to 35% in Tyrant. Which parts is random for each creature, and
 changes on every attempt; look for the wood.
 
 From level 3 on, three more creatures join the existing levels:
@@ -138,12 +139,14 @@ From level 3 on, three more creatures join the existing levels:
   and faster; hit it 15 times before it runs out (any round counts), or it
   springs up into a tall steel wall that
   stops your rounds and hides whatever walks behind it until it crumbles. Shoot
-  off the throwing arm and the bombs stop.
+  off the throwing arm and the bombs stop. Bombs still on its back when it
+  drops go off as it hits the ground: shoot them off first.
 - **Shifter**, a stone golem: only one block can be hurt at a time, and it
   glows. Everything else shrugs rounds off. The glow jumps to another block
   every few seconds (or sooner once a visit has worn about a third off that
-  block), and the damage stays: a block goes on its third visit (a leg gives
-  way a little before that), and the head or body kills it.
+  block), and the damage stays: a block goes on its third visit, and the head
+  or body kills it. Worn blocks don't weaken it: it walks on at full strength
+  until a block actually breaks.
 - **Roller**, a big wheel of seven rubber segments and one wooden plank. Rounds
   glance off the rubber; only the plank can be hurt, and it rolls round with
   the wheel, so time your shots for when it faces you. Break the plank and the

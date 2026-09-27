@@ -3,8 +3,8 @@
  * The roster grows more complex (armour, engines, abilities, odd gaits) as
  * the campaign goes on. Speeds are base values: creatures spawn at
  * CREATURE_SPEED (flyers FLYER_SPEED) times them. A wave's `hint` shows
- * when that creature arrives (where a new kind first appears). From Shield
- * Wall on, the easier creatures come with a share of their wooden parts
+ * when that creature arrives (where a new kind first appears). From level 5
+ * (Shell Game) on, the easier walkers come with a share of their wooden parts
  * swapped for steel (param `steel`, growing level by level; which parts is
  * random for each one).
  */
@@ -72,7 +72,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 220,
     waves: [
       { creature: 'beetle', at: 1, params: { speed: 0.7 } },
-      { creature: 'stickman', at: 26, params: { speed: 0.95 } },
+      { creature: 'stickman', at: 26, params: { speed: 0.95, steel: 0.1 }, hint: 'From here on, some wooden parts come in steel. Look for the wood.' },
     ],
   },
   {
@@ -102,7 +102,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 250,
     waves: [
       { creature: 'brood', at: 1, hint: 'Shoot the glowing sac to stop the hatchlings. A short burst drops each little one.' },
-      { creature: 'stickman', at: 18, params: { speed: 0.9 } },
+      { creature: 'stickman', at: 18, params: { speed: 0.9, steel: 0.1 } },
       { creature: 'brood', at: 36, params: { speed: 0.6 } },
     ],
   },
@@ -117,7 +117,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     waves: [
       { creature: 'bird', at: 1, params: { speed: 2.3, height: 3 } },
       { creature: 'bird', at: 9, params: { speed: 2.4, height: 2.4 } },
-      { creature: 'stickman', at: 12, params: { speed: 0.85 } },
+      { creature: 'stickman', at: 12, params: { speed: 0.85, steel: 0.12 } },
       { creature: 'bird', at: 19, params: { speed: 2.6, height: 3.4 } },
       { creature: 'bird', at: 29, params: { speed: 2.5, height: 2.6 } },
       { creature: 'wheel', at: 14, params: { phase: 110 }, hint: 'Only the wooden plank can be hurt: shoot it as it rolls round to face you.' },
@@ -133,9 +133,9 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     reward: 240,
     waves: [
       { creature: 'engine', at: 1, params: { speed: 1 } },
-      { creature: 'stickman', at: 10, params: { speed: 1 } },
+      { creature: 'stickman', at: 10, params: { speed: 1, steel: 0.12 } },
       { creature: 'engine', at: 26, params: { speed: 1.05 } },
-      { creature: 'hound', at: 34, params: { speed: 1.6 } },
+      { creature: 'hound', at: 34, params: { speed: 1.6, steel: 0.12 } },
       { creature: 'bird', at: 40, params: { speed: 3.2, height: 3 } },
     ],
   },
@@ -164,7 +164,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     seed: 107,
     reward: 300,
     waves: [
-      { creature: 'shield', at: 1, params: { speed: 0.85, steel: 0.15 }, hint: 'From here on, some wooden parts come in steel. Look for the wood.' },
+      { creature: 'shield', at: 1, params: { speed: 0.85, steel: 0.15 } },
       { creature: 'shield', at: 10, params: { speed: 0.9, steel: 0.15 } },
       { creature: 'thrower', at: 24, params: { speed: 0.8, steel: 0.15 } },
       { creature: 'hound', at: 36, params: { speed: 1.6, steel: 0.15 } },

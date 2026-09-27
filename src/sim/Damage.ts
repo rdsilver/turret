@@ -6,7 +6,9 @@
  * creature's own weight and stride. At zero integrity the part is wrecked:
  * glass shatters, explosives detonate, anything else is torn off. An
  * invulnerable part (StructurePart.invulnerable) shrugs hits off: the round
- * deflects (partDeflected) and nothing changes.
+ * deflects (partDeflected) and nothing changes. A part tagged 'sturdy' (a
+ * stone block) wears down without weakening its joints: it holds at full
+ * strength until it breaks.
  */
 import type { SimContext } from './SimContext';
 import type { StructurePart } from './StructurePart';
@@ -40,7 +42,7 @@ export class DamageSystem {
     if (part.hasTag('engine')) part.heat = Math.min(1.6, part.heat + (dealt / part.maxHp) * 5);
     const jointScale = MIN_JOINT_SCALE + (1 - MIN_JOINT_SCALE) * part.integrity;
     const world = this.ctx.physics.world;
-    for (let i = part.joints.length - 1; i >= 0; i--) {
+    for (let i = part.hasTag('sturdy') ? -1 : part.joints.length - 1; i >= 0; i--) {
       const j = part.joints[i]!;
       if (j.strengthScale > jointScale) j.setStrengthScale(world, jointScale, 0.5 + 0.5 * jointScale);
     }

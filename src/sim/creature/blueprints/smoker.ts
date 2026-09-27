@@ -6,13 +6,16 @@
  * if you can guess where to put them). The smoker itself walks in front of
  * its smoke, in plain sight: shoot the stack off and the smoke stops coming
  * (what is out already thins away in a few seconds), or take its legs.
+ * Half its wooden parts, picked at random, are steel (of the same weight):
+ * look for the wood.
  *
- * Params: speed, stackHp, legHp, interval, radius, life.
+ * Params: speed, stackHp, legHp, interval, radius, life, steelShare.
  */
 import { registerCreature, type CreatureSpec } from '../CreatureTypes';
-import { G, buildLeg, draftMass, walkerGait } from './kit';
+import { G, buildLeg, draftMass, swapWoodForSteel, walkerGait } from './kit';
+import { Random, hashString } from '../../../core/Random';
 
-registerCreature('smoker', (d, _rng, params) => {
+registerCreature('smoker', (d, rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
   const S = 1.3;
   const density = 0.45;
@@ -46,7 +49,7 @@ registerCreature('smoker', (d, _rng, params) => {
     d.joints.push({ kind: 'muscle', id: `shoulder${side}`, a: 'torso', b: `arm${side}`, at: [0, shoulderY], seam: 0.17 * S, strength: 2.5, muscle: { torque: tref * 0.15, min: -120, max: 150, omega: 18 } });
     buildLeg(d, side, 0, hipY, { thigh: legLen, shin: legLen, w: legW, mat: 'wood', density, hipTorque: tref * 1.6, kneeTorque: tref * 1.4, hp: P('legHp', 1.3), footW: 0.46 * S }, 'torso');
   }
-  return {
+  const spec: CreatureSpec = {
     name: 'Smoker',
     weakPoints: ['stack', 'shinL', 'thighL', 'shinR', 'torso'],
     core: 'torso',
@@ -59,5 +62,8 @@ registerCreature('smoker', (d, _rng, params) => {
     vitals: ['torso', 'head'],
     abilities: [{ id: 'smoke', part: 'stack', interval: P('interval', 0.3), radius: P('radius', 6), life: P('life', 8), height: 6.5, behind: 1.2, delay: 1 }],
     bounty: 110,
-  } satisfies CreatureSpec;
+  };
+  // Half its wood in steel (its own stream: builds from nearby seeds would draw alike from the shared one).
+  swapWoodForSteel(d, spec, P('steelShare', 0.5), new Random(hashString(`smoker:${rng.seed}`)));
+  return spec;
 });

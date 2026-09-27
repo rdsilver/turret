@@ -55,8 +55,13 @@ export const TOP_TURRET = {
   maxAngleDeg: 75,
 };
 
-/** Impact craters (hits pitting and chipping the parts they strike, view/PartCraters.ts): off for now. */
-export const IMPACT_CRATERS = false;
+/**
+ * Impact damage in the parts' art (view/PartCraters.ts): 'edges' = chips
+ * bitten out of the silhouette only, eating in from the outside as a part
+ * wears down (no bullet holes); 'full' = pits and scorch inside it too;
+ * 'off' = none.
+ */
+export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' = 'edges';
 
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;

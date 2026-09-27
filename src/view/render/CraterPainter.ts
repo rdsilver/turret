@@ -190,16 +190,23 @@ export function paintCraters(
   maxR: number,
   st: CraterStyle,
   g: CraterGeom,
+  /** Chips only: no scorch halos and no pits (nothing inside the silhouette). */
+  edgesOnly = false,
 ): void {
   const n = which ? which.length : list.length;
   if (n === 0) return;
   const at = (j: number): Crater => list[which ? which[j]! : j]!;
+  // Edges only: a crater too big to chip a thin part is chipped smaller instead (never a hole).
+  const rOf = (c: Crater): number => {
+    const r = craterRadius(c, grow, maxR);
+    return edgesOnly ? Math.min(r, biteLimit(c, st, g)) : r;
+  };
   ctx.save();
   ctx.globalCompositeOperation = 'source-atop';
   ctx.lineJoin = 'bevel';
   ctx.lineCap = 'round';
   // 1. Scorch / soot halo.
-  if (st.scorch !== st.scorchClear) {
+  if (!edgesOnly && st.scorch !== st.scorchClear) {
     for (let j = 0; j < n; j++) {
       const c = at(j);
       const r = craterRadius(c, grow, maxR) * 1.9;
@@ -214,12 +221,12 @@ export function paintCraters(
   let bites = 0;
   for (let j = 0; j < n; j++) {
     const c = at(j);
-    const r = craterRadius(c, grow, maxR);
+    const r = rOf(c);
     if (isBite(c, r, st, g)) {
       bites++;
       continue;
     }
-    paintPit(ctx, c, r, st, g);
+    if (!edgesOnly) paintPit(ctx, c, r, st, g);
   }
   if (bites > 0) {
     // 3. Chips out of the silhouette.
@@ -227,7 +234,7 @@ export function paintCraters(
     ctx.fillStyle = '#000';
     for (let j = 0; j < n; j++) {
       const c = at(j);
-      const r = craterRadius(c, grow, maxR);
+      const r = rOf(c);
       if (!isBite(c, r, st, g)) continue;
       biteSubpaths(ctx, c, r, st, g);
       ctx.fill();
@@ -237,7 +244,7 @@ export function paintCraters(
     const hl = Math.max(1, g.lw * 0.8);
     for (let j = 0; j < n; j++) {
       const c = at(j);
-      const r = craterRadius(c, grow, maxR);
+      const r = rOf(c);
       if (!isBite(c, r, st, g)) continue;
       biteSubpaths(ctx, c, r, st, g);
       ctx.strokeStyle = st.rim;
@@ -265,6 +272,11 @@ function isBite(c: Crater, r: number, st: CraterStyle, g: CraterGeom): boolean {
     // Never through a thin tip or limb: a pit there instead.
     r * 0.9 * (1 + st.biteJag * 0.5) + g.lw < c.clear
   );
+}
+
+/** The largest chip a crater can take out of its part without cutting through it (texels; see isBite). */
+function biteLimit(c: Crater, st: CraterStyle, g: CraterGeom): number {
+  return 0.97 * Math.min((c.clear - g.lw) / (0.9 * (1 + st.biteJag * 0.5)), (g.maxNotch - c.depth) / 0.9);
 }
 
 function paintPit(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom): void {

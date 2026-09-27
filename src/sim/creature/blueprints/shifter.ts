@@ -13,7 +13,8 @@
  * breaking one block in a single burst. Keep up with the glow and the visits
  * come round quickly, so every block wears down together. Holding fire on one
  * block, or spraying it, wastes nearly every round on dead stone while the
- * glow takes its time everywhere else.
+ * glow takes its time everywhere else. Worn blocks don't weaken it: it
+ * strides on at full strength until a block breaks.
  * (Roaming logic: weakSpot.ts; the glow: view/WeakSpotView.ts.)
  *
  * Params: speed, hp (every block's hit points: how many hits a visit takes),
@@ -70,6 +71,10 @@ registerCreature('shifter', (d, _rng, params) => {
   }
   gait.shoulderL = { ...gait.shoulderL!, amp: 0.18 };
   gait.shoulderR = { ...gait.shoulderR!, amp: 0.18 };
+  // Stone blocks crack, they don't weaken: worn as they are, its joints (and
+  // so its stride) hold at full strength until a block breaks (a worn knee
+  // would otherwise leave it rocking on the spot, every limb still on).
+  for (const p of d.parts) p.tags = [...(p.tags ?? []), 'sturdy'];
   return {
     name: 'Shifter',
     // Gunners chase Creature.weakSpot; this order only applies once nothing glows.

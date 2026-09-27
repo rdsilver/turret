@@ -9,9 +9,10 @@
  * If the campaign is complete (levelIndex >= levelManager.count) say so and
  * deploy into procedural levels.
  *
- * In creature mode a last column sells FUN STUFF (data/cosmetics.ts): visual
- * extras for the turret, locked until every upgrade is maxed out; once bought
- * each can be worn or taken off (hats one at a time).
+ * In creature mode, once every upgrade is maxed out, a FUN STUFF section
+ * opens under the branches (data/cosmetics.ts): visual extras for the turret
+ * in a grid of cards; once bought each can be worn or taken off (hats one at
+ * a time).
  *
  * Layout: one column per branch (a small tech tree). The catalogue is drawn
  * by its own camera (viewport = catalogue rect) so it clips and scrolls with
@@ -180,9 +181,7 @@ export class UpgradeScene extends Phaser.Scene {
     this.cameras.main.ignore(this.catalog);
     this.add.rectangle(CAT.x + CAT.w + 26, CAT.y, 2, CAT.h, THEME.panelEdge).setOrigin(0.5, 0);
     this.scrollThumb = this.add.rectangle(CAT.x + CAT.w + 26, CAT.y, 4, 60, THEME.textDimNum).setOrigin(0.5, 0);
-    const scrollable = this.contentH > CAT.h;
-    this.scrollThumb.setVisible(scrollable);
-    this.scrollThumb.height = Math.max(40, (CAT.h * CAT.h) / Math.max(CAT.h, this.contentH));
+    this.layoutScrollbar();
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x < CAT.x || p.x > CAT.x + CAT.w + 40 || p.y < CAT.y || p.y > CAT.y + CAT.h) return;
       this.scrollTarget = Phaser.Math.Clamp(this.scrollTarget + dy * 0.8, 0, Math.max(0, this.contentH - CAT.h));
@@ -279,24 +278,17 @@ export class UpgradeScene extends Phaser.Scene {
       return;
     }
 
-    // Creature mode: FUN STUFF goes in a column of its own after the branches.
-    const fun = this.mode === 'assault';
-    const cols = Math.min(MAX_COLS, branches.length + (fun ? 1 : 0));
+    const cols = Math.min(MAX_COLS, branches.length);
     const colW = Math.floor((CAT.w - COL_GAP * (cols - 1)) / cols);
     let bandY = 0;
     let bandH = 0;
-    const columns: Array<UpgradeBranch | 'fun'> = fun ? [...branches, 'fun'] : branches;
-    columns.forEach((branch, i) => {
+    branches.forEach((branch, i) => {
       const col = i % cols;
       if (col === 0 && i > 0) {
         bandY += bandH + 28;
         bandH = 0;
       }
       const x = col * (colW + COL_GAP);
-      if (branch === 'fun') {
-        bandH = Math.max(bandH, this.buildFunColumn(x, bandY, colW) - bandY);
-        return;
-      }
       const list = defs.filter((d) => d.branch === branch);
       // Column header
       const label = (this.mode === 'assault' ? ASSAULT_BRANCH_LABEL[branch] : undefined) ?? BRANCH_LABEL[branch] ?? branch.toUpperCase();
@@ -313,21 +305,36 @@ export class UpgradeScene extends Phaser.Scene {
       bandH = Math.max(bandH, y - CARD_GAP - bandY);
     });
     this.contentH = bandY + bandH;
+    // Creature mode, everything maxed: the fun stuff opens up below.
+    if (this.mode === 'assault' && this.allMaxed()) this.buildFunBand();
   }
 
-  /** The FUN STUFF column at (x, y); returns its bottom. */
-  private buildFunColumn(x: number, y: number, w: number): number {
-    const head = mono(this, x, y + 10, 'FUN STUFF', SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
-    const count = mono(this, x + w, y + 10, `${COSMETICS.length} EXTRAS`, SIZE.micro, THEME.textFaint, { originX: 1, originY: 0.5 });
-    const rule = this.add.rectangle(x, y + 28, w, 1, THEME.rule).setOrigin(0, 0.5);
-    const tick = this.add.rectangle(x, y + 28, 28, 3, THEME.accentNum).setOrigin(0, 0.5);
+  /**
+   * The FUN STUFF section: a band across the whole catalogue under the
+   * branches, its cards in a grid (only once every upgrade is maxed out).
+   */
+  private buildFunBand(): void {
+    const y0 = this.contentH + 36;
+    const head = mono(this, 0, y0 + 10, 'FUN STUFF · EVERYTHING IS MAXED', SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
+    const count = mono(this, CAT.w, y0 + 10, `${COSMETICS.length} EXTRAS`, SIZE.micro, THEME.textFaint, { originX: 1, originY: 0.5 });
+    const rule = this.add.rectangle(0, y0 + 28, CAT.w, 1, THEME.rule).setOrigin(0, 0.5);
+    const tick = this.add.rectangle(0, y0 + 28, 28, 3, THEME.accentNum).setOrigin(0, 0.5);
     this.catalog.add([head, count, rule, tick]);
-    let cy = y + HEAD_H;
-    for (const def of COSMETICS) {
-      this.funCards.push(this.buildFunCard(def, x, cy, w));
-      cy += FUN_H + CARD_GAP;
-    }
-    return cy - CARD_GAP;
+    const cols = MAX_COLS;
+    const w = Math.floor((CAT.w - COL_GAP * (cols - 1)) / cols);
+    COSMETICS.forEach((def, i) => {
+      const x = (i % cols) * (w + COL_GAP);
+      const y = y0 + HEAD_H + Math.floor(i / cols) * (FUN_H + CARD_GAP);
+      this.funCards.push(this.buildFunCard(def, x, y, w));
+    });
+    const rows = Math.ceil(COSMETICS.length / cols);
+    this.contentH = y0 + HEAD_H + rows * (FUN_H + CARD_GAP) - CARD_GAP;
+  }
+
+  /** Scroll thumb size and visibility for the catalogue's current height. */
+  private layoutScrollbar(): void {
+    this.scrollThumb.setVisible(this.contentH > CAT.h);
+    this.scrollThumb.height = Math.max(40, (CAT.h * CAT.h) / Math.max(CAT.h, this.contentH));
   }
 
   private buildFunCard(def: CosmeticDef, x: number, y: number, w: number): FunCard {
@@ -628,6 +635,13 @@ export class UpgradeScene extends Phaser.Scene {
     if (c.def.unlocksAmmo && st.level === 0 && AMMO[c.def.unlocksAmmo]) {
       gs.selectedAmmo = c.def.unlocksAmmo;
       gs.save();
+    }
+    // That was the last one: the fun stuff opens up (scrolled into view).
+    if (this.mode === 'assault' && !this.funCards.length && this.allMaxed()) {
+      const top = this.contentH;
+      this.buildFunBand();
+      this.layoutScrollbar();
+      this.scrollTarget = Phaser.Math.Clamp(top, 0, Math.max(0, this.contentH - CAT.h));
     }
     this.refreshAll();
   }

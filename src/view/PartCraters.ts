@@ -12,6 +12,8 @@
  *   are pits just inside it. A hit next to an existing crater merges into it
  *   (that crater grows); past MAX_CRATERS every hit merges into the nearest
  *   one, so the painting cost of a part stays bounded however long it is shot.
+ *   With `edgesOnly` every crater sits on the edge and only chips are
+ *   painted (no pits, no scorch): damage eats into the part from outside.
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
  *   chips.
@@ -187,6 +189,8 @@ export class PartCraters {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly textures: TextureFactory,
+    /** Chips out of the silhouette only (no pits, no scorch): damage eats in from the outside. */
+    private readonly edgesOnly = false,
   ) {}
 
   /** Any part waiting for a repaint this frame. */
@@ -231,7 +235,10 @@ export class PartCraters {
     const round = Math.max(0.6, Math.min(1.5, 0.55 + 0.45 * Math.sqrt(Math.max(0, raw))));
     const r = Math.min(set.maxR, Math.max(2.5, CRATER_R * S * set.style.size * round * (0.8 + 0.4 * this.rand())));
     let depth: number;
-    if (SF.d > (-0.35 * r) / S) {
+    if (this.edgesOnly) {
+      // On the edge, wherever it struck: a chip, never a hole.
+      depth = 0;
+    } else if (SF.d > (-0.35 * r) / S) {
       // Surface hit: from the edge point, a random depth inward (roughly 20-50% chip the edge,
       // depending on the material; the rest are pits just inside it).
       depth = Math.min(r * (0.1 + 3 * Math.pow(this.rand(), 1.4)), set.halfMin * 0.85);
@@ -452,11 +459,11 @@ export class PartCraters {
     if (set.full) {
       ctx.clearRect(0, 0, r.w, r.h);
       ctx.drawImage(this.baseArt(p, host.neutral, set.w, set.h).canvas, 0, 0);
-      paintCraters(ctx, set.list, null, grow, set.maxR, set.style, set.geom);
+      paintCraters(ctx, set.list, null, grow, set.maxR, set.style, set.geom, this.edgesOnly);
       set.full = false;
       this.counters.fullPaints++;
     } else {
-      paintCraters(ctx, set.list, set.fresh, grow, set.maxR, set.style, set.geom);
+      paintCraters(ctx, set.list, set.fresh, grow, set.maxR, set.style, set.geom, this.edgesOnly);
     }
     set.fresh.length = 0;
     this.counters.paints++;

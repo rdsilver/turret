@@ -27,7 +27,9 @@
  * (part the bomb leaves from while it is attached; else the organ), ammo
  * (comma-separated pack parts: each throw takes one as it lets go, none left
  * = no more bombs; one shot or knocked off the pack pops on the spot, so the
- * only glowing canister ever lying on the field is a live bomb).
+ * only glowing canister ever lying on the field is a live bomb). Canisters
+ * still on the pack when the creature is stopped go off as it hits the
+ * ground: each springs up into a wall where it lies.
  *
  * Bombs and walls block bullets but never touch creatures (or anything else
  * but the ground): a creature can lob a bomb over its own wall.
@@ -86,6 +88,10 @@ interface ShieldWall {
 interface PackCan {
   part: StructurePart;
   owner: Creature;
+  /** The wall it becomes if it goes off (its creature stopped with it still racked). */
+  wall: WallSpec;
+  /** Sim time its creature was stopped (-1 while it is on the move). */
+  stoppedAt: number;
 }
 
 interface BombField {
@@ -101,6 +107,11 @@ const CRUMBLE_TIME = 1.1;
 const SHOT_DOWN_TIME = 0.6;
 /** The foot sits this far below the surface so no round slips under the wall. */
 const FOOT_DEPTH = 0.15;
+/** A dead creature's racked canisters go off once one is this low (m above the ground), or this long after. */
+const LEFTOVER_LOW = 0.9;
+const LEFTOVER_LATEST = 2.5;
+/** Walls from one pack stand this far apart (m, stepping away from the turret). */
+const LEFTOVER_SPACING = 1.6;
 /** Blinks come every `TICK_MIN + TICK_SPAN * fuse left fraction` seconds. */
 const TICK_MIN = 0.08;
 const TICK_SPAN = 0.47;
@@ -168,8 +179,10 @@ function str(spec: AbilitySpec, k: string): string | null {
 
 function stepField(ctx: SimContext, f: BombField): void {
   const now = ctx.physics.simTime;
+  const goingOff = new Map<Creature, number>();
   for (let i = f.cans.length - 1; i >= 0; i--) {
-    const { part, owner } = f.cans[i]!;
+    const can = f.cans[i]!;
+    const { part, owner } = can;
     if (part.removed) {
       f.cans.splice(i, 1); // thrown (or faded with its creature)
     } else if (part.wrecked || !owner.owns(part)) {
@@ -177,6 +190,15 @@ function stepField(ctx: SimContext, f: BombField): void {
       // glowing canister ever lying on the field is a live bomb.
       f.cans.splice(i, 1);
       pop(ctx, part);
+    } else if (!owner.active) {
+      // Its creature is down with it still racked: it goes off as the body hits the ground.
+      if (can.stoppedAt < 0) can.stoppedAt = now;
+      const low = part.height - part.halfHeightNow < LEFTOVER_LOW || owner.core.height - owner.core.halfHeightNow < LEFTOVER_LOW;
+      if (!low && now - can.stoppedAt < LEFTOVER_LATEST) continue;
+      f.cans.splice(i, 1);
+      const k = goingOff.get(owner) ?? 0;
+      goingOff.set(owner, k + 1);
+      raise(ctx, f, part, owner, can.wall, part.x + k * LEFTOVER_SPACING);
     }
   }
   for (let i = f.bombs.length - 1; i >= 0; i--) {
@@ -245,9 +267,12 @@ function pop(ctx: SimContext, p: StructurePart): void {
 
 /** The fuse ran out: the canister springs up into a wall where it lies. */
 function deploy(ctx: SimContext, f: BombField, b: ShieldBomb): void {
-  const x = b.part.x;
-  ctx.physics.removeEntity(b.part);
-  const s = b.wall;
+  raise(ctx, f, b.part, b.owner, b.wall, b.part.x);
+}
+
+/** Canister `can` goes off: gone, and a wall of `s` swings up with its foot at x. */
+function raise(ctx: SimContext, f: BombField, can: StructurePart, owner: Creature, s: WallSpec, x: number): void {
+  ctx.physics.removeEntity(can);
   const part = spawnPart(
     ctx.physics,
     { id: 'shieldWall', shape: { kind: 'box', w: s.w, h: s.h }, x: 0, y: 0, material: 'armor', tags: ['shieldWall'], hpScale: s.hp },
@@ -256,7 +281,7 @@ function deploy(ctx: SimContext, f: BombField, b: ShieldBomb): void {
   );
   part.body.setBodyType(R().RigidBodyType.KinematicPositionBased, true);
   part.collider.setCollisionGroups(WALL_GROUPS);
-  f.walls.push({ part, owner: b.owner, spec: s, bornAt: ctx.physics.simTime, px: x, crumbleAt: -1 });
+  f.walls.push({ part, owner, spec: s, bornAt: ctx.physics.simTime, px: x, crumbleAt: -1 });
   ctx.events.emit('shieldBomb', { phase: 'deployed', part, x, y: 0, urgency: 1 });
 }
 
@@ -326,6 +351,11 @@ function nextAmmo(c: Creature, spec: AbilitySpec): StructurePart | null | undefi
   return undefined;
 }
 
+/** The wall a bomb of this ability becomes. */
+function wallSpec(spec: AbilitySpec): WallSpec {
+  return { h: num(spec, 'wallH', 9), w: num(spec, 'wallW', 1), life: num(spec, 'wallLife', 14), hp: num(spec, 'wallHp', 0.3) };
+}
+
 /** Bombs in the air or ticking plus walls standing, thrown by this creature. */
 function liveCount(f: BombField, c: Creature): number {
   let n = 0;
@@ -342,9 +372,10 @@ registerAbility('throwShieldBomb', {
     const arm = typeof spec.muscle === 'string' ? c.muscles.get(spec.muscle) : undefined;
     arm?.setDrive(ctx.physics.world, num(spec, 'carry', 0.5));
     const field = fieldOf(ctx);
+    const wall = wallSpec(spec);
     for (const n of (str(spec, 'ammo') ?? '').split(',')) {
       const p = n ? c.structure.part(n) : undefined;
-      if (p) field.cans.push({ part: p, owner: c });
+      if (p) field.cans.push({ part: p, owner: c, wall, stoppedAt: -1 });
     }
   },
   step(c, spec, ctx, dt, organ) {
@@ -417,7 +448,7 @@ registerAbility('throwShieldBomb', {
       hits: 0,
       hitsToPop: Math.max(1, Math.round(num(spec, 'hits', 15))),
       nextTick: 0,
-      wall: { h: num(spec, 'wallH', 9), w: num(spec, 'wallW', 1), life: num(spec, 'wallLife', 14), hp: num(spec, 'wallHp', 0.3) },
+      wall: wallSpec(spec),
     });
     if (armOk) {
       arm!.setDrive(world, num(spec, 'release', 1.3));
