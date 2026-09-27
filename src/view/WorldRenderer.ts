@@ -22,6 +22,8 @@
  *    is mended and its damage tint recedes with its integrity; its craters
  *    stay as scars but shrink back as it heals. HealBeams draws the lamp's
  *    cone of light and the beams to the parts it mends.
+ *  - Haste (hasteners): HasteView draws the telekinetic beam and the speed
+ *    streaks, afterimages and chevrons of every creature it has hastened.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
  *  - Stress view (setStressView): parts tinted by the max joint.stressVis of
@@ -42,6 +44,7 @@ import { TextureFactory, TEXTURE_RES } from './TextureFactory';
 import { PartCraters, type CraterSet, type CraterStats } from './PartCraters';
 import { WeakSpotView } from './WeakSpotView';
 import { HealBeams } from './HealBeams';
+import { HasteView } from './HasteView';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
@@ -137,6 +140,7 @@ export class WorldRenderer {
   /** Glow on roaming weak spots (the only part of such a creature that can be hurt). */
   private readonly weakSpots: WeakSpotView;
   private readonly healBeams: HealBeams;
+  private readonly haste: HasteView;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -159,6 +163,7 @@ export class WorldRenderer {
       return v && v.kind === 0 ? v.img : null;
     });
     this.healBeams = new HealBeams(scene, sim);
+    this.haste = new HasteView(scene, sim);
     this.trailGfx = scene.add.graphics().setDepth(DEPTH.projectiles - 0.5);
     this.cableGfx = scene.add.graphics().setDepth(DEPTH.cables);
     const ev = sim.events;
@@ -250,6 +255,7 @@ export class WorldRenderer {
     }
     if (this.colliderDebug) this.drawColliders();
     this.healBeams.update(alpha, realDt);
+    this.haste.update(alpha, realDt);
     // Crater repaints + texture uploads: once per damaged part per frame.
     if (this.craters.pending) this.craters.flush();
   }
@@ -303,6 +309,7 @@ export class WorldRenderer {
     this.craters.clear();
     this.weakSpots.clear();
     this.healBeams.clear();
+    this.haste.clear();
     if (trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
     // Keep texture memory bounded across many (procedural) levels.
     if (trimTextures && this.textures.atlasPages > 6) {
@@ -319,6 +326,7 @@ export class WorldRenderer {
     this.craters.destroy();
     this.weakSpots.destroy();
     this.healBeams.destroy();
+    this.haste.destroy();
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;

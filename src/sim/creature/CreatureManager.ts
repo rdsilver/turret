@@ -85,6 +85,8 @@ export class CreatureManager {
   private adopt(structure: Structure, spec: CreatureSpec, kind: string, parent?: Creature): Creature {
     const creature = new Creature(this.ctx, structure, spec);
     creature.kind = kind;
+    // A cut-off piece is as hastened as the body it came from.
+    if (parent) creature.speedMul = parent.speedMul;
     this.list.push(creature);
     let cs = this.byStructure.get(structure);
     if (!cs) this.byStructure.set(structure, (cs = []));

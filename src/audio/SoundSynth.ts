@@ -41,7 +41,8 @@ export type SoundId =
   | 'ui_deny'
   | 'cash'
   | 'collapse_sting'
-  | 'mend';
+  | 'mend'
+  | 'haste';
 
 /** Number of variants generated per sound; keys are `${id}_${n}`. */
 export const SOUND_VARIANTS = 3;

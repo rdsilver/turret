@@ -91,6 +91,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   cash: { cat: 'ui', vol: 0.55, jitter: 0.02 },
   collapse_sting: { cat: 'sting', vol: 0.5, jitter: 0.01 },
   mend: { cat: 'aura', vol: 0.3, jitter: 0.05 },
+  haste: { cat: 'aura', vol: 0.3, jitter: 0.05 },
 };
 
 /** Voice bookkeeping shared by every AudioManager (the sound manager is global). */
@@ -203,6 +204,7 @@ export class AudioManager {
     on('partDeflected', this.onDeflected);
     on('shieldBomb', this.onShieldBomb);
     on('partHealed', this.onPartHealed);
+    on('creatureHasted', this.onCreatureHasted);
   }
 
   unbind(): void {
@@ -405,6 +407,14 @@ export class AudioManager {
   /** A mender's lamp mending: a faint falling shimmer (the aura category plays it at most about once a second). */
   private onPartHealed(e: SimEvents['partHealed']): void {
     this.start('mend', 0.45, 1, this.panFor(e.organ.x * PPM), false);
+  }
+
+  /**
+   * A hastener's beam at work: a rising whirr (aura category: at most about
+   * once a second); a creature reaching its cap gets a brighter one.
+   */
+  private onCreatureHasted(e: SimEvents['creatureHasted']): void {
+    this.start('haste', e.maxed ? 0.6 : 0.4, e.maxed ? 1.25 : 1, this.panFor(e.organ.x * PPM), false);
   }
 
   private onPartFallen(e: SimEvents['partFallen']): void {

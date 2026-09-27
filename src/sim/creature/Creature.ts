@@ -120,6 +120,12 @@ export class Creature {
   /** Walking-speed multiplier set by the game (creatures hurry as they near the line). */
   speedBoost = 1;
   /**
+   * Lasting speed multiplier of this one creature (1 = as its blueprint says):
+   * a hastener's beam raises it for good (see haste.ts). Every way of getting
+   * about drives for travelSpeed, which includes it.
+   */
+  speedMul = 1;
+  /**
    * The only part that can be hurt right now, for a creature whose weak spot
    * roams (ability roamingWeakSpot; null otherwise): gunners aim here first.
    */
@@ -273,6 +279,15 @@ export class Creature {
 
   get active(): boolean {
     return this.state !== 'neutralized';
+  }
+
+  /**
+   * Speed (m/s) it travels at with nothing holding it back: its gait speed,
+   * hurried near the line (speedBoost) and hastened (speedMul). Floating and
+   * flying drive for it; walking for it scaled by its working legs and power.
+   */
+  get travelSpeed(): number {
+    return this.spec.gait.speed * this.speedBoost * this.speedMul;
   }
 
   /** A joint of this creature's structure broke (called by the manager). */
@@ -436,7 +451,9 @@ export class Creature {
     const walking = this.state !== 'neutralized' && this.age > SPAWN_SETTLE && power > 0.05 && this.capacity > 0 && !downed && !stalled;
     // The gait eases in over its first moments (a standing start, not a jolt that snaps hips).
     const ramp = clamp((this.age - SPAWN_SETTLE) / GAIT_RAMP, 0, 1);
-    const speed = this.spec.gait.speed * this.capacity * power * ramp * this.speedBoost;
+    // (travelSpeed scaled by working legs, power and the ease-in, multiplied in
+    // this order so an unhastened walker's numbers stay exactly as they were.)
+    const speed = this.spec.gait.speed * this.capacity * power * ramp * this.speedBoost * this.speedMul;
     if (walking) {
       // The gait runs at the TARGET speed (legs keep cycling if it's blocked: it struggles).
       const rate = speed / Math.max(0.2, this.spec.gait.stride);
@@ -600,7 +617,7 @@ export class Creature {
     if (this.state === 'neutralized') return;
     if (this.state === 'spawning' && this.age > SPAWN_SETTLE) this.state = 'walking';
     const f = this.spec.float!;
-    if (this.state !== 'spawning') this.floatX -= this.spec.gait.speed * this.speedBoost * dt;
+    if (this.state !== 'spawning') this.floatX -= this.travelSpeed * dt;
     this.floatT += dt;
     const t = this.floatT;
     const cx = this.floatX;
@@ -676,7 +693,7 @@ export class Creature {
     const m = this.mass;
     const g = this.ctx.physics.gravity;
     const t = this.age;
-    const speed = this.spec.gait.speed * this.speedBoost;
+    const speed = this.travelSpeed;
     // It arrives on the wing: already cruising when it comes into view.
     if (!this.launched) {
       this.launched = true;
