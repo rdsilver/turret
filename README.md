@@ -166,6 +166,13 @@ own gun is doing, until something breaches the line (then it stands down until
 the level restarts). Creatures pick up speed as they near the line; stopped
 ones fade away after a few seconds.
 
+Once every upgrade is maxed out, the workshop's **FUN STUFF** column opens:
+purely visual extras for the turret (nothing about the gun changes). Hats for
+the breech (a sombrero, a top hat, a party hat, a crown; one at a time),
+googly eyes that follow your aim, a curled mustache, gold plating, rainbow
+tracers and confetti whenever a creature is stopped. Buy once, then wear or
+take off at will.
+
 ## Demolition controls
 
 | Input | Action |

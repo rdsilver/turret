@@ -131,6 +131,8 @@ export class WorldRenderer {
   /** Glow on roaming weak spots (the only part of such a creature that can be hurt). */
   private readonly weakSpots: WeakSpotView;
   private readonly smoke: SmokeView;
+  /** Rainbow tracers (a cosmetic): each round's trail in its own colour. */
+  rainbowTracers = false;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -665,7 +667,7 @@ export class WorldRenderer {
       if (p.state !== 'flying' || p.fading > 0 || p.removed) continue;
       const sp2 = p.vx * p.vx + p.vy * p.vy;
       if (sp2 < TRAIL_MIN_SPEED * TRAIL_MIN_SPEED) continue;
-      const color = p.ammo.trailColor;
+      const color = this.rainbowTracers ? rainbow(p.bornAt * 1.7) : p.ammo.trailColor;
       const r = p.radius * PPM;
       const hx = v.img.x;
       const hy = v.img.y;
@@ -955,4 +957,12 @@ function takeJoint(list: JointVis[], j: BreakableJoint): JointVis | null {
     }
   }
   return null;
+}
+
+/** A fully saturated colour round the hue circle (t in turns). */
+function rainbow(t: number): number {
+  const h = (((t % 1) + 1) % 1) * 6;
+  const x = 1 - Math.abs((h % 2) - 1);
+  const [r, g, b] = h < 1 ? [1, x, 0] : h < 2 ? [x, 1, 0] : h < 3 ? [0, 1, x] : h < 4 ? [0, x, 1] : h < 5 ? [x, 0, 1] : [1, 0, x];
+  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }

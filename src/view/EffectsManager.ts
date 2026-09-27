@@ -40,6 +40,8 @@ const HALF_PI = Math.PI / 2;
 const UP = -HALF_PI;
 /** Particle gravity (px/s^2): sim gravity 12 m/s^2 * PPM, a touch heavier so debris reads snappy. */
 const G = 12 * PPM * 1.15;
+/** Confetti colours. */
+const CONFETTI = [0xff5d8f, 0xffd24a, 0x5dffc1, 0x58a6ff, 0xc084fc];
 const GROUND_DUST = 0x8f8a7e;
 /** Radius (m) of the little pop when a limb tears off. */
 const LIMB_POP_RADIUS = 0.6;
@@ -484,6 +486,31 @@ export class EffectsManager {
     b.gravity = G * 0.5;
     b.jitter = R * 0.3;
     this.emit(this.glow, x, y, 6 + e.gen * 4);
+  }
+
+  /** Confetti (a cosmetic): a colourful burst at (x, y) in sim metres, fluttering down. */
+  confetti(x: number, y: number): void {
+    const px = x * PPM;
+    const py = y * PPM;
+    for (const tint of CONFETTI) {
+      const b = resetBurst();
+      b.tint = tint;
+      b.angle = -Math.PI / 2;
+      b.spread = 1.1;
+      b.speedMin = 180;
+      b.speedMax = 520;
+      b.lifeMin = 900;
+      b.lifeMax = 1700;
+      b.scaleMin = 0.35;
+      b.scaleMax = 0.6;
+      b.aspect = 0.55;
+      b.spin = 9;
+      b.gravity = G * 0.35;
+      b.drag = 2.2;
+      b.alpha = 1;
+      b.fadePow = 3;
+      this.emit(this.chips, px, py, 9);
+    }
   }
 
   /** A boss crashes down onto its arms: a heavy shake and a wall of dust. */

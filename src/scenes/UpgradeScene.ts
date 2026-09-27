@@ -9,6 +9,10 @@
  * If the campaign is complete (levelIndex >= levelManager.count) say so and
  * deploy into procedural levels.
  *
+ * In creature mode a last column sells FUN STUFF (data/cosmetics.ts): visual
+ * extras for the turret, locked until every upgrade is maxed out; once bought
+ * each can be worn or taken off (hats one at a time).
+ *
  * Layout: one column per branch (a small tech tree). The catalogue is drawn
  * by its own camera (viewport = catalogue rect) so it clips and scrolls with
  * the mouse wheel when a branch is taller than the screen.
@@ -28,6 +32,7 @@ import { levelManager } from '../game/LevelManager';
 import { UpgradeSystem } from '../game/UpgradeSystem';
 import type { UpgradeDef, UpgradeBranch } from '../data/upgrades';
 import { AMMO } from '../data/ammo';
+import { COSMETICS, exclusiveSlot, type CosmeticDef } from '../data/cosmetics';
 
 type Text = Phaser.GameObjects.Text;
 
@@ -56,6 +61,8 @@ const HEAD_H = 40;
 const MAX_COLS = 4;
 
 const SIDE = { x: 1460, w: 388 };
+/** FUN STUFF cards are shorter (no levels, no stat preview). */
+const FUN_H = 132;
 
 interface Card {
   def: UpgradeDef;
@@ -77,6 +84,19 @@ interface Card {
   flash: number;
 }
 
+interface FunCard {
+  def: CosmeticDef;
+  root: Phaser.GameObjects.Container;
+  bg: Phaser.GameObjects.Graphics;
+  tag: Text;
+  cost: Text;
+  note: Text;
+  btn: Button;
+  w: number;
+  flash: number;
+  state: { owned: boolean; worn: boolean; unlocked: boolean; affordable: boolean };
+}
+
 interface AmmoRow {
   id: string;
   btn: Button;
@@ -88,6 +108,7 @@ export class UpgradeScene extends Phaser.Scene {
   private audio!: AudioManager;
   private backdrop!: LabBackdrop;
   private cards: Card[] = [];
+  private funCards: FunCard[] = [];
   private ammoRows: AmmoRow[] = [];
   private buttons: Button[] = [];
   private catalog!: Phaser.GameObjects.Container;
@@ -125,6 +146,7 @@ export class UpgradeScene extends Phaser.Scene {
     this.upg = new UpgradeSystem();
     this.upg.progress = gameState().assaultIndex;
     this.cards = [];
+    this.funCards = [];
     this.ammoRows = [];
     this.buttons = [];
     this.specTexts = [];
@@ -228,6 +250,12 @@ export class UpgradeScene extends Phaser.Scene {
         this.drawCardBg(c);
       }
     }
+    for (const c of this.funCards) {
+      if (c.flash > 0) {
+        c.flash = Math.max(0, c.flash - dt / 0.6);
+        this.drawFunBg(c);
+      }
+    }
     for (const s of this.specTexts) {
       if (s.flash > 0) {
         s.flash = Math.max(0, s.flash - dt / 1.2);
@@ -251,17 +279,24 @@ export class UpgradeScene extends Phaser.Scene {
       return;
     }
 
-    const cols = Math.min(MAX_COLS, branches.length);
+    // Creature mode: FUN STUFF goes in a column of its own after the branches.
+    const fun = this.mode === 'assault';
+    const cols = Math.min(MAX_COLS, branches.length + (fun ? 1 : 0));
     const colW = Math.floor((CAT.w - COL_GAP * (cols - 1)) / cols);
     let bandY = 0;
     let bandH = 0;
-    branches.forEach((branch, i) => {
+    const columns: Array<UpgradeBranch | 'fun'> = fun ? [...branches, 'fun'] : branches;
+    columns.forEach((branch, i) => {
       const col = i % cols;
       if (col === 0 && i > 0) {
         bandY += bandH + 28;
         bandH = 0;
       }
       const x = col * (colW + COL_GAP);
+      if (branch === 'fun') {
+        bandH = Math.max(bandH, this.buildFunColumn(x, bandY, colW) - bandY);
+        return;
+      }
       const list = defs.filter((d) => d.branch === branch);
       // Column header
       const label = (this.mode === 'assault' ? ASSAULT_BRANCH_LABEL[branch] : undefined) ?? BRANCH_LABEL[branch] ?? branch.toUpperCase();
@@ -278,6 +313,132 @@ export class UpgradeScene extends Phaser.Scene {
       bandH = Math.max(bandH, y - CARD_GAP - bandY);
     });
     this.contentH = bandY + bandH;
+  }
+
+  /** The FUN STUFF column at (x, y); returns its bottom. */
+  private buildFunColumn(x: number, y: number, w: number): number {
+    const head = mono(this, x, y + 10, 'FUN STUFF', SIZE.xs, THEME.textDim, { weight: 700, spacing: 3, originY: 0.5 });
+    const count = mono(this, x + w, y + 10, `${COSMETICS.length} EXTRAS`, SIZE.micro, THEME.textFaint, { originX: 1, originY: 0.5 });
+    const rule = this.add.rectangle(x, y + 28, w, 1, THEME.rule).setOrigin(0, 0.5);
+    const tick = this.add.rectangle(x, y + 28, 28, 3, THEME.accentNum).setOrigin(0, 0.5);
+    this.catalog.add([head, count, rule, tick]);
+    let cy = y + HEAD_H;
+    for (const def of COSMETICS) {
+      this.funCards.push(this.buildFunCard(def, x, cy, w));
+      cy += FUN_H + CARD_GAP;
+    }
+    return cy - CARD_GAP;
+  }
+
+  private buildFunCard(def: CosmeticDef, x: number, y: number, w: number): FunCard {
+    const root = this.add.container(x, y);
+    this.catalog.add(root);
+    const bg = this.add.graphics();
+    const name = mono(this, 18, 14, def.name, SIZE.md - 1, THEME.text, { weight: 700 });
+    const tag = mono(this, w - 16, 17, '', SIZE.micro - 1, THEME.textDim, { weight: 700, spacing: 2, originX: 1 });
+    const desc = mono(this, 18, 42, '', SIZE.micro, THEME.textDim, { wrap: w - 36, lineSpacing: 2 });
+    setEllipsized(desc, def.description, 2);
+    const cost = mono(this, 18, FUN_H - 21, '', SIZE.lg - 4, THEME.money, { weight: 800, originY: 0.5 });
+    const note = mono(this, 18, FUN_H - 21, '', SIZE.micro - 1, THEME.textDim, { weight: 600, spacing: 1, originY: 0.5 });
+    const card: FunCard = { def, root, bg, tag, cost, note, btn: null as unknown as Button, w, flash: 0, state: { owned: false, worn: false, unlocked: false, affordable: false } };
+    card.btn = new Button(this, {
+      x: w - 14 - 62,
+      y: FUN_H - 21,
+      width: 124,
+      height: 32,
+      label: 'BUY',
+      variant: 'secondary',
+      fontSize: SIZE.sm,
+      audio: this.audio,
+      sound: null,
+      onClick: () => this.funClick(card),
+    });
+    root.add([bg, name, tag, desc, cost, note, card.btn.container]);
+    this.buttons.push(card.btn);
+    return card;
+  }
+
+  /** Every upgrade on sale here at its top level (FUN STUFF unlocks then). */
+  private allMaxed(): boolean {
+    const owned = gameState().upgrades;
+    return this.upg.defs.filter((d) => !d.modes || d.modes.includes(this.mode)).every((d) => (owned[d.id] ?? 0) >= d.maxLevel);
+  }
+
+  private refreshFunCard(c: FunCard): void {
+    const gs = gameState();
+    const owned = gs.cosmetics.includes(c.def.id);
+    const worn = gs.equipped.includes(c.def.id);
+    const unlocked = owned || this.allMaxed();
+    const affordable = gs.money >= c.def.cost;
+    c.state = { owned, worn, unlocked, affordable };
+    setTextIfChanged(c.tag, worn ? 'WORN' : owned ? 'OWNED' : unlocked ? '' : 'LOCKED');
+    setColorIfChanged(c.tag, worn ? THEME.good : owned ? THEME.textDim : THEME.textFaint);
+    if (owned) {
+      c.cost.setVisible(false);
+      c.note.setVisible(true);
+      setTextIfChanged(c.note, worn ? 'ON THE TURRET' : 'IN THE LOCKER');
+      setColorIfChanged(c.note, worn ? THEME.good : THEME.textDim);
+      c.btn.setVisible(true).setEnabled(true).setLabel(worn ? 'TAKE OFF' : 'WEAR');
+    } else if (!unlocked) {
+      c.cost.setVisible(false);
+      c.note.setVisible(true);
+      setTextIfChanged(c.note, 'MAX OUT EVERY UPGRADE TO UNLOCK');
+      setColorIfChanged(c.note, THEME.textDim);
+      c.btn.setVisible(false);
+    } else {
+      c.cost.setVisible(true);
+      setTextIfChanged(c.cost, money(c.def.cost));
+      setColorIfChanged(c.cost, affordable ? THEME.money : THEME.bad);
+      c.note.setVisible(false);
+      c.btn.setVisible(true).setEnabled(affordable).setLabel('BUY');
+    }
+    c.root.setAlpha(unlocked ? 1 : 0.6);
+    this.drawFunBg(c);
+  }
+
+  private drawFunBg(c: FunCard): void {
+    const st = c.state;
+    const g = c.bg;
+    g.clear();
+    g.fillStyle(st.unlocked ? THEME.panelHi : THEME.panel, st.unlocked ? 0.95 : 0.7);
+    g.fillRoundedRect(0, 0, c.w, FUN_H, 4);
+    g.lineStyle(1, st.worn ? THEME.goodNum : st.unlocked ? THEME.rule : THEME.panelEdge, st.worn ? 0.7 : 1);
+    g.strokeRoundedRect(0.5, 0.5, c.w - 1, FUN_H - 1, 4);
+    if (st.worn) {
+      g.fillStyle(THEME.goodNum, 1);
+      g.fillRect(0, 14, 3, 24);
+    }
+    g.lineStyle(1, THEME.panelEdge, 1);
+    g.lineBetween(14, FUN_H - 42.5, c.w - 14, FUN_H - 42.5);
+    if (c.flash > 0) {
+      g.fillStyle(THEME.accentNum, 0.22 * c.flash);
+      g.fillRoundedRect(0, 0, c.w, FUN_H, 4);
+    }
+  }
+
+  /** Buy it (and put it on), or put it on / take it off. Hats go on one at a time. */
+  private funClick(c: FunCard): void {
+    const gs = gameState();
+    const { owned, worn, unlocked } = c.state;
+    if (!owned) {
+      if (!unlocked || gs.money < c.def.cost) {
+        this.audio.play('ui_deny');
+        return;
+      }
+      this.moneyFrom = gs.money;
+      gs.money -= c.def.cost;
+      gs.cosmetics.push(c.def.id);
+      this.moneyT = 0;
+      this.audio.play('ui_buy');
+      c.flash = 1;
+    } else this.audio.play('ui_click');
+    if (worn) gs.equipped = gs.equipped.filter((id) => id !== c.def.id);
+    else {
+      if (exclusiveSlot(c.def.slot)) gs.equipped = gs.equipped.filter((id) => COSMETICS.find((k) => k.id === id)?.slot !== c.def.slot);
+      gs.equipped.push(c.def.id);
+    }
+    gs.save();
+    this.refreshAll();
   }
 
   private buildCard(def: UpgradeDef, x: number, y: number, w: number): Card {
@@ -708,6 +869,7 @@ export class UpgradeScene extends Phaser.Scene {
 
   private refreshAll(): void {
     for (const c of this.cards) this.refreshCard(c);
+    for (const c of this.funCards) this.refreshFunCard(c);
     this.refreshAmmo();
     this.refreshSpec();
     if (this.investedText) setTextIfChanged(this.investedText, money(this.upg.invested(gameState().upgrades)));
@@ -737,6 +899,7 @@ export class UpgradeScene extends Phaser.Scene {
     for (const b of this.buttons) b.destroy();
     this.buttons = [];
     this.cards = [];
+    this.funCards = [];
     this.ammoRows = [];
     this.backdrop.destroy();
     this.input.keyboard?.removeAllListeners();

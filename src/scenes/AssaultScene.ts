@@ -26,6 +26,7 @@ import { TextureFactory } from '../view/TextureFactory';
 import { WorldRenderer } from '../view/WorldRenderer';
 import { BackgroundRenderer } from '../view/BackgroundRenderer';
 import { TurretView } from '../view/TurretView';
+import { TurretCosmetics } from '../view/TurretCosmetics';
 import { CameraDirector, type SimRect } from '../view/CameraDirector';
 import { EffectsManager } from '../view/EffectsManager';
 import { DefenseLineView } from '../view/DefenseLineView';
@@ -58,6 +59,8 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
   private world!: WorldRenderer;
   private background!: BackgroundRenderer;
   private turret!: TurretView;
+  /** Hats, eyes and other fun extras the player wears on the turret. */
+  private cosmetics!: TurretCosmetics;
   private topTurret: TopTurretView | null = null;
   private cam!: CameraDirector;
   private effects!: EffectsManager;
@@ -129,6 +132,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
       this.topTurret = new TopTurretView(this, this.sim.topWeapon!);
     }
     this.effects = new EffectsManager(this, this.sim, this.cam);
+    this.cosmetics = new TurretCosmetics(this, this.sim, this.turret, this.world, this.effects);
     this.defense = new DefenseLineView(this, DEFENSE_LINE_X);
     this.audio = new AudioManager(this);
     this.audio.bind(this.sim);
@@ -377,6 +381,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     w.predict(this.prediction);
     this.turret.showPreview = this.flow === 'playing';
     this.turret.update(dt, this.prediction);
+    this.cosmetics.update(dt);
     this.topTurret?.update();
     this.world.update(physics.alpha, dt);
     this.grabView.update();
@@ -601,6 +606,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
     this.audio.unbind();
     this.effects.destroy();
     this.world.destroy();
+    this.cosmetics.destroy();
     this.turret.destroy();
     this.topTurret?.destroy();
     this.topTurret = null;

@@ -3,12 +3,14 @@
  * Saved to localStorage (guarded; works without it). OWNER: meta agent.
  *
  * Format: versioned JSON under `turret.save.v1`:
- *   { v: 1, savedAt, money, levelIndex, upgrades, selectedAmmo, records, totals..., settings }
+ *   { v: 1, savedAt, money, levelIndex, upgrades, selectedAmmo, records, totals..., settings,
+ *     cosmetics (owned), equipped (worn) }
  * Loading validates every field (bad / missing values fall back to defaults),
  * so a corrupted or hand-edited save can never crash the game. When storage is
  * unavailable (private mode, Node tools, quota) the game runs from memory.
  */
 import type { OwnedUpgrades } from './UpgradeSystem';
+import { COSMETICS } from '../data/cosmetics';
 
 export interface LevelRecord {
   completed: boolean;
@@ -48,6 +50,9 @@ export class GameState {
   totalJointsBroken = 0;
   totalEarned = 0;
   settings: GameSettings = defaultSettings();
+  /** Fun turret extras bought (data/cosmetics.ts), and the ones being worn. */
+  cosmetics: string[] = [];
+  equipped: string[] = [];
   /** False when the last save/load could not touch storage (UI may show a note). */
   persistent = true;
 
@@ -95,6 +100,8 @@ export class GameState {
       totalJointsBroken: this.totalJointsBroken,
       totalEarned: this.totalEarned,
       settings: this.settings,
+      cosmetics: this.cosmetics,
+      equipped: this.equipped,
     };
   }
 
@@ -130,6 +137,11 @@ export class GameState {
         };
       }
     }
+    // Extras: known ids only; worn ones must be owned.
+    const known = new Set(COSMETICS.map((c) => c.id));
+    const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && known.has(x)))] : []);
+    gs.cosmetics = ids(d.cosmetics);
+    gs.equipped = ids(d.equipped).filter((id) => gs.cosmetics.includes(id));
     if (isObj(d.settings)) {
       const s = d.settings;
       gs.settings = {

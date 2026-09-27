@@ -46,6 +46,9 @@ const POWER_LOW = 0x58d6c9;
 const POWER_HIGH = 0xffb547;
 const SLOT_OFF = 0x1c2129;
 const POWER_SEGMENTS = 10;
+/** Gold plating tints (setGold). */
+const GOLD = 0xffcf4a;
+const GOLD_HUB = 0xffe08a;
 
 export class TurretView {
   showPreview = true;
@@ -147,6 +150,17 @@ export class TurretView {
     const show = this.showPreview && prediction.count > 1;
     if (show) this.drawPreview(prediction);
     else if (this.previewVisible) this.hidePreview();
+  }
+
+  /** Gold plating (a cosmetic): the barrel and breech tinted gold, or back to plain steel. */
+  setGold(on: boolean): void {
+    if (on) {
+      this.barrel.setTint(GOLD);
+      this.hub.setTint(GOLD_HUB);
+    } else {
+      this.barrel.clearTint();
+      this.hub.clearTint();
+    }
   }
 
   destroy(): void {
