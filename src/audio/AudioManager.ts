@@ -416,6 +416,12 @@ export class AudioManager {
    * once a second); a creature reaching its cap gets a brighter one.
    */
   private onCreatureHasted(e: SimEvents['creatureHasted']): void {
+    if (e.maxed) {
+      // The cap cue always plays: the beam's own ticks keep the slot busy otherwise.
+      const slot = VOICES.haste;
+      slot.last = -1e9;
+      slot.ends.fill(0);
+    }
     this.start('haste', e.maxed ? 0.6 : 0.4, e.maxed ? 1.25 : 1, this.panFor(e.organ.x * PPM), false);
   }
 

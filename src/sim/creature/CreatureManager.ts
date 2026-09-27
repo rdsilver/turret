@@ -33,6 +33,8 @@ const PIECE_FADE_AFTER = 4;
 export class CreatureManager {
   readonly list: Creature[] = [];
   private byStructure = new Map<Structure, Creature[]>();
+  /** The creature that carries each part (the latest to adopt it). */
+  private readonly ownerOf = new WeakMap<StructurePart, Creature>();
   /** Structures that lost a joint and may have split (checked before the next step). */
   private splitCheck = new Set<Structure>();
   /** Joints broken last step: a piece torn off a creature pops. */
@@ -84,6 +86,8 @@ export class CreatureManager {
 
   private adopt(structure: Structure, spec: CreatureSpec, kind: string, parent?: Creature): Creature {
     const creature = new Creature(this.ctx, structure, spec);
+    // Parts only ever pass from an older creature to a newer one (a split), so this is who carries each now.
+    for (const p of structure.parts) if (creature.owns(p)) this.ownerOf.set(p, creature);
     creature.kind = kind;
     // A cut-off piece is as hastened as the body it came from.
     if (parent) creature.speedMul = parent.speedMul;
@@ -293,7 +297,8 @@ export class CreatureManager {
           vitals: [lead.name],
           bounty: Math.round((base.spec.bounty ?? 50) * 0.25),
         };
-        this.adopt(structure, spec, base.kind, base);
+        // Its parent is the creature that carried it until the cut (as hastened as that one).
+        this.adopt(structure, spec, base.kind, this.ownerOf.get(lead) ?? base);
       }
     }
     this.splitCheck.clear();

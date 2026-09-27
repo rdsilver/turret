@@ -135,6 +135,26 @@ export class HasteView {
     return { x: (p.px + (p.x - p.px) * alpha) * PPM, y: (p.py + (p.y - p.py) * alpha) * PPM };
   }
 
+  /**
+   * Where a creature's body is for the beam and burst (world px) and how big it
+   * is (m): its core, or for a wheel (whose core turns round the rim) the middle
+   * of the ring and its radius.
+   */
+  private anchor(c: Creature, alpha: number): { x: number; y: number; r: number } {
+    if (!c.wheel) return { ...this.at(c.core, alpha), r: c.core.extent };
+    let x = 0;
+    let y = 0;
+    let m = 0;
+    for (const p of c.structure.parts) {
+      if (p.removed || !c.owns(p)) continue;
+      x += (p.px + (p.x - p.px) * alpha) * p.mass;
+      y += (p.py + (p.y - p.py) * alpha) * p.mass;
+      m += p.mass;
+    }
+    if (m <= 0) return { ...this.at(c.core, alpha), r: c.core.extent };
+    return { x: (x / m) * PPM, y: (y / m) * PPM, r: c.wheel.outer };
+  }
+
   private organOf(c: Creature): StructurePart | null {
     const spec = hasteSpec(c);
     const organ = spec ? c.structure.part(spec.part) : undefined;
@@ -160,7 +180,7 @@ export class HasteView {
     const k = b.target!;
     if (!organ || k.core.removed) return;
     const o = this.at(organ, alpha);
-    const p = this.at(k.core, alpha);
+    const p = this.anchor(k, alpha);
     const dx = p.x - o.x;
     const dy = p.y - o.y;
     const len = Math.hypot(dx, dy);
@@ -172,7 +192,7 @@ export class HasteView {
     const f = b.k;
     const g = this.front;
     const w0 = 0.1 * PPM;
-    const w1 = Math.max(0.5, Math.min(1.6, k.core.extent * 0.7)) * PPM;
+    const w1 = Math.max(0.5, Math.min(1.6, p.r * 0.7)) * PPM;
     // Soft tapered glow.
     const flicker = 0.85 + 0.15 * Math.sin(t * 11 + b.seed * 30);
     const a0 = 0.22 * f * flicker;
@@ -206,7 +226,7 @@ export class HasteView {
       this.ring(g, o.x + dx * u, o.y + dy * u, ux, uy, nx, ny, r * 1.2, r * 0.35, i % 2 ? CYAN : PALE, 0.5 * f * s, 2);
     }
     // Where it lands: ripples spreading out around the beam over the ally's body.
-    const kr = Math.max(0.8, Math.min(3, k.core.extent)) * PPM;
+    const kr = Math.max(0.8, Math.min(3, p.r)) * PPM;
     for (let i = 0; i < 2; i++) {
       const u = (t * 1.1 + b.seed + i * 0.5) % 1;
       this.ring(g, p.x, p.y, ux, uy, nx, ny, kr * (0.5 + 0.9 * u), kr * (0.14 + 0.2 * u), VIOLET, 0.5 * f * (1 - u), 2.5);
@@ -344,8 +364,8 @@ export class HasteView {
   /** A creature that just reached its cap: a violet ring bursting outward. */
   private drawBurst(u: Burst, alpha: number): void {
     const c = u.creature;
-    const p = this.at(c.core, alpha);
-    const r = Math.max(1, Math.min(4, c.core.extent * 1.4)) * PPM * (0.6 + 1.2 * (1 - u.life));
+    const p = this.anchor(c, alpha);
+    const r = Math.max(1, Math.min(4, p.r * 1.4)) * PPM * (0.6 + 1.2 * (1 - u.life));
     const g = this.front;
     g.lineStyle(5, VIOLET, 0.7 * u.life);
     g.strokeCircle(p.x, p.y, r);

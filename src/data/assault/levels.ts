@@ -176,7 +176,6 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 38, params: { speed: 3.2, height: 3 } },
       { creature: 'hound', at: 40, params: { speed: 1.7 } },
       { creature: 'bomber', at: 30 },
-      { creature: 'hastener', at: 20, params: { cap: 1.4 } },
     ],
   },
   {
