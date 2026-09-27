@@ -32,7 +32,7 @@ registerCreature('brood', (d, _rng, params) => {
   // The brood sac, slung round the front of the belly (the organ).
   const sacR = 0.4;
   const sacY = hipY + 0.42;
-  d.circle(-torsoW / 2 - sacR * 0.55, sacY, sacR, 'core', { id: 'sac', densityScale: 0.12, tags: ['organ'], hpScale: P('sacHp', 1.7) });
+  d.circle(-torsoW / 2 - sacR * 0.55, sacY, sacR, 'core', { id: 'sac', densityScale: 0.12, tags: ['organ'], hpScale: P('sacHp', 2.04) });
   d.weld('sac', 'torso', { at: [-torsoW / 2, sacY], seam: 0.5, strength: 3 });
   // Short, thick arms (swing for balance), kept high so the sac stays in view.
   const shoulderY = top - 0.2;
