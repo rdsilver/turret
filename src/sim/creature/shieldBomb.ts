@@ -5,7 +5,7 @@
  *  throwShieldBomb – lobs a big glowing canister ten-odd metres ahead of the
  *                    creature. Once it lands its fuse ticks: a red light
  *                    blinking and beeping faster and faster. Hit it `hits`
- *                    times (10; any round counts, whatever its damage) before
+ *                    times (15; any round counts, whatever its damage) before
  *                    the fuse runs out and it pops harmlessly. If the fuse runs
  *                    out it springs up into a tall armour wall standing on
  *                    the ground: bullets (the main gun's and the top
@@ -415,7 +415,7 @@ registerAbility('throwShieldBomb', {
       landedAt: -1,
       fuse: num(spec, 'fuse', 3.5),
       hits: 0,
-      hitsToPop: Math.max(1, Math.round(num(spec, 'hits', 10))),
+      hitsToPop: Math.max(1, Math.round(num(spec, 'hits', 15))),
       nextTick: 0,
       wall: { h: num(spec, 'wallH', 9), w: num(spec, 'wallW', 1), life: num(spec, 'wallLife', 14), hp: num(spec, 'wallHp', 0.3) },
     });

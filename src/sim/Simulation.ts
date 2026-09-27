@@ -163,6 +163,11 @@ export class Simulation implements SimContext {
     return this.physics.update(realDt);
   }
 
+  /** Let the top turret fire (true) or stand it down (false: it holds fire until enabled again). */
+  setTopTurretEnabled(on: boolean): void {
+    if (this.topGunner) this.topGunner.enabled = on;
+  }
+
   /** Mount (stats) or remove (null) the automatic top turret. */
   setTopTurret(stats: WeaponStats | null): void {
     this.topGunner?.dispose();

@@ -100,8 +100,8 @@ registerCreature('thrower', (d, _rng, params) => {
 /**
  * HOUND — a fast quadruped. Trots (diagonal legs move together). It keeps
  * coming on three legs; take out a front pair (or a back pair) and it goes
- * down. Its front shins are steel: the wooden thighs above them, or the back
- * legs, give way sooner.
+ * down. Its front legs are three-quarters steel (only the top of each thigh
+ * is wood): that wooden band, or the back legs, give way sooner.
  */
 registerCreature('hound', (d, _rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
@@ -126,11 +126,31 @@ registerCreature('hound', (d, _rng, params) => {
   for (const [side, x] of hips) {
     buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * P('hipK', 2.5), kneeTorque: tref * P('kneeK', 3), hp: P('legHp', 0.8), omega: P('omega', 90) }, 'body');
   }
-  // Steel front shins, weighing what wooden ones would (the gait doesn't notice).
-  for (const side of ['FL', 'FR']) {
-    const shin = d.parts.find((q) => q.id === `shin${side}`)!;
-    shin.material = 'steel';
-    shin.densityScale = (density * 520) / 7000;
+  // Front legs three-quarters steel: everything below the middle of the thigh
+  // (lower thigh, shin, foot), weighing what wood would, so the gait doesn't
+  // notice. The top half of each front thigh stays wood.
+  const asWood = (density * 520) / 7000;
+  const footH = 0.12;
+  const kneeY = footH + legLen;
+  const midY = kneeY + (hipY - kneeY) / 2;
+  for (const [side, x] of hips.slice(0, 2)) {
+    const far = side.endsWith('R') ? ['back'] : [];
+    const thigh = d.parts.find((q) => q.id === `thigh${side}`)!;
+    const top = hipY + 0.04;
+    thigh.y = (midY + top) / 2;
+    thigh.shape = { kind: 'box', w: 0.16, h: top - midY };
+    d.box(x, (kneeY - 0.04 + midY) / 2, 0.16, midY - (kneeY - 0.04), 'steel', { id: `thighLo${side}`, densityScale: asWood, tags: ['limb', ...far], hpScale: P('legHp', 0.8) });
+    // A stiff, strong seam: the hip and knee torques both go through it, and a
+    // wood-bonded weld would bend under them (the leg comes off only when the
+    // wooden half is shot away).
+    d.weld(`thigh${side}`, `thighLo${side}`, { at: [x, midY], seam: 0.16, strength: 20, bond: 'armor' });
+    // The knee now hinges on the steel half.
+    d.joints.find((j) => j.id === `knee${side}`)!.a = `thighLo${side}`;
+    for (const id of [`shin${side}`, `foot${side}`]) {
+      const q = d.parts.find((k) => k.id === id)!;
+      q.material = 'steel';
+      q.densityScale = asWood;
+    }
   }
   const amp = P('amp', 0.6);
   const gait: Record<string, MuscleGait> = {};
@@ -144,7 +164,12 @@ registerCreature('hound', (d, _rng, params) => {
     name: 'Hound',
     weakPoints: ['thighFL', 'thighFR', 'shinBL', 'shinBR', 'shinFL', 'shinFR', 'head', 'body'],
     core: 'body',
-    legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
+    legs: hips.map(([side]) => ({
+      name: side,
+      joints: [`hip${side}`, `knee${side}`],
+      parts: side.startsWith('F') ? [`thigh${side}`, `thighLo${side}`, `shin${side}`, `foot${side}`] : [`thigh${side}`, `shin${side}`, `foot${side}`],
+      foot: `foot${side}`,
+    })),
     gait: { speed, stride: P('stride', 3), muscles: gait },
     legGroups: [
       ['FL', 'FR'],

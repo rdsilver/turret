@@ -191,6 +191,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
       this.sim.topWeapon.heat = 0;
       this.sim.topWeapon.overheated = false;
     }
+    this.sim.setTopTurretEnabled(true);
     this.world.setStressView(this.stressDebug);
     if (!this.debugMenu.visible) {
       this.sim.physics.paused = false;
@@ -390,6 +391,8 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
       } else {
         this.hud?.banner('BREACH', 'A creature crossed the line');
         this.endTimer = 2.4;
+        // The line is lost: the top turret stands down too (until the level restarts).
+        this.sim.setTopTurretEnabled(false);
       }
     }
     if (this.flow === 'ending') {
