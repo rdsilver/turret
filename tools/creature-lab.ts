@@ -122,7 +122,7 @@ run(sim, seconds, (t) => {
     lastPrint = t;
     const tilt = (c.core.angle * 180) / Math.PI;
     rows.push(
-      `${t.toFixed(1).padStart(5)}s x=${c.x.toFixed(2).padStart(6)} vx=${c.core.vx.toFixed(2).padStart(5)} state=${c.state.padEnd(11)} legs=${c.functionalLegs}/${c.legs.length} cap=${c.capacity.toFixed(2)} power=${c.power.toFixed(2)} tilt=${tilt.toFixed(0).padStart(4)}° bodyH=${c.core.height.toFixed(2)} gunHeat=${sim.weapon.heat.toFixed(2)}${c.engines.length ? ` engine=${c.engines[0]!.heat.toFixed(2)}/${c.engines[0]!.integrity.toFixed(2)}` : ''}`,
+      `${t.toFixed(1).padStart(5)}s x=${c.x.toFixed(2).padStart(6)} vx=${c.core.vx.toFixed(2).padStart(5)} state=${c.state.padEnd(11)} legs=${c.functionalLegs}/${c.legs.length} cap=${c.capacity.toFixed(2)} power=${c.power.toFixed(2)} tilt=${tilt.toFixed(0).padStart(4)}° bodyH=${c.core.height.toFixed(2)} gunHeat=${sim.weapon.heat.toFixed(2)}${c.engines.length ? ` engine=${c.engines[0]!.heat.toFixed(2)}/${c.engines[0]!.integrity.toFixed(2)}` : ''}${c.wheel ? ` hub: vx=${c.wheel.vx.toFixed(2)} h=${c.wheel.height.toFixed(2)}/${c.wheel.restHeight.toFixed(2)} spin=${c.wheel.spin.toFixed(2)}` : ''}`,
     );
   }
   if (fi < frameTimes.length && t >= frameTimes[fi]!) {

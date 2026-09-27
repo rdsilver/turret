@@ -78,6 +78,13 @@ export interface FlySpec {
   gear?: string[];
 }
 
+export interface RollSpec {
+  /** Rim part ids in order around the wheel (each joined to the next, the last to the first). */
+  rim: string[];
+  /** Speed (m/s) the rim parts fly apart with when it is stopped (default 3). */
+  burst?: number;
+}
+
 export interface CreatureSpec {
   name: string;
   /** Part id of the body the controller balances and propels. */
@@ -145,6 +152,15 @@ export interface CreatureSpec {
    * treat it as that many metres closer to the line than it is.
    */
   targetPriority?: number;
+  /**
+   * Rolling creatures are a wheel: a closed ring of rim parts that spins
+   * itself along the ground toward the turret. The drive is a torque inside
+   * the ring (no push), so it only gets anywhere by rolling (gait.speed is its
+   * rolling speed; spec.drive scales the torque). A broken ring (a rim part
+   * wrecked or cut out, a seam torn) downs it; a vital destroyed kills it;
+   * either way the ring bursts apart.
+   */
+  roll?: RollSpec;
 }
 
 export interface CreatureParams {
