@@ -20,8 +20,10 @@
  *    entities: alpha = fading/fadeDuration.
  *  - Healing (partHealed, from a mender's lamp): the part glows green while it
  *    is mended and its damage tint recedes with its integrity; its craters
- *    stay as scars but shrink back as it heals. HealBeams draws the lamp's
- *    cone of light and the beams to the parts it mends.
+ *    shrink and fade away as it heals (smallest first, in step with the hit
+ *    points it gets back), and once it is whole again it is back on its
+ *    plain, uncratered art as if never hit (PartCraters.healed). HealBeams
+ *    draws the lamp's cone of light and the beams to the parts it mends.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
  *  - Stress view (setStressView): parts tinted by the max joint.stressVis of
@@ -250,7 +252,8 @@ export class WorldRenderer {
     }
     if (this.colliderDebug) this.drawColliders();
     this.healBeams.update(alpha, realDt);
-    // Crater repaints + texture uploads: once per damaged part per frame.
+    // Healed craters shrinking away, then crater repaints + texture uploads: once per damaged part per frame.
+    if (this.craters.healingActive) this.craters.animate(realDt);
     if (this.craters.pending) this.craters.flush();
   }
 
@@ -385,7 +388,7 @@ export class WorldRenderer {
     this.applyPartTint(v, true);
   }
 
-  /** A mender healed the part: it glows green, its red recedes, its craters shrink back a little. */
+  /** A mender healed the part: it glows green, its red recedes, its craters close up (gone once it is whole). */
   private onPartHealed(p: StructurePart): void {
     const v = p.view as PartVis | null;
     if (!v || v.kind !== 0 || p.removed) return;

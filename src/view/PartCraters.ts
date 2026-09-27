@@ -14,8 +14,22 @@
  *   one, so the painting cost of a part stays bounded however long it is shot.
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
- *   chips. A healed part (healed()) keeps its craters as scars, shrunk back
- *   to the growth step of its integrity.
+ *   chips.
+ * - healed(): a mender's light takes the damage back off. Every crater holds
+ *   the share of the part's hit points its rounds took (`w`); the craters
+ *   together never hold more than the part is still missing, so the
+ *   integrity a heal tick gives back is taken off them smallest crater first
+ *   (fresh scratches mend first, the deep gouges close last): what is left
+ *   on the part always matches the damage it still has. A crater shows what
+ *   it still holds (Crater.life, LIFE_STEPS steps, smaller and fainter: a
+ *   chip shrinks until the silhouette is whole again, a pit fades) and eases
+ *   down to it one step every LIFE_STEP_TIME (animate(), only while some
+ *   crater is on its way down), so even a crater one tick heals whole
+ *   shrinks and fades out instead of blinking away. With the part (nearly)
+ *   whole again (HEALED) whatever is left fades out too; the empty part goes
+ *   back to its plain atlas frame and its region is recycled: it looks as if
+ *   it had never been hit. Every step is one full repaint, still at most
+ *   once per part per frame.
  * - flush() (end of WorldRenderer.update): each dirty part repaints at most
  *   once per frame into its own small CPU canvas — just the new / merged
  *   craters on top, or everything on a fresh copy of its base art when the
@@ -83,12 +97,20 @@ interface Region {
   frame: string;
 }
 
+/** A crater and the damage it stands for (what healing takes back). */
+interface HealingCrater extends Crater {
+  /** Share of the part's hit points its rounds took and no heal has given back yet (integrity units). */
+  w: number;
+  /** The most it has held: while it heals it paints as w / peak of itself (Crater.life). */
+  peak: number;
+}
+
 export interface CraterSet {
   host: CraterHost;
   region: Region | null;
   /** Private CPU canvas of the region's size: painted, then uploaded. */
   scratch: Ctx | null;
-  list: Crater[];
+  list: HealingCrater[];
   /** Indices of craters added or merged since the last paint. */
   fresh: number[];
   /** Growth step the art was painted at. */
@@ -97,6 +119,10 @@ export interface CraterSet {
   full: boolean;
   dirty: boolean;
   released: boolean;
+  /** In the healing list: some crater is still easing down (see animate()). */
+  healing: boolean;
+  /** Seconds to its next heal step. */
+  healClock: number;
   style: CraterStyle;
   geom: CraterGeom;
   /** Frame size and body origin inside it (texels). */
@@ -125,6 +151,9 @@ export interface CraterStats {
   uploads: number;
   /** Paints that found no room on the pages (drawn without craters until room frees up). */
   skipped: number;
+  /** Craters healed away, and healed parts put back on their plain atlas frame. */
+  healedAway: number;
+  cleaned: number;
   /** Total milliseconds spent painting + uploading. */
   paintMs: number;
 }
@@ -139,6 +168,15 @@ const MERGE = 0.6;
 const GROW = 0.8;
 /** Growth is quantised: each step repaints the part once. */
 const GROW_STEPS = 4;
+/** A healing crater shrinks and fades in this many steps (each repaints the part once). */
+const LIFE_STEPS = 4;
+/** Seconds per step (a crater a heal tick closed whole fades out in LIFE_STEPS of them). */
+const LIFE_STEP_TIME = 0.08;
+/**
+ * Integrity at which a healed part is whole again: its last craters go and it
+ * returns to its plain art (the renderer's damage tint is gone by then too).
+ */
+const HEALED = 0.995;
 const PAGE_SIZE = 1024;
 const MAX_PAGES = 3;
 /** Transparent gutter between regions (texels) so bilinear filtering never bleeds. */
@@ -176,6 +214,8 @@ interface GLRendererLike {
 
 export class PartCraters {
   private readonly dirty: CraterSet[] = [];
+  /** Parts with a crater still easing down after a heal (animate()). */
+  private readonly healing: CraterSet[] = [];
   private readonly live = new Set<CraterSet>();
   private pages: CraterPage[] = [];
   private regionCount = 0;
@@ -183,7 +223,7 @@ export class PartCraters {
   private scratchPooled = 0;
   private readonly arts = new Map<string, Ctx>();
   private seed = 0x2f6b1c3d;
-  private readonly counters = { paints: 0, fullPaints: 0, uploads: 0, skipped: 0, paintMs: 0 };
+  private readonly counters = { paints: 0, fullPaints: 0, uploads: 0, skipped: 0, healedAway: 0, cleaned: 0, paintMs: 0 };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -193,6 +233,11 @@ export class PartCraters {
   /** Any part waiting for a repaint this frame. */
   get pending(): boolean {
     return this.dirty.length > 0;
+  }
+
+  /** Any healed crater still shrinking away (call animate() each frame while so). */
+  get healingActive(): boolean {
+    return this.healing.length > 0;
   }
 
   get stats(): CraterStats {
@@ -251,15 +296,27 @@ export class PartCraters {
         best = i;
       }
     }
+    // The share of the part this round destroyed (what healing gives back).
+    const share = p.maxHp > 0 ? Math.min(1, amount / p.maxHp) : 1;
     if (best >= 0 && (list.length >= MAX_CRATERS || Math.sqrt(bestD2) < MERGE * (list[best]!.r + r))) {
       // A merged hit widens the crater by how much of the part it destroyed: heavy
       // plate soaking up a hundred rounds stays scuffed, a wooden limb gets gouged.
-      const share = p.maxHp > 0 ? amount / p.maxHp : 1;
-      this.merge(set, list[best]!, cx, cy, r * Math.max(0.08, Math.min(0.55, share * 6)));
+      const k = list[best]!;
+      this.merge(set, k, cx, cy, r * Math.max(0.08, Math.min(0.55, share * 6)));
+      k.w += share;
+      if (k.w > k.peak) k.peak = k.w;
+      if (k.life < 1) {
+        // A healing crater torn open again: repaint it whole (its faint paint would pile up otherwise).
+        k.life = Math.max(k.life, lifeOf(k));
+        set.full = true;
+      }
       if (!set.fresh.includes(best)) set.fresh.push(best);
     } else {
       const clear = across(p.shape, (cx - set.ox) / S, (cy - set.oy) / S, SF.nx, SF.ny) * S;
-      list.push({ x: cx, y: cy, r, nx: SF.nx, ny: SF.ny, depth: Math.max(0, depth), clear, seed: (this.rand() * 0x7fffffff) | 0 });
+      list.push({
+        x: cx, y: cy, r, nx: SF.nx, ny: SF.ny, depth: Math.max(0, depth), clear, seed: (this.rand() * 0x7fffffff) | 0,
+        life: 1, w: share, peak: share,
+      });
       set.fresh.push(list.length - 1);
     }
     this.markDirty(set);
@@ -280,14 +337,93 @@ export class PartCraters {
   }
 
   /**
-   * The part got some integrity back (a mender healed it): its craters stay as
-   * scars, but shrink back when it climbs a growth step.
+   * The part got some integrity back (a mender healed it): its craters give
+   * back what it regained, smallest first, and ease down to what they still
+   * hold (animate()); whole again, it loses the rest and returns to its plain art.
    */
   healed(host: CraterHost): void {
     const set = host.craters;
     if (!set || set.released) return;
-    const step = Math.min(GROW_STEPS, Math.round((1 - Math.max(0, host.entity.integrity)) * GROW_STEPS));
-    if (step !== set.step) this.markDirty(set);
+    const p = host.entity;
+    const list = set.list;
+    if (p.integrity >= HEALED) {
+      for (let i = 0; i < list.length; i++) list[i]!.w = 0;
+    } else {
+      // The craters hold no more than the part still misses: the excess goes, smallest crater first.
+      let excess = p.integrity - 1;
+      for (let i = 0; i < list.length; i++) excess += list[i]!.w;
+      while (excess > 1e-9) {
+        let k: HealingCrater | null = null;
+        for (let i = 0; i < list.length; i++) {
+          const c = list[i]!;
+          if (c.w > 0 && (!k || c.r < k.r || (c.r === k.r && c.w < k.w))) k = c;
+        }
+        if (!k) break;
+        const take = Math.min(k.w, excess);
+        k.w -= take;
+        excess -= take;
+      }
+    }
+    let easing = list.length === 0;
+    for (let i = 0; i < list.length && !easing; i++) easing = list[i]!.life > lifeOf(list[i]!);
+    if (easing && !set.healing) {
+      // The first step shows at once (this frame's animate()).
+      set.healing = true;
+      set.healClock = 0;
+      this.healing.push(set);
+    }
+    if (growStep(p) !== set.step) this.markDirty(set);
+  }
+
+  /**
+   * Healed craters ease down to what they still hold: one step per part every
+   * LIFE_STEP_TIME (real seconds), each a full repaint; a crater at zero is
+   * gone, and an empty part returns to its plain art on the flush.
+   */
+  animate(dt: number): void {
+    const list = this.healing;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const set = list[i]!;
+      if (!set.released && !set.host.entity.removed) {
+        set.healClock -= dt;
+        if (set.healClock > 0) continue;
+        set.healClock = Math.max(0, set.healClock + LIFE_STEP_TIME);
+        if (this.stepDown(set)) continue;
+      }
+      set.healing = false;
+      list[i] = list[list.length - 1]!;
+      list.pop();
+    }
+  }
+
+  /** One heal step of a part's craters. Returns whether any still has further to go. */
+  private stepDown(set: CraterSet): boolean {
+    const list = set.list;
+    let changed = list.length === 0;
+    let more = false;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const k = list[i]!;
+      const target = lifeOf(k);
+      if (k.life > target) {
+        k.life = Math.max(target, k.life - 1 / LIFE_STEPS);
+        changed = true;
+      }
+      if (k.life <= 1e-6) {
+        this.counters.healedAway++;
+        continue;
+      }
+      if (k.life > target) more = true;
+      list[n++] = k;
+    }
+    list.length = n;
+    if (changed) {
+      // Shrinking craters can't be painted over the old ones: repaint from the base art.
+      set.fresh.length = 0;
+      set.full = true;
+      this.markDirty(set);
+    }
+    return more;
   }
 
   /** The part's display object goes away: region and scratch are recycled. Never touches the image. */
@@ -370,6 +506,8 @@ export class PartCraters {
     for (const ctx of this.arts.values()) freeCanvas(ctx);
     this.arts.clear();
     this.dirty.length = 0;
+    for (const set of this.healing) set.healing = false;
+    this.healing.length = 0;
   }
 
   // ------------------------------------------------------------------ craters
@@ -392,6 +530,8 @@ export class PartCraters {
       full: true,
       dirty: false,
       released: false,
+      healing: false,
+      healClock: 0,
       style: craterStyle(host.neutral ? neutralMaterial(p.material) : p.material),
       geom: {
         horizontal: dims.w >= dims.h,
@@ -412,7 +552,7 @@ export class PartCraters {
   }
 
   /** Fold a hit at (cx, cy) into crater k, widening it by `grow` (texels, added in quadrature). */
-  private merge(set: CraterSet, k: Crater, cx: number, cy: number, grow: number): void {
+  private merge(set: CraterSet, k: HealingCrater, cx: number, cy: number, grow: number): void {
     // Area-weighted centre: small additions barely move the crater.
     const w1 = k.r * k.r;
     const w2 = grow * grow * 2;
@@ -439,7 +579,18 @@ export class PartCraters {
   private paint(set: CraterSet): void {
     const host = set.host;
     const p = host.entity;
-    const step = Math.min(GROW_STEPS, Math.round((1 - Math.max(0, p.integrity)) * GROW_STEPS));
+    if (set.list.length === 0) {
+      // Healed clean: back on its plain atlas frame, its region and scratch recycled.
+      if (set.region) {
+        const f = this.textures.partFrame(p, host.neutral);
+        host.img.setTexture(f.key, f.frame);
+        host.img.setOrigin(f.originX, f.originY);
+      }
+      this.release(host);
+      this.counters.cleaned++;
+      return;
+    }
+    const step = growStep(p);
     if (step !== set.step) {
       set.step = step;
       set.full = true;
@@ -610,6 +761,17 @@ export class PartCraters {
 
 function bucketKey(w: number, h: number): number {
   return w * 65536 + h;
+}
+
+/** Crater growth step of a part at its integrity (0 = whole .. GROW_STEPS = about to break). */
+function growStep(p: StructurePart): number {
+  return Math.min(GROW_STEPS, Math.round((1 - Math.max(0, p.integrity)) * GROW_STEPS));
+}
+
+/** How much of a crater is left to heal, quantised to LIFE_STEPS (0 = healed away). */
+function lifeOf(k: HealingCrater): number {
+  if (!(k.peak > 0) || !(k.w > 0)) return 0;
+  return Math.ceil(Math.min(1, k.w / k.peak) * LIFE_STEPS - 1e-6) / LIFE_STEPS;
 }
 
 /**
