@@ -6,7 +6,8 @@
  * a round (something in front of it soaks them up) is skipped for a while.
  * A wheel (Creature.wheel) whose weak points are all turned away from the gun
  * waits: it shoots the next creature meanwhile (if there is one); on a wheel
- * it aims at a weak point that faces the gun.
+ * it aims at a weak point that faces the gun. It can't see through smoke
+ * (creature/smoke.ts): a creature hidden in it is left until it comes out.
  */
 import type { SimContext } from '../SimContext';
 import type { Weapon } from './Weapon';
@@ -14,6 +15,7 @@ import type { Creature } from '../creature/Creature';
 import type { StructurePart } from '../StructurePart';
 import { solveAim } from '../ballistics';
 import { exposedWeakPoints } from '../creature/rolling';
+import { smokeBetween } from '../creature/smoke';
 
 /** Seconds between target re-evaluations. */
 const RETARGET = 0.35;
@@ -101,6 +103,7 @@ export class AutoGunner {
     const m = this.weapon.muzzle();
     for (const c of this.ctx.creatures.list) {
       if (!c.active || c.core.removed || c.age < 0.5) continue;
+      if (smokeBetween(this.ctx, m.x, m.y, c.core.x, c.core.y)) continue;
       const x = c.frontX;
       // A wheel with its weak point turned away can't be hurt from here: something else first, meanwhile.
       if (c.wheel && !exposedWeakPoints(c, m.x, m.y).length) {

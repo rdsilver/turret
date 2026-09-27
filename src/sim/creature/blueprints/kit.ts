@@ -135,6 +135,7 @@ export function scaleCreature(d: StructureDraft, spec: CreatureSpec, s: number):
     if (j.muscle) j.muscle = { ...j.muscle, torque: j.muscle.torque * s * s * s };
   }
   spec.gait.stride *= s;
+  if (spec.crawl) spec.crawl.stride *= s;
   if (spec.float) spec.float.bob *= s;
   if (spec.fly) spec.fly.swoop *= s;
   for (const a of spec.abilities ?? []) {

@@ -55,6 +55,9 @@ export const TOP_TURRET = {
   maxAngleDeg: 75,
 };
 
+/** Impact craters (hits pitting and chipping the parts they strike, view/PartCraters.ts): off for now. */
+export const IMPACT_CRATERS = false;
+
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;
 /** Walking (and floating) creatures move at this multiple of their blueprint / level speed. */

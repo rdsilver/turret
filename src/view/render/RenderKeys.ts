@@ -15,6 +15,8 @@ export const RK = {
   reticle: 'rk_reticle',
   /** Radial glow (core parts), 64x64. */
   glow: 'rk_glow',
+  /** Soft, lumpy puff of smoke (white; tinted), 64x64. */
+  smoke: 'rk_smoke',
   /** Soft trajectory dot, 12x12. */
   pdot: 'rk_pdot',
   /** Ground hatch tile (1x), 24x24. */

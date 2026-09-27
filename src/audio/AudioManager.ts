@@ -200,6 +200,8 @@ export class AudioManager {
     on('partDeflected', this.onDeflected);
     on('shieldBomb', this.onShieldBomb);
     on('creatureHatched', this.onHatched);
+    on('blobSplit', this.onBlobSplit);
+    on('creatureStage', this.onStage);
   }
 
   unbind(): void {
@@ -364,6 +366,20 @@ export class AudioManager {
     const pan = this.panFor(e.x * PPM);
     this.start('impact_rubber', 0.55, 0.7, pan, false);
     this.start('whoosh', 0.25, 1.5, pan, false);
+  }
+
+  /** A blob bursts: a wet, rubbery splat, deeper the bigger it was. */
+  private onBlobSplit(e: SimEvents['blobSplit']): void {
+    const pan = this.panFor(e.x * PPM);
+    this.start('impact_rubber', 0.6, 0.55 + 0.25 * (2 - e.gen), pan, false);
+    this.start('debris', 0.25, 1.6, pan, false);
+  }
+
+  /** A boss crashes down onto its arms: a deep boom and a long metal groan. */
+  private onStage(e: SimEvents['creatureStage']): void {
+    const pan = this.panFor(e.x * PPM);
+    this.start('explosion', 0.7, 0.6, pan, false);
+    this.start('groan_metal', 0.8, 0.55, pan, false);
   }
 
   /** Torn-off limb: the explosion sample, quiet and pitched up into a small pop. */

@@ -329,6 +329,8 @@ export class EffectsManager {
     this.on('partDeflected', this.onPartDeflected);
     this.on('shieldBomb', this.onShieldBomb);
     this.on('creatureHatched', this.onHatched);
+    this.on('blobSplit', this.onBlobSplit);
+    this.on('creatureStage', this.onStage);
   }
 
   // ---- creatures -----------------------------------------------------------
@@ -456,6 +458,39 @@ export class EffectsManager {
     this.flash(x, y, 70, 0x5dffc1, 220, 0.7);
     this.ring(x, y, 90, 320, 0.45, 0x9dffd9);
     this.puff(x, 0, 4, GROUND_DUST, 22, 0.3, 1.2);
+  }
+
+  /** A blob burst: a green flash and a splash of glowing goo flung out (more of it the bigger the blob). */
+  private onBlobSplit(e: SimEvents['blobSplit']): void {
+    const x = e.x * PPM;
+    const y = e.y * PPM;
+    const R = e.r * PPM;
+    this.flash(x, y, R * 1.3, 0x5dffc1, 160, 0.75);
+    this.ring(x, y, R * 1.5, 260, 0.4, 0x9dffd9);
+    const b = resetBurst();
+    b.tint = 0x5dffc1;
+    b.tintVar = 0.2;
+    b.tintEnd = 0x0f6b48;
+    b.speedMin = R * 0.8;
+    b.speedMax = R * 2.2;
+    b.lifeMin = 350;
+    b.lifeMax = 700;
+    b.scaleMin = (R * 0.12) / 32;
+    b.scaleMax = (R * 0.25) / 32;
+    b.endScale = 0.4;
+    b.alpha = 0.85;
+    b.fadePow = 1.2;
+    b.drag = 1.5;
+    b.gravity = G * 0.5;
+    b.jitter = R * 0.3;
+    this.emit(this.glow, x, y, 6 + e.gen * 4);
+  }
+
+  /** A boss crashes down onto its arms: a heavy shake and a wall of dust. */
+  private onStage(e: SimEvents['creatureStage']): void {
+    const x = e.x * PPM;
+    this.puff(x, 0, 10, GROUND_DUST, 60, 0.4, 1.8);
+    this.camera.addTrauma(0.45, 0.8);
   }
 
   private onAbility(e: SimEvents['creatureAbility']): void {

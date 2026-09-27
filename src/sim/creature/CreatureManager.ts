@@ -17,6 +17,7 @@ import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
 import { CREATURE_SCALE, CREATURE_SPEED, FLYER_SPEED, GROUP, interactionGroups } from '../../config/constants';
 import { scaleCreature, swapWoodForSteel } from './blueprints/kit';
+import { clearSmoke } from './smoke';
 import type { BreakableJoint } from '../BreakableJoint';
 
 /** Velocity change (m/s) a torn-off piece gets from its pop. */
@@ -82,6 +83,7 @@ export class CreatureManager {
     if (typeof params.steel === 'number') swapWoodForSteel(draft, spec, params.steel, new Random(hashString(`steel:${seed}`)));
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
     spec.gait.speed *= spec.fly ? FLYER_SPEED : CREATURE_SPEED;
+    if (spec.crawl) spec.crawl.speed *= CREATURE_SPEED;
     const def = draft.toDef(x, spec.name);
     const structure = buildStructure(this.ctx.physics, def);
     // Limbs overlap in a 2D side view: creature parts never collide with each other.
@@ -190,6 +192,7 @@ export class CreatureManager {
     }
     this.list.length = 0;
     this.byStructure.clear();
+    clearSmoke(this.ctx);
     this.splitCheck.clear();
     this.popCheck.length = 0;
   }

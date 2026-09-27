@@ -248,6 +248,11 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
         this.waveHints.add(w);
         this.hud?.hint(w.hint!);
       }),
+      // A boss moving on to its next stage says what to do now.
+      ev.on('creatureStage', ({ creature }) => {
+        const hint = creature.spec.crawl?.hint;
+        if (this.flow === 'playing' && hint) this.hud?.hint(hint);
+      }),
       ev.on('shieldBomb', ({ phase }) => {
         if (this.flow !== 'playing') return;
         if (phase === 'deployed') this.hud?.flash('SHIELD WALL UP', '#ffb547');

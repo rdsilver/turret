@@ -14,9 +14,10 @@
  *  - Parts: Image with an atlas frame from TextureFactory; material alpha is
  *    baked into the texture; subtle darkening by part.wear. Weapon damage
  *    (partDamaged) tints a part redder as its integrity drops, flashes it on
- *    every hit and makes it throb once it is close to breaking. Every hit
- *    also leaves an impact crater in the part's own art (PartCraters: pits,
- *    chips bitten out of the silhouette, growing as integrity drops). Fading
+ *    every hit and makes it throb once it is close to breaking. With
+ *    IMPACT_CRATERS on (off for now), every hit also leaves an impact crater
+ *    in the part's own art (PartCraters: pits, chips bitten out of the
+ *    silhouette, growing as integrity drops). Fading
  *    entities: alpha = fading/fadeDuration.
  *  - Joints: small markers at weld anchors (dark bolts), hinges as rings,
  *    cables as lines (sagging when slack). Only updated while a side is awake.
@@ -25,6 +26,7 @@
  *    markers coloured by stress, sized by damage.
  *  - Collider debug (setColliderDebug): sim.physics.world.debugRender() lines.
  *  - Roaming weak spots glow (WeakSpotView, placed after the parts each frame).
+ *  - Smoke clouds (SmokeView) cover the creatures inside them.
  */
 import * as Phaser from 'phaser';
 import type { Simulation } from '../sim/Simulation';
@@ -32,11 +34,12 @@ import type { Entity } from '../sim/Entity';
 import { StructurePart } from '../sim/StructurePart';
 import { Projectile } from '../sim/weapons/Projectile';
 import type { BreakableJoint } from '../sim/BreakableJoint';
-import { PPM } from '../config/constants';
+import { IMPACT_CRATERS, PPM } from '../config/constants';
 import { lerpAngle } from '../core/math';
 import { TextureFactory, TEXTURE_RES } from './TextureFactory';
 import { PartCraters, type CraterSet, type CraterStats } from './PartCraters';
 import { WeakSpotView } from './WeakSpotView';
+import { SmokeView } from './SmokeView';
 import { TEX } from './TextureKeys';
 import { RK } from './render/RenderKeys';
 import { DEPTH } from './depths';
@@ -127,6 +130,7 @@ export class WorldRenderer {
   private readonly craters: PartCraters;
   /** Glow on roaming weak spots (the only part of such a creature that can be hurt). */
   private readonly weakSpots: WeakSpotView;
+  private readonly smoke: SmokeView;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -148,6 +152,7 @@ export class WorldRenderer {
       const v = p.view as Vis | null;
       return v && v.kind === 0 ? v.img : null;
     });
+    this.smoke = new SmokeView(scene, sim, textures);
     this.trailGfx = scene.add.graphics().setDepth(DEPTH.projectiles - 0.5);
     this.cableGfx = scene.add.graphics().setDepth(DEPTH.cables);
     const ev = sim.events;
@@ -228,6 +233,7 @@ export class WorldRenderer {
 
     if (this.fading.length) this.updateFading();
     this.weakSpots.update(realDt, this.stressView);
+    this.smoke.update();
     if (this.cores.length) this.updateCores();
     if (this.animated.length) this.updateAnimated(realDt);
     if (this.projs.length || this.trailsDrawn) this.drawTrails();
@@ -289,7 +295,8 @@ export class WorldRenderer {
     // small-arms ammo the crater page is ready before the first hit.
     this.craters.clear();
     this.weakSpots.clear();
-    if (trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
+    this.smoke.clear();
+    if (IMPACT_CRATERS && trimTextures && this.sim.weapon.ammo.behaviors.some((b) => b.id === 'damage')) this.craters.warm();
     // Keep texture memory bounded across many (procedural) levels.
     if (trimTextures && this.textures.atlasPages > 6) {
       for (const pool of this.pools.values()) for (const img of pool) img.setTexture(TEX.pixel);
@@ -304,6 +311,7 @@ export class WorldRenderer {
     this.clear(false);
     this.craters.destroy();
     this.weakSpots.destroy();
+    this.smoke.destroy();
     this.destroyed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;
@@ -361,7 +369,7 @@ export class WorldRenderer {
   private onPartDamaged(p: StructurePart, x: number, y: number, amount: number, armor: number): void {
     const v = p.view as PartVis | null;
     if (!v || v.kind !== 0 || p.removed) return;
-    this.craters.hit(v, x, y, amount, armor);
+    if (IMPACT_CRATERS) this.craters.hit(v, x, y, amount, armor);
     v.flash = 1;
     if (!v.animated) {
       v.animated = true;

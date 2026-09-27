@@ -83,6 +83,24 @@ function paintStatic(a: TextureAtlas): void {
     c.fillStyle = g;
     c.fillRect(0, 0, 12, 12);
   });
+  a.add(RK.smoke, 64, 64, (c) => {
+    // A few overlapping soft blobs round the middle: a cloud, not a disc.
+    const blobs: Array<[number, number, number]> = [
+      [32, 33, 26],
+      [22, 27, 16],
+      [42, 25, 15],
+      [25, 41, 15],
+      [41, 41, 16],
+    ];
+    for (const [x, y, r] of blobs) {
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.55, 'rgba(255,255,255,0.7)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, 64, 64);
+    }
+  });
   a.add(RK.glow, 64, 64, (c) => {
     const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
     g.addColorStop(0, 'rgba(255,255,255,1)');

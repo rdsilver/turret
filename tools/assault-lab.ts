@@ -12,6 +12,7 @@
  *        [--add creature@at[:k=v,k=v...]]   (repeatable: extra wave entries, to try a placement without editing levels.ts,
  *                                            e.g. --add shifter@12:hp=0.8)
  *   (--top: top turret level; defaults to what the tier owns)
+ *   (Creatures hidden in smoke are left alone until they come out.)
  *   (A wheel whose weak point is turned away is left until it comes round, as a player would time it:
  *    the bot shoots something else meanwhile, or waits on it with the trigger released.)
  */
@@ -31,6 +32,7 @@ import type { Creature } from '../src/sim/creature/Creature';
 import type { StructurePart } from '../src/sim/StructurePart';
 import { bombFuseLeft, liveShieldBombs, standingShieldWalls } from '../src/sim/creature/shieldBomb';
 import { exposedWeakPoints } from '../src/sim/creature/rolling';
+import { smokeBetween } from '../src/sim/creature/smoke';
 
 await initRapier();
 const args = process.argv.slice(2);
@@ -118,6 +120,8 @@ run(sim, Number(opt('seconds', '150')), () => {
   let hold = false;
   for (const c of live) {
     if (waiting.includes(c) && waiting.length < live.length) continue;
+    // What the smoke hides, a player can't aim at.
+    if (smokeBetween(sim, muzzle.x, muzzle.y, c.core.x, c.core.y)) continue;
     const cx = c.x;
     if (cx >= best) continue;
     best = cx;

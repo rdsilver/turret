@@ -79,6 +79,9 @@ const SPAWN_SETTLE = 0.7;
 const GAIT_RAMP = 0.8;
 /** Joint strength below which a leg joint no longer carries its leg. */
 const LEG_FAIL_SCALE = 0.32;
+/** Crawling: friction of everything it drags, and the share of their strength its arm muscles use. */
+const CRAWL_FRICTION = 0.06;
+const CRAWL_ARM_POWER = 0.35;
 /** Flyers' altitude hold: stiffness (1/s²) and damping (1/s) per unit mass. */
 const FLY_KP = 6;
 const FLY_KD = 4.5;
@@ -154,6 +157,9 @@ export class Creature {
   flyRef = 0;
   /** Rolling creatures (spec.roll): the ring it rolls on. */
   readonly wheel: Wheel | null = null;
+  /** Crawlers (spec.crawl): legs gone, dragging itself on its arms. */
+  crawling = false;
+  private crawlPhase = 0;
 
   constructor(
     private readonly ctx: SimContext,
@@ -379,6 +385,10 @@ export class Creature {
       this.rollStep(dt);
       return;
     }
+    if (this.crawling) {
+      this.crawlStep(dt);
+      return;
+    }
     this.age += dt;
     const world = this.ctx.physics.world;
     const g = this.ctx.physics.gravity;
@@ -558,6 +568,11 @@ export class Creature {
       if (!immobile && Math.abs(this.core.x - this.stuckRefX) < STUCK_DISTANCE) immobile = 'stuck';
       this.stuckTimer = 0;
       this.stuckRefX = this.core.x;
+    }
+    // A crawler whose legs are gone drops onto its arms instead of stopping.
+    if ((immobile === 'legs' || immobile === 'downed') && this.spec.crawl && this.workingArms() > 0) {
+      this.startCrawl();
+      return;
     }
     if (immobile) {
       this.immobileTime += dt;
@@ -794,6 +809,99 @@ export class Creature {
     }
     if (immobile) this.neutralize(immobile);
     else this.state = 'walking';
+  }
+
+  /** Arms (spec.crawl) still attached with their joints holding. */
+  private workingArms(): number {
+    let n = 0;
+    for (const arm of this.spec.crawl?.arms ?? []) {
+      let ok = arm.joints.length > 0;
+      for (const id of arm.joints) {
+        const j = this.muscles.get(id);
+        if (!j || j.broken || j.strengthScale < LEG_FAIL_SCALE || !this.connected.has(j.a)) ok = false;
+      }
+      for (const id of arm.parts) {
+        const p = this.structure.part(id);
+        if (!p || p.removed || p.wrecked || !this.connected.has(p)) ok = false;
+      }
+      if (ok) n++;
+    }
+    return n;
+  }
+
+  /**
+   * Legs gone: drop onto the arms. What is left of the legs goes limp, and
+   * everything it drags (fists too) slides: the pull does the moving, the
+   * arms only make the motions (a planted fist would anchor it otherwise).
+   */
+  private startCrawl(): void {
+    this.crawling = true;
+    this.state = 'crippled';
+    this.immobileTime = 0;
+    this.stuckTimer = 0;
+    this.stuckRefX = this.core.x;
+    const world = this.ctx.physics.world;
+    const arms = new Set(this.spec.crawl!.arms.flatMap((a) => a.joints));
+    for (const { joint } of this.gait) if (!joint.broken && !arms.has(joint.name ?? '')) joint.setPower(world, 0.05);
+    // (Min: the ground's own grip would otherwise average it back up.)
+    const min = R().CoefficientCombineRule.Min;
+    for (const p of this.connected) {
+      if (p.removed) continue;
+      p.collider.setFriction(CRAWL_FRICTION);
+      p.collider.setFrictionCombineRule(min);
+    }
+    this.ctx.events.emit('creatureStage', { creature: this, stage: 'crawl', x: this.core.x, y: this.core.y });
+  }
+
+  /**
+   * Crawling: cycle the arms, hold the body up at its lean and pull it toward
+   * the turret at crawling speed (slower with an arm gone). Stopped when the
+   * arms go, or a vital; stuck like anything else.
+   */
+  private crawlStep(dt: number): void {
+    this.age += dt;
+    for (const v of this.vitals) {
+      if (v.removed || v.wrecked || v.integrity <= 0 || !this.connected.has(v)) {
+        this.neutralize('killed');
+        break;
+      }
+    }
+    if (this.state === 'neutralized') return;
+    const cr = this.spec.crawl!;
+    const arms = this.workingArms();
+    if (arms === 0) {
+      this.neutralize('legs');
+      return;
+    }
+    const world = this.ctx.physics.world;
+    const g = this.ctx.physics.gravity;
+    const speed = cr.speed * this.speedBoost * Math.sqrt(arms / cr.arms.length);
+    this.crawlPhase += (speed / Math.max(0.2, cr.stride)) * dt;
+    for (const [name, gt] of Object.entries(cr.muscles)) {
+      const j = this.muscles.get(name);
+      if (!j || j.broken || !this.connected.has(j.a)) continue;
+      // (Gently: arms pushing hard on the ground would lever the body off its lean.)
+      j.setPower(world, CRAWL_ARM_POWER);
+      const sn = Math.sin((this.crawlPhase + gt.phase) * Math.PI * 2);
+      j.setDrive(world, gt.shape === 'hold' ? gt.bias : gt.shape === 'sin' ? gt.bias + gt.amp * sn : gt.bias + gt.amp * Math.max(0, sn));
+    }
+    // Held up on the arms at its lean (a firm hand: it is dragging its whole weight).
+    const body = this.core.body;
+    const coreI = this.core.mass * this.core.extent * this.core.extent * 0.5 + 1;
+    const kp = coreI * 7 * 7 * 4;
+    const kd = 2 * Math.sqrt(kp * coreI * 4);
+    const err = wrapAngle(this.core.angle + cr.lean * DEG);
+    const cap = this.mass * g * this.core.extent * 1.5;
+    body.applyTorqueImpulse(clamp(-kp * err - kd * this.core.av, -cap, cap) * dt, true);
+    const f = clamp(this.mass * 8 * (-speed - this.core.vx), -this.mass * 5, this.mass * 5);
+    body.applyImpulse({ x: f * dt, y: 0 }, true);
+    this.stuckTimer += dt;
+    if (this.stuckTimer >= STUCK_WINDOW) {
+      const stuck = Math.abs(this.core.x - this.stuckRefX) < STUCK_DISTANCE;
+      this.stuckTimer = 0;
+      this.stuckRefX = this.core.x;
+      if (stuck) this.neutralize('stuck');
+    }
   }
 
   /** Hand a kinematic floater part over to physics, keeping its current motion. */

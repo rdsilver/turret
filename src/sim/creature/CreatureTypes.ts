@@ -76,6 +76,27 @@ export interface FlySpec {
   swoopPeriod: number;
 }
 
+/** An arm a creature can drag itself along on (CrawlSpec). */
+export interface CrawlArm {
+  /** Joints from the body outward (shoulder first): any broken = arm lost. */
+  joints: string[];
+  /** Arm parts (any wrecked or cut off = arm lost). */
+  parts: string[];
+}
+
+export interface CrawlSpec {
+  arms: CrawlArm[];
+  /** Crawling speed (m/s, before the game's CREATURE_SPEED, like gait.speed) and reach per pull (m). */
+  speed: number;
+  stride: number;
+  /** The arm muscles' cycle while crawling (drives them instead of the walking gait). */
+  muscles: Record<string, MuscleGait>;
+  /** Body angle it holds itself at, leaning on its arms (deg, + = toward the turret). */
+  lean: number;
+  /** Shown when it starts crawling. */
+  hint?: string;
+}
+
 export interface RollSpec {
   /** Rim part ids in order around the wheel (each joined to the next, the last to the first). */
   rim: string[];
@@ -159,6 +180,14 @@ export interface CreatureSpec {
    * either way the ring bursts apart.
    */
   roll?: RollSpec;
+  /**
+   * Crawlers don't give up when their legs do: legs lost (or knocked down),
+   * it drops and drags itself on toward the turret on its arms (a slow pull
+   * driven at the body, the arms cycling), until the arms go too or a vital
+   * is destroyed. Its body loses its grip on the ground, and it holds itself
+   * up at `lean` on the arms.
+   */
+  crawl?: CrawlSpec;
 }
 
 export interface CreatureParams {

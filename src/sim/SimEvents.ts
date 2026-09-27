@@ -106,6 +106,10 @@ export interface SimEvents {
   creatureSpawned: { creature: Creature };
   /** A cut-off piece of `parent` became a creature of its own (also emits creatureSpawned). */
   creatureSplit: { creature: Creature; parent: Creature };
+  /** A creature moved on to another stage of its fight (crawl: its legs gone, it drags itself on its arms). */
+  creatureStage: { creature: Creature; stage: 'crawl'; x: number; y: number };
+  /** A blob burst at (x, y) (radius r m; gen > 0: two smaller blobs come out of it, creature/blob.ts). */
+  blobSplit: { creature: Creature; x: number; y: number; r: number; gen: number };
   /** `parent` hatched a new creature in front of itself (creature/brood.ts; also emits creatureSpawned). (x, y): where. */
   creatureHatched: { creature: Creature; parent: Creature; x: number; y: number };
   /** A creature can no longer advance (for good). */

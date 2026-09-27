@@ -57,9 +57,9 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. Every hit also leaves an impact crater in the part
-itself: wood splinters into dark gouges, steel dents, armour only scuffs, and
-hits near an edge chip pieces out of the silhouette.
+limb stops obeying it. (Impact craters, where every hit pits the part it
+strikes, are switched off for now: `IMPACT_CRATERS` in
+`src/config/constants.ts`.)
 
 | Input | Action |
 | --- | --- |
@@ -79,13 +79,14 @@ hits near an edge chip pieces out of the silhouette.
 | 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
 | 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
 | 9 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 10 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
-| 11 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
-| 12 | Stampede | everything | triage |
-| 13 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
-| 14 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 15 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
-| 16 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
+| 10 | Colossus | Knights in bolted armour, a Smoker, a Blob, then the Colossus | bolts, the smokestack, anything on a blob; the Colossus's bolts, then its core |
+| 11 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 12 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
+| 13 | Stampede | everything | triage |
+| 14 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
+| 15 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 16 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 17 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
 **Geometry** (level 6): each shape is hollow, like the Roller: a ring of
 straight sides joined at the corners, rolling by tipping over its leading
@@ -107,7 +108,25 @@ of her: a small stick walker that runs at the line at twice a walker's pace
 keep coming until you burst the sac; she herself goes down at the knees and
 shins like any walker.
 
-**Steel swaps**: from Shield Wall (level 10) on, the easier walkers (stick
+**Colossus** (level 10) brings four new creatures:
+
+- **Knight**: a wooden walker in armour (helm, breastplate, plates on each
+  thigh and shin). Rounds spark off the plates, but each hangs on one steel
+  bolt near its top: shoot the bolt and the plate falls off, leaving the wood
+  behind it bare.
+- **Smoker**: a walker with a boiler and a tall smokestack, trailing a wall
+  of thick smoke that hides whatever walks behind it, from you and from the
+  top turret (rounds still go through). Shoot the stack and the smoke stops.
+- **Blob**: a rolling lump of green jelly. Shoot it anywhere and it bursts
+  into two smaller, faster blobs, and those into two more, which just pop:
+  seven blobs from one.
+- **Colossus**, a boss in three acts. Its reactor core sits behind a chest
+  plate held by two bolts: shoot both and the plate falls. Then pour it into
+  the core: at half, its legs give out and fall apart, and it crashes down
+  and drags itself on at the line on its arms. Finish the core (or take both
+  arms). Cutting its legs down the long way sends it crawling too.
+
+**Steel swaps**: from Shield Wall (level 11) on, the easier walkers (stick
 walkers, throwers, hounds, shield-bearers, sappers) come with some of their
 wooden parts swapped for steel of the same weight: 15% of them in Shield
 Wall, rising to 35% in Tyrant. Which parts is random for each creature, and
@@ -133,7 +152,7 @@ From level 3 on, three more creatures join the existing levels:
 Every creature is 30% faster than its level's base speed; birds are twice as
 fast.
 
-After level 16 the game continues with endless mixed waves (the strider and
+After level 17 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
 joins every fifth wave too, with shifters, sappers, rollers and broodmothers
 mixed in, and
