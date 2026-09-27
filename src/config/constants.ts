@@ -56,9 +56,10 @@ export const TOP_TURRET = {
 };
 
 /**
- * Impact damage in the parts' art (view/PartCraters.ts): 'edges' = chips
- * bitten out of the silhouette only, eating in from the outside as a part
- * wears down (no bullet holes); 'full' = pits and scorch inside it too;
+ * Impact damage in the parts' art (view/PartCraters.ts): 'edges' = small
+ * triangular notches cut into the silhouette only, eating in from the
+ * outside as a part wears down (no bullet holes); 'full' = round chips, pits
+ * and scorch inside it too;
  * 'off' = none.
  */
 export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' = 'edges';

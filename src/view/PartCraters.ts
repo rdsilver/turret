@@ -12,8 +12,9 @@
  *   are pits just inside it. A hit next to an existing crater merges into it
  *   (that crater grows); past MAX_CRATERS every hit merges into the nearest
  *   one, so the painting cost of a part stays bounded however long it is shot.
- *   With `edgesOnly` every crater sits on the edge and only chips are
- *   painted (no pits, no scorch): damage eats into the part from outside.
+ *   With `edgesOnly` every crater sits on the edge and is cut as a clean
+ *   triangular notch (no pits, no scorch, nothing round): damage eats into
+ *   the part from outside.
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
  *   chips.

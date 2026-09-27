@@ -57,8 +57,8 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. Hits also chip pieces out of a part's outline, eating
-further in as it wears down (no bullet holes inside it: `IMPACT_DAMAGE` in
+limb stops obeying it. Hits also cut small triangular notches into a part's
+outline, eating further in as it wears down (no bullet holes inside it: `IMPACT_DAMAGE` in
 `src/config/constants.ts` switches between edges only, full craters and off).
 
 | Input | Action |

@@ -236,7 +236,7 @@ export function paintCraters(
       const c = at(j);
       const r = rOf(c);
       if (!isBite(c, r, st, g)) continue;
-      biteSubpaths(ctx, c, r, st, g);
+      biteSubpaths(ctx, c, r, st, g, edgesOnly);
       ctx.fill();
     }
     // 4. Fresh edge + outline around each notch (only surviving texels take paint).
@@ -246,14 +246,14 @@ export function paintCraters(
       const c = at(j);
       const r = rOf(c);
       if (!isBite(c, r, st, g)) continue;
-      biteSubpaths(ctx, c, r, st, g);
+      biteSubpaths(ctx, c, r, st, g, edgesOnly);
       ctx.strokeStyle = st.rim;
       ctx.lineWidth = (g.lw + hl) * 2;
       ctx.stroke();
       ctx.strokeStyle = st.edge;
       ctx.lineWidth = g.lw * 2;
       ctx.stroke();
-      if (st.detail === 'splinters') paintDetail(ctx, c, r, st, g, 0.6);
+      if (st.detail === 'splinters' && !edgesOnly) paintDetail(ctx, c, r, st, g, 0.6);
     }
   }
   ctx.restore();
@@ -297,10 +297,38 @@ function paintPit(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: Crate
   if (st.detail !== 'none') paintDetail(ctx, c, r, st, g, 1);
 }
 
-/** The chip: the crater plus a slightly smaller copy on the surface (an open funnel, never a keyhole). */
-function biteSubpaths(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom): void {
+/**
+ * The chip: the crater plus a slightly smaller copy on the surface (an open
+ * funnel, never a keyhole). `notch`: a clean triangular V-notch instead (edge-only
+ * damage: angular, nothing like a wound).
+ */
+function biteSubpaths(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom, notch = false): void {
+  if (notch) {
+    notchPath(ctx, c, r);
+    return;
+  }
   craterPath(ctx, c, c.x, c.y, r, 0.9, st, g, true, st.biteJag);
   if (c.depth > r * 0.15) craterPath(ctx, c, c.x - c.nx * c.depth, c.y - c.ny * c.depth, r, 0.8, st, g, false, st.biteJag);
+}
+
+/**
+ * A triangular notch: the tip pointing into the part along the crater's inward
+ * normal, the base out past the edge (so only a clean V is cut away). A little
+ * lopsided per crater seed so a row of them doesn't look stamped.
+ */
+function notchPath(ctx: CanvasRenderingContext2D, c: Crater, r: number): void {
+  const rnd = rng(c.seed ^ 0x2c1b3c6d);
+  const tx = -c.ny;
+  const ty = c.nx;
+  const depth = r * (0.6 + rnd() * 0.3);
+  const lean = r * (rnd() - 0.5) * 0.5;
+  const half = r * (0.6 + rnd() * 0.3);
+  const back = r * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(c.x + c.nx * depth + tx * lean, c.y + c.ny * depth + ty * lean);
+  ctx.lineTo(c.x - c.nx * back + tx * half, c.y - c.ny * back + ty * half);
+  ctx.lineTo(c.x - c.nx * back - tx * half, c.y - c.ny * back - ty * half);
+  ctx.closePath();
 }
 
 /** Ragged crater outline (deterministic per crater seed). `begin` = start a new path. */
