@@ -73,7 +73,7 @@ hits near an edge chip pieces out of the silhouette.
 | 1 | First Contact | Stick walker | knees |
 | 2 | Pair | two walkers | stop the closest first |
 | 3 | The Thrower | walker with a sling arm that throws rubber shields; first Sapper | the sling arm (bullets bounce off rubber); shoot the Sapper's blinking bombs |
-| 4 | The Hound | fast quadruped; first Shifter | both front (or both back) legs; chase the Shifter's glow |
+| 4 | The Hound | fast quadruped with steel front shins; first Shifter | the thighs above the steel shins, or both back legs; chase the Shifter's glow |
 | 5 | Shell Game | armoured beetle, six steel legs; first Mender | legs under the shell; armour-piercing rounds; the Mender's lamp |
 | 6 | Flock | flapping birds | a wing: lose one and it can't stay up (the top turret helps) |
 | 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
@@ -88,7 +88,7 @@ hits near an edge chip pieces out of the silhouette.
 From level 3 on, three more creatures join the existing levels:
 
 - **Sapper** lobs big shield bombs ahead of itself. A bomb's light blinks faster
-  and faster; hit it four times before it runs out (any round counts), or it
+  and faster; hit it ten times before it runs out (any round counts), or it
   springs up into a tall steel wall that
   stops your rounds and hides whatever walks behind it until it crumbles. Shoot
   off the throwing arm and the bombs stop.

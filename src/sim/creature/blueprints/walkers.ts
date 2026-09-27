@@ -99,7 +99,9 @@ registerCreature('thrower', (d, _rng, params) => {
 
 /**
  * HOUND — a fast quadruped. Trots (diagonal legs move together). It keeps
- * coming on three legs; take out a front pair and it goes down on its nose.
+ * coming on three legs; take out a front pair (or a back pair) and it goes
+ * down. Its front shins are steel: the wooden thighs above them, or the back
+ * legs, give way sooner.
  */
 registerCreature('hound', (d, _rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
@@ -124,6 +126,12 @@ registerCreature('hound', (d, _rng, params) => {
   for (const [side, x] of hips) {
     buildLeg(d, side, x, hipY, { thigh: legLen, shin: legLen, w: 0.16, mat: 'wood', density, hipTorque: tref * P('hipK', 2.5), kneeTorque: tref * P('kneeK', 3), hp: P('legHp', 0.8), omega: P('omega', 90) }, 'body');
   }
+  // Steel front shins, weighing what wooden ones would (the gait doesn't notice).
+  for (const side of ['FL', 'FR']) {
+    const shin = d.parts.find((q) => q.id === `shin${side}`)!;
+    shin.material = 'steel';
+    shin.densityScale = (density * 520) / 7000;
+  }
   const amp = P('amp', 0.6);
   const gait: Record<string, MuscleGait> = {};
   // Trot: FL+BR together, FR+BL half a cycle later.
@@ -134,7 +142,7 @@ registerCreature('hound', (d, _rng, params) => {
   }
   return {
     name: 'Hound',
-    weakPoints: ['shinFL', 'thighFL', 'shinFR', 'thighFR', 'head', 'body'],
+    weakPoints: ['thighFL', 'thighFR', 'shinBL', 'shinBR', 'shinFL', 'shinFR', 'head', 'body'],
     core: 'body',
     legs: hips.map(([side]) => ({ name: side, joints: [`hip${side}`, `knee${side}`], parts: [`thigh${side}`, `shin${side}`, `foot${side}`], foot: `foot${side}` })),
     gait: { speed, stride: P('stride', 3), muscles: gait },

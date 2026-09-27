@@ -95,7 +95,7 @@ registerCreature('bomber', (d, _rng, params) => {
         maxLive: P('maxLive', 2),
         minX: 22,
         maxX: 42,
-        hits: P('bombHits', 4),
+        hits: P('bombHits', 10),
         wallH: P('wallH', 11.5),
         wallW: 1,
         wallLife: P('wallLife', 14),
