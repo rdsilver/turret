@@ -1,9 +1,11 @@
 /**
- * Live physics vignette for the main menu: a creature from the campaign walks
- * into a small test range in a real Simulation (same muscles, joints and
- * failure model as the game) while an automatic machine gun off to the left
- * works on its weak points. It limps, loses limbs, goes down, fades, and the
- * next specimen walks in.
+ * Live physics vignette for the main menu: a slideshow of creatures from the
+ * campaign, each on for SLOT seconds. The specimen walks into a small test
+ * range in a real Simulation (same muscles, joints and failure model as the
+ * game) while an automatic machine gun off to the left works on its weak
+ * points: it limps, loses limbs, goes down. Stopped (or through the range)
+ * before its time is up, another of the same kind walks in; then the view
+ * fades to the next specimen.
  *
  * Rendered with one Graphics through a dedicated camera whose viewport is the
  * "test cell" rectangle, so everything is clipped to the cell for free. The
@@ -46,9 +48,12 @@ const SPECIMENS: Array<{ kind: string; params?: Record<string, number> }> = [
 const CENTER_X = 27;
 const VIEW_W_M = 38;
 const SPAWN_X = CENTER_X + VIEW_W_M / 2 + 3;
-/** Seconds it walks in before the gun opens up; the latest it may take. */
+/** Seconds each specimen is on; the gun holds fire this long after one walks in. */
+const SLOT = 25;
 const HOLD_FIRE = 3;
-const MAX_TIME = 28;
+/** Seconds after one goes down (or walks out) before the next of its kind walks in, and the latest that can happen. */
+const NEXT_AFTER = 2.5;
+const LAST_ENTRY = SLOT - 6;
 /** The gun: a starter machine gun with better rounds (the show should not drag). */
 const GUN = { ...BASE_MG_STATS, damage: (BASE_MG_STATS.damage ?? 1) * 2.5 };
 
@@ -60,7 +65,9 @@ export class MenuVignette {
   private creature: Creature | null = null;
   private index = 0;
   private clock = 0;
-  private endAt = -1;
+  /** When the latest one walked in, and when the next of its kind does (-1: not due). */
+  private enteredAt = 0;
+  private nextAt = -1;
   private fade = 0;
   private fadeDir = 1;
   private seed = 1;
@@ -92,12 +99,14 @@ export class MenuVignette {
     this.load();
   }
 
-  /** Live stats for the caption: joints intact / total (every creature on the range), sim time. */
+  /** Live stats for the caption: joints intact / total (the specimen on the range and its brood), time into its slot. */
   stats(out: { joints: number; intact: number; time: number; name: string }): void {
     let joints = 0;
     let intact = 0;
     const seen = new Set<unknown>();
-    for (const c of this.sim?.creatures.list ?? []) {
+    const list = this.sim?.creatures.list ?? [];
+    const on = list.filter((c) => c.active);
+    for (const c of on.length ? on : this.creature ? [this.creature] : []) {
       if (seen.has(c.structure)) continue;
       seen.add(c.structure);
       for (const j of c.structure.joints) {
@@ -128,15 +137,16 @@ export class MenuVignette {
       }
     }
 
-    // Script: let it walk in, open fire, watch it go down; the next one once everything is still.
-    if (this.gunner) this.gunner.enabled = this.clock >= HOLD_FIRE;
-    if (this.endAt < 0) {
-      const walking = sim.creatures.list.some((c) => c.active);
-      const through = sim.creatures.list.some((c) => c.active && c.frontX < CENTER_X - VIEW_W_M / 2);
-      if ((!walking && this.clock > HOLD_FIRE) || through || this.clock > MAX_TIME) this.endAt = this.clock + 2.2;
-    } else if (this.clock >= this.endAt && this.fadeDir === 0) {
-      this.fadeDir = -1;
+    // Script: let it walk in, open fire, watch it go down; another of its kind
+    // if there is time; the next specimen when its slot is up.
+    if (this.gunner) this.gunner.enabled = this.clock - this.enteredAt >= HOLD_FIRE;
+    for (const c of sim.creatures.list) {
+      // Out of the range to the left: it has made it (off the stage).
+      if (c.active && c.frontX < CENTER_X - VIEW_W_M / 2) c.neutralize('stuck');
     }
+    if (this.nextAt < 0 && !sim.creatures.list.some((c) => c.active) && this.clock + NEXT_AFTER <= LAST_ENTRY) this.nextAt = this.clock + NEXT_AFTER;
+    if (this.nextAt >= 0 && this.clock >= this.nextAt) this.enter();
+    if (this.clock >= SLOT - 0.5 && this.fadeDir === 0) this.fadeDir = -1;
 
     sim.update(dt);
     this.draw();
@@ -156,18 +166,25 @@ export class MenuVignette {
   private load(): void {
     this.gunner?.dispose();
     this.sim?.destroy();
-    const spec = SPECIMENS[this.index]!;
     const sim = new Simulation({ seed: this.seed + this.index, weaponStats: GUN, ammo: AMMO.bullet });
     sim.autoCleanup = false;
-    this.creature = sim.creatures.spawn(spec.kind, SPAWN_X, spec.params ?? {}, this.seed + this.index * 101);
     this.gunner = new AutoGunner(sim, sim.weapon);
     this.gunner.enabled = false;
     this.sim = sim;
-    this.name = this.creature.spec.name.toUpperCase();
     this.clock = 0;
-    this.endAt = -1;
     this.fade = 0;
     this.fadeDir = 1;
+    this.enter();
+    this.name = this.creature!.spec.name.toUpperCase();
+  }
+
+  /** The specimen (another of its kind, after the first) walks in from the right. */
+  private enter(): void {
+    const sim = this.sim!;
+    const spec = SPECIMENS[this.index]!;
+    this.creature = sim.creatures.spawn(spec.kind, SPAWN_X, spec.params ?? {}, this.seed + this.index * 101 + Math.floor(this.clock * 7));
+    this.enteredAt = this.clock;
+    this.nextAt = -1;
   }
 
   private draw(): void {

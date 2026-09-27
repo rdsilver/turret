@@ -12,9 +12,10 @@
  *   are pits just inside it. A hit next to an existing crater merges into it
  *   (that crater grows); past MAX_CRATERS every hit merges into the nearest
  *   one, so the painting cost of a part stays bounded however long it is shot.
- *   With `edgesOnly` every crater sits on the edge and is cut as a clean
- *   triangular notch (no pits, no scorch, nothing round): damage eats into
- *   the part from outside.
+ *   With `edgesOnly` every crater sits on the edge and is cut as a clean,
+ *   sharp V-notch, bigger than a crater so it reads as a V at play distance
+ *   (no pits, no scorch, nothing round): damage eats into the part from
+ *   outside.
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
  *   chips.
@@ -137,6 +138,10 @@ const CRATER_R = 0.12;
 const MAX_CRATERS = 22;
 /** A hit closer than MERGE * (r1 + r2) to a crater deepens that crater instead of adding one. */
 const MERGE = 0.6;
+/** Edge-only notches are cut this much bigger than a crater would be (a V must be big enough to read as one). */
+const NOTCH_SIZE = 1.6;
+/** The deepest a notch may cut, as a share of the part's thinner dimension (craters: 0.42). */
+const NOTCH_MAX = 0.5;
 /** Crater radius multiplier at zero integrity is 1 + GROW. */
 const GROW = 0.8;
 /** Growth is quantised: each step repaints the part once. */
@@ -234,7 +239,8 @@ export class PartCraters {
     // Bigger rounds leave bigger craters (the event carries damage after armour).
     const raw = armor < 0.98 ? amount / (1 - armor) : amount;
     const round = Math.max(0.6, Math.min(1.5, 0.55 + 0.45 * Math.sqrt(Math.max(0, raw))));
-    const r = Math.min(set.maxR, Math.max(2.5, CRATER_R * S * set.style.size * round * (0.8 + 0.4 * this.rand())));
+    const size = this.edgesOnly ? NOTCH_SIZE : 1;
+    const r = Math.min(set.maxR, Math.max(2.5, CRATER_R * S * set.style.size * size * round * (0.8 + 0.4 * this.rand())));
     let depth: number;
     if (this.edgesOnly) {
       // On the edge, wherever it struck: a chip, never a hole.
@@ -393,13 +399,13 @@ export class PartCraters {
         horizontal: dims.w >= dims.h,
         // Same outline width as PartPainter: ~1.5 world px, thinner on small parts.
         lw: Math.max(1.5, Math.min(S * 0.05, minDim * 0.16)),
-        maxNotch: minDim * 0.42,
+        maxNotch: minDim * (this.edgesOnly ? NOTCH_MAX : 0.42),
       },
       w: lay.w,
       h: lay.h,
       ox: lay.ox,
       oy: lay.oy,
-      maxR: Math.max(2.5, Math.min(minDim * 0.34, 0.42 * S)),
+      maxR: this.edgesOnly ? Math.max(2.5, Math.min(minDim * NOTCH_MAX, 0.5 * S)) : Math.max(2.5, Math.min(minDim * 0.34, 0.42 * S)),
       halfMin: minDim / 2,
     };
     host.craters = set;
@@ -420,9 +426,17 @@ export class PartCraters {
     const ux = (k.x - set.ox) / S;
     const uy = (k.y - set.oy) / S;
     surface(shape, ux, uy, SF);
-    k.depth = Math.max(0, -SF.d * S);
     k.nx = SF.nx;
     k.ny = SF.ny;
+    if (this.edgesOnly) {
+      // Notches stay on the edge (two hits either side of a corner average to a point inside it).
+      k.x = set.ox + (ux + SF.nx * SF.d) * S;
+      k.y = set.oy + (uy + SF.ny * SF.d) * S;
+      k.depth = 0;
+      k.clear = across(shape, (k.x - set.ox) / S, (k.y - set.oy) / S, SF.nx, SF.ny) * S;
+      return;
+    }
+    k.depth = Math.max(0, -SF.d * S);
     k.clear = across(shape, ux, uy, SF.nx, SF.ny) * S;
   }
 

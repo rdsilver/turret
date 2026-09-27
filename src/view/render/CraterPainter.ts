@@ -196,11 +196,12 @@ export function paintCraters(
   const n = which ? which.length : list.length;
   if (n === 0) return;
   const at = (j: number): Crater => list[which ? which[j]! : j]!;
-  // Edges only: a crater too big to chip a thin part is chipped smaller instead (never a hole).
+  // Edges only: a notch too deep for a thin part is cut shallower instead (never through it).
   const rOf = (c: Crater): number => {
     const r = craterRadius(c, grow, maxR);
-    return edgesOnly ? Math.min(r, biteLimit(c, st, g)) : r;
+    return edgesOnly ? Math.min(r, notchLimit(c, g)) : r;
   };
+  const bite = (c: Crater, r: number): boolean => (edgesOnly ? isNotch(c, r, st) : isBite(c, r, st, g));
   ctx.save();
   ctx.globalCompositeOperation = 'source-atop';
   ctx.lineJoin = 'bevel';
@@ -222,7 +223,7 @@ export function paintCraters(
   for (let j = 0; j < n; j++) {
     const c = at(j);
     const r = rOf(c);
-    if (isBite(c, r, st, g)) {
+    if (bite(c, r)) {
       bites++;
       continue;
     }
@@ -235,17 +236,22 @@ export function paintCraters(
     for (let j = 0; j < n; j++) {
       const c = at(j);
       const r = rOf(c);
-      if (!isBite(c, r, st, g)) continue;
+      if (!bite(c, r)) continue;
       biteSubpaths(ctx, c, r, st, g, edgesOnly);
       ctx.fill();
     }
     // 4. Fresh edge + outline around each notch (only surviving texels take paint).
     ctx.globalCompositeOperation = 'source-atop';
-    const hl = Math.max(1, g.lw * 0.8);
+    // V-notches: a mitred (pointed) tip and a thin fresh-cut band, so the V stays crisp when small.
+    const hl = edgesOnly ? Math.max(0.75, g.lw * 0.45) : Math.max(1, g.lw * 0.8);
+    if (edgesOnly) {
+      ctx.lineJoin = 'miter';
+      ctx.miterLimit = 10;
+    }
     for (let j = 0; j < n; j++) {
       const c = at(j);
       const r = rOf(c);
-      if (!isBite(c, r, st, g)) continue;
+      if (!bite(c, r)) continue;
       biteSubpaths(ctx, c, r, st, g, edgesOnly);
       ctx.strokeStyle = st.rim;
       ctx.lineWidth = (g.lw + hl) * 2;
@@ -274,9 +280,17 @@ function isBite(c: Crater, r: number, st: CraterStyle, g: CraterGeom): boolean {
   );
 }
 
-/** The largest chip a crater can take out of its part without cutting through it (texels; see isBite). */
-function biteLimit(c: Crater, st: CraterStyle, g: CraterGeom): number {
-  return 0.97 * Math.min((c.clear - g.lw) / (0.9 * (1 + st.biteJag * 0.5)), (g.maxNotch - c.depth) / 0.9);
+/** Deepest V-notch tip, as a share of its radius (see notchPath). */
+const NOTCH_DEEP = 1;
+
+/** A V-notch is cut wherever the material chips at all and the notch has some size. */
+function isNotch(c: Crater, r: number, st: CraterStyle): boolean {
+  return st.bite > 0 && r >= 2 && c.depth < r * 0.5;
+}
+
+/** The largest notch a crater can cut without going through its part (texels): its outline survives under the tip. */
+function notchLimit(c: Crater, g: CraterGeom): number {
+  return Math.min(c.clear - g.lw * 2, g.maxNotch - c.depth) / NOTCH_DEEP;
 }
 
 function paintPit(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom): void {
@@ -299,7 +313,7 @@ function paintPit(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: Crate
 
 /**
  * The chip: the crater plus a slightly smaller copy on the surface (an open
- * funnel, never a keyhole). `notch`: a clean triangular V-notch instead (edge-only
+ * funnel, never a keyhole). `notch`: a clean, sharp V-notch instead (edge-only
  * damage: angular, nothing like a wound).
  */
 function biteSubpaths(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: CraterStyle, g: CraterGeom, notch = false): void {
@@ -312,22 +326,29 @@ function biteSubpaths(ctx: CanvasRenderingContext2D, c: Crater, r: number, st: C
 }
 
 /**
- * A triangular notch: the tip pointing into the part along the crater's inward
- * normal, the base out past the edge (so only a clean V is cut away). A little
- * lopsided per crater seed so a row of them doesn't look stamped.
+ * A V-notch: a narrow triangle whose tip points into the part along the
+ * crater's inward normal, about as deep as the crater's radius and about as
+ * wide at the surface (a ~55-65 degree V), its base well out past the edge so
+ * only a clean V is cut away. A little lopsided per crater seed so a row of
+ * them doesn't look stamped.
  */
 function notchPath(ctx: CanvasRenderingContext2D, c: Crater, r: number): void {
   const rnd = rng(c.seed ^ 0x2c1b3c6d);
   const tx = -c.ny;
   const ty = c.nx;
-  const depth = r * (0.6 + rnd() * 0.3);
-  const lean = r * (rnd() - 0.5) * 0.5;
-  const half = r * (0.6 + rnd() * 0.3);
+  // The surface point under the crater (edge craters sit on it: depth 0).
+  const sx = c.x - c.nx * c.depth;
+  const sy = c.y - c.ny * c.depth;
+  const depth = r * NOTCH_DEEP * (0.85 + rnd() * 0.15);
+  const lean = r * (rnd() - 0.5) * 0.35;
+  // Half the V's opening at the surface, carried out to the base.
+  const open = r * (0.5 + rnd() * 0.12);
   const back = r * 0.6;
+  const half = (open * (depth + back)) / depth;
   ctx.beginPath();
-  ctx.moveTo(c.x + c.nx * depth + tx * lean, c.y + c.ny * depth + ty * lean);
-  ctx.lineTo(c.x - c.nx * back + tx * half, c.y - c.ny * back + ty * half);
-  ctx.lineTo(c.x - c.nx * back - tx * half, c.y - c.ny * back - ty * half);
+  ctx.moveTo(sx + c.nx * depth + tx * lean, sy + c.ny * depth + ty * lean);
+  ctx.lineTo(sx - c.nx * back + tx * half, sy - c.ny * back + ty * half);
+  ctx.lineTo(sx - c.nx * back - tx * half, sy - c.ny * back - ty * half);
   ctx.closePath();
 }
 
