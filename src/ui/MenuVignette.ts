@@ -1,11 +1,11 @@
 /**
  * Live physics vignette for the main menu: a slideshow of creatures from the
- * campaign, each on for SLOT seconds. The specimen walks into a small test
+ * campaign, each on for SLOT seconds. The specimen stands on a small test
  * range in a real Simulation (same muscles, joints and failure model as the
- * game) while an automatic machine gun off to the left works on its weak
- * points: it limps, loses limbs, goes down. Stopped (or through the range)
- * before its time is up, another of the same kind walks in; then the view
- * fades to the next specimen.
+ * game) and walks at an automatic machine gun off to the left, which works on
+ * its weak points: it limps, loses limbs, goes down. Stopped (or through the
+ * range) before its time is up, another of the same kind appears in its
+ * place; then the view fades to the next specimen.
  *
  * Rendered with one Graphics through a dedicated camera whose viewport is the
  * "test cell" rectangle, so everything is clipped to the cell for free. The
@@ -44,16 +44,18 @@ const SPECIMENS: Array<{ kind: string; params?: Record<string, number> }> = [
   { kind: 'brood', params: { count: 3 } },
 ];
 
-/** Middle of the range (sim m), metres shown across the cell, where specimens walk in. */
+/** Middle of the range (sim m), metres shown across the cell, and where specimens appear (in view, room to walk; the widest reaches 7 m to the right). */
 const CENTER_X = 27;
 const VIEW_W_M = 38;
-const SPAWN_X = CENTER_X + VIEW_W_M / 2 + 3;
-/** Seconds each specimen is on; the gun holds fire this long after one walks in. */
-const SLOT = 25;
-const HOLD_FIRE = 3;
-/** Seconds after one goes down (or walks out) before the next of its kind walks in, and the latest that can happen. */
+const SPAWN_X = CENTER_X + VIEW_W_M / 2 - 10;
+/** Seconds each specimen is on; the gun holds fire this long after one appears. */
+const SLOT = 20;
+const HOLD_FIRE = 1.5;
+/** Seconds after one goes down (or walks out) before the next of its kind appears, and the latest that can happen. */
 const NEXT_AFTER = 2.5;
 const LAST_ENTRY = SLOT - 6;
+/** A replacement fades in over this long (the first comes in with the slide). */
+const APPEAR = 0.35;
 /** The gun: a starter machine gun with better rounds (the show should not drag). */
 const GUN = { ...BASE_MG_STATS, damage: (BASE_MG_STATS.damage ?? 1) * 2.5 };
 
@@ -65,7 +67,7 @@ export class MenuVignette {
   private creature: Creature | null = null;
   private index = 0;
   private clock = 0;
-  /** When the latest one walked in, and when the next of its kind does (-1: not due). */
+  /** When the latest one appeared, and when the next of its kind does (-1: not due). */
   private enteredAt = 0;
   private nextAt = -1;
   private fade = 0;
@@ -137,7 +139,7 @@ export class MenuVignette {
       }
     }
 
-    // Script: let it walk in, open fire, watch it go down; another of its kind
+    // Script: let it take a step, open fire, watch it go down; another of its kind
     // if there is time; the next specimen when its slot is up.
     if (this.gunner) this.gunner.enabled = this.clock - this.enteredAt >= HOLD_FIRE;
     for (const c of sim.creatures.list) {
@@ -178,7 +180,7 @@ export class MenuVignette {
     this.name = this.creature!.spec.name.toUpperCase();
   }
 
-  /** The specimen (another of its kind, after the first) walks in from the right. */
+  /** The specimen (another of its kind, after the first) appears on the range, standing. */
   private enter(): void {
     const sim = this.sim!;
     const spec = SPECIMENS[this.index]!;
@@ -194,6 +196,8 @@ export class MenuVignette {
     g.clear();
     const a = sim.physics.alpha;
     g.setAlpha(this.fade);
+    const fresh = this.enteredAt > 0 ? this.creature : null;
+    const appear = Math.min(1, (this.clock - this.enteredAt) / APPEAR);
 
     // Ground + measuring marks
     const x0 = (CENTER_X - VIEW_W_M) * PPM;
@@ -213,7 +217,7 @@ export class MenuVignette {
       const ey = (e.py + (e.y - e.py) * a) * PPM;
       if (e instanceof StructurePart) {
         const ang = e.pangle + (e.angle - e.pangle) * a;
-        const fadeK = e.fading > 0 && e.fadeDuration > 0 ? e.fading / e.fadeDuration : 1;
+        const fadeK = (e.fading > 0 && e.fadeDuration > 0 ? e.fading / e.fadeDuration : 1) * (fresh?.owns(e) ? appear : 1);
         this.drawPart(e, ex, ey, ang, fadeK);
       } else if (e instanceof Projectile) {
         // A round: a short tracer streak behind it.
@@ -229,7 +233,7 @@ export class MenuVignette {
         if (j.broken || j.isGround || !c.owns(j.a)) continue;
         const k = j.stressVis;
         const col = k < 0.35 ? 0xe8ecf1 : k < 0.75 ? THEME.accentNum : THEME.badNum;
-        g.fillStyle(col, k < 0.35 ? 0.55 : 0.95);
+        g.fillStyle(col, (k < 0.35 ? 0.55 : 0.95) * (c === fresh ? appear : 1));
         g.fillRect(j.wx * PPM - 3, j.wy * PPM - 3, 6, 6);
       }
     }

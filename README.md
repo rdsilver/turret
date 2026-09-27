@@ -57,11 +57,11 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. Hits also cut sharp V-notches into a part's outline, so
-a battered limb turns saw-toothed, eating further in as it wears down (no bullet
-holes inside it: `IMPACT_DAMAGE` in `src/config/constants.ts` switches between
-edges only, full craters and off). The main menu shows a live test range: a
-slideshow of campaign creatures, 25 seconds each, walking into an automatic gun.
+limb stops obeying it. Impact damage in the parts' art is switched off for now
+(`IMPACT_DAMAGE` in `src/config/constants.ts`: 'edges' cuts sharp V-notches into
+a part's outline, 'full' adds pits and scorch inside it too). The main menu
+shows a live test range: a slideshow of campaign creatures, 20 seconds each,
+each standing in view and walking into an automatic gun.
 
 | Input | Action |
 | --- | --- |

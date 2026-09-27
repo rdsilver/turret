@@ -62,7 +62,7 @@ export const TOP_TURRET = {
  * and scorch inside it too;
  * 'off' = none.
  */
-export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' = 'edges';
+export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' = 'off';
 
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;
