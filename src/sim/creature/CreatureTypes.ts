@@ -161,6 +161,12 @@ export interface CreatureSpec {
    * either way the ring bursts apart.
    */
   roll?: RollSpec;
+  /**
+   * The most a hastener's beam can raise this creature's lasting speed
+   * multiplier (Creature.speedMul) to, for a body that can't walk any faster
+   * without falling over (default: whatever the beam goes up to; 1 = never).
+   */
+  maxSpeedMul?: number;
 }
 
 export interface CreatureParams {

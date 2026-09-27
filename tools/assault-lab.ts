@@ -99,6 +99,11 @@ sim.events.on('partHealed', (e) => {
   if (firstHeal < 0) firstHeal = session.elapsed;
   healed += e.amount;
 });
+// Hasteners: how fast they made what (each creature's speedMul when the level ended).
+const hasted = new Set<Creature>();
+sim.events.on('creatureHasted', (e) => {
+  if (session.state === 'running') hasted.add(e.creature);
+});
 const priority = !args.includes('--noPriority');
 // Human-ish aim: a slowly wandering error around the chosen point whose
 // standard deviation is --aimError metres (Ornstein-Uhlenbeck, ~0.7 s memory).
@@ -211,6 +216,7 @@ console.log(log.join('\n'));
 if (sim.topWeapon) console.log(`top turret fired ${sim.topWeapon.shotsFired}`);
 if (bombStats.defused + bombStats.walls > 0) console.log(`shield bombs: ${bombStats.defused} shot apart, ${bombStats.walls} walls (${bombStats.shotDown} shot down, ${bombStats.stopped} rounds stopped)`);
 if (healed > 0) console.log(`healers mended ${healed.toFixed(1)} HP (first at ${firstHeal.toFixed(1)}s)`);
+if (hasted.size) console.log(`hasteners sped up ${[...hasted].map((c) => `${c.spec.name} x${c.speedMul.toFixed(2)}`).join(', ')}`);
 console.log(`\nRESULT ${id} ${level.name}: ${o.won ? 'WON' : 'LOST'} in ${o.time.toFixed(1)}s, stopped ${o.stopped}/${o.creatures}, closest ${o.closest.toFixed(1)} m, shots ${o.shots} hits ${o.hits}, limbs ${o.limbsSevered}, distanceScore ${o.distanceScore.toFixed(2)}`);
 console.log(`PAYOUT $${r.total} grade ${r.grade} ${r.titles.join(',')} :: ${r.lines.map((l) => `${l.label} ${l.amount}`).join(', ')}`);
 frames.push(snapshot(sim, `end ${o.won ? 'WON' : 'LOST'}`));

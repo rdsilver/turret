@@ -27,6 +27,10 @@
  *           light is out, an escort counts as no closer to the line than the
  *           ally it follows (it is no threat to the line while it has one).
  *           (above, minHeight, maxHeight, speed, retarget, linger, drop, notice)
+ *           An escort carrying some other support ability than heal does its
+ *           own kind of work: that ability registers an EscortRole (see
+ *           registerEscortRole; haste.ts) which picks its allies, says when
+ *           it is at work and where over its ally it hovers.
  *
  * Distances are metres at game scale (after scaleCreature).
  */
@@ -183,6 +187,39 @@ interface EscortState {
 }
 const escortState = new WeakMap<Creature, EscortState>();
 
+/**
+ * What an escort does for its ally when its support ability is not heal (the
+ * healer's behaviour is built in below). Escorts only spread out over allies
+ * among those doing the same work (a healer and a hastener may share one).
+ */
+export interface EscortRole {
+  /** Does it still carry the organ its work needs? (Without it, it tags along behind its ally.) */
+  working(c: Creature): boolean;
+  /** Is it at work right now (visibly doing its ally good)? */
+  atWork(c: Creature): boolean;
+  /** Seconds it has spent at work so far (gunners take notice after `notice` s). */
+  workedFor(c: Creature): number;
+  /** Added to an ally's score (the ally closest to the line scores highest). */
+  want(c: Creature, ally: Creature): number;
+  /** Where over its ally to hover (x, m), given the ally's mass-weighted middle. */
+  station(c: Creature, ally: Creature, mx: number): number;
+}
+const roles = new Map<string, EscortRole>();
+
+/** Escorts carrying the ability `abilityId` do the work `role` describes. */
+export function registerEscortRole(abilityId: string, role: EscortRole): void {
+  roles.set(abilityId, role);
+}
+
+/** The work an escort does (null = a healer's). */
+function roleOf(c: Creature): EscortRole | null {
+  for (const a of c.spec.abilities ?? []) {
+    const r = roles.get(a.id);
+    if (r) return r;
+  }
+  return null;
+}
+
 /** Hit points an ally has lost on parts still attached to it (capped). */
 function need(k: Creature): number {
   let lost = 0;
@@ -196,15 +233,18 @@ function need(k: Creature): number {
 function pickAlly(c: Creature, ctx: SimContext, st: EscortState): Creature | null {
   let best: Creature | null = null;
   let bestScore = -Infinity;
+  const role = roleOf(c);
   for (const k of ctx.creatures.list) {
     if (k === c || !k.active || k.core.removed || k.age < 0.3 || k.spec.fly || healSpec(k)) continue;
     // Closest to the line first, but a badly hurt ally further back can win;
     // an ally another escort already watches over counts for less.
-    let score = -k.frontX + 0.8 * need(k);
+    let score = -k.frontX + (role ? role.want(c, k) : 0.8 * need(k));
     if (k === st.ally) score += 4;
     for (const o of ctx.creatures.list) {
-      // (A healer that lost its lamp doesn't count: it only tags along.)
-      if (o === c || !o.active || !escorting(o) || (healSpec(o) && !canHeal(o))) continue;
+      // (A healer that lost its lamp doesn't count: it only tags along. Nor
+      // does an escort doing other work.)
+      if (o === c || !o.active || !escorting(o) || roleOf(o) !== role) continue;
+      if (role ? !role.working(o) : healSpec(o) && !canHeal(o)) continue;
       if (escortState.get(o)?.ally === k) {
         score -= 12;
         break;
@@ -242,7 +282,9 @@ const CLOSING = 14.5;
 function priority(c: Creature, ctx: SimContext, ally: Creature | null, notice: number): number {
   if (!ally) return 0;
   const base = c.spec.targetPriority ?? 0;
-  if (base > 0 && healing(c) && mendedFor(c) >= notice) {
+  const role = roleOf(c);
+  const seen = role ? role.atWork(c) && role.workedFor(c) >= notice : healing(c) && mendedFor(c) >= notice;
+  if (base > 0 && seen) {
     let closing = false;
     for (const o of ctx.creatures.list) {
       if (o !== c && o.active && !o.core.removed && o.frontX < TURRET.x + CLOSING) closing = true;
@@ -319,7 +361,9 @@ registerAbility('escort', {
     // Over its middle, drawn toward its wounds; with its lamp gone it just
     // tags along behind. Never ahead of the ally's front.
     const W0 = 4;
-    let hx = canHeal(c) ? (mx * W0 + dx) / (W0 + dw) : back + 2;
+    const role = roleOf(c);
+    const works = role ? role.working(c) : canHeal(c);
+    let hx = !works ? back + 2 : role ? role.station(c, k, mx) : (mx * W0 + dx) / (W0 + dw);
     const rear = k.frontX + (c.x - c.frontX) + 1.2;
     hx = Math.max(hx, rear);
     if (st.fresh) {

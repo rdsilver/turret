@@ -133,4 +133,11 @@ export interface SimEvents {
    * joints regain strength with it). `organ` is the healer's lamp; (x, y) the part.
    */
   partHealed: { part: StructurePart; amount: number; integrity: number; healer: Creature; organ: StructurePart; x: number; y: number };
+  /**
+   * A hastener's beam (creature/haste.ts) raised `creature`'s lasting speed
+   * multiplier to `speedMul` (sent every few ticks while it beams, and once
+   * more when the creature is as fast as it gets: maxed). `organ` is the
+   * hastener's crystal; (x, y) the creature's body.
+   */
+  creatureHasted: { creature: Creature; hastener: Creature; organ: StructurePart; speedMul: number; maxed: boolean; x: number; y: number };
 }

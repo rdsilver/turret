@@ -447,6 +447,28 @@ const mend: Recipe = (r) => {
   return done(b, 0.6);
 };
 
+/**
+ * A hastener's beam taking hold: a rising, warbling whirr (two detuned tones
+ * sweeping up an octave with a fast shimmer) over a breath of air rushing
+ * upward — quick and eager, where the mender's shimmer falls calmly.
+ */
+const haste: Recipe = (r) => {
+  const b = buffer(1.0);
+  const f = 420 * r.vary(0.04);
+  for (const [k, amp] of [
+    [1, 0.4],
+    [1.498, 0.22],
+    [2.005, 0.14],
+  ] as const) {
+    addTone(b, { f0: f * k, f1: f * k * 2.1, glide: 0.22, amp, attack: 0.04, decay: 0.2, dur: 0.55, vibRate: 17 + 3 * k, vibDepth: 0.02, shape: 0.15 });
+    addTone(b, { f0: f * k * 1.012, f1: f * k * 2.12, glide: 0.24, amp: amp * 0.6, attack: 0.05, decay: 0.18, dur: 0.5, vibRate: 13 + 2 * k, vibDepth: 0.015 });
+  }
+  addNoise(b, r, { dur: 0.45, amp: 0.16, attack: 0.08, decay: 0.14, type: 'bandpass', freq: 900, freqEnd: 4200, glide: 0.18, q: 1.8 });
+  filter(b, 'lowpass', 7000, 0.7);
+  reverb(b, 0.25, 0.75, 0.4, 0.8);
+  return done(b, 0.6);
+};
+
 export const RECIPES: Record<SoundId, Recipe> = {
   cannon,
   gunshot,
@@ -473,6 +495,7 @@ export const RECIPES: Record<SoundId, Recipe> = {
   cash,
   collapse_sting: collapseSting,
   mend,
+  haste,
 };
 
 /** Synthesis priority: gameplay-critical sounds first (they become playable as soon as rendered). */
@@ -502,6 +525,7 @@ export const SYNTH_PRIORITY: SoundId[] = [
   'cash',
   'collapse_sting',
   'mend',
+  'haste',
 ];
 
 function seedFor(id: string, variant: number): number {

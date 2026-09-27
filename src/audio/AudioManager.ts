@@ -22,7 +22,7 @@ import { StructurePart } from '../sim/StructurePart';
 import { PPM } from '../config/constants';
 import { SOUND_VARIANTS, setMasterMuffle, soundDuration, soundKey, type SoundId } from './SoundSynth';
 
-type Category = 'boom' | 'gun' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui' | 'aura';
+type Category = 'boom' | 'gun' | 'impact' | 'ground' | 'snap' | 'creak' | 'shatter' | 'ambient' | 'rattle' | 'air' | 'sting' | 'ui' | 'aura' | 'haste';
 
 interface CategorySpec {
   max: number;
@@ -47,6 +47,8 @@ const CATEGORIES: Record<Category, CategorySpec> = {
   ui: { max: 4, interval: 25, global: false },
   /** A creature's lingering effect (a healer's lamp at work): one voice, at most about once a second. */
   aura: { max: 1, interval: 950, global: true },
+  // Its own slot, so a hastener and a mender at work don't silence each other.
+  haste: { max: 1, interval: 950, global: true },
 };
 
 const GLOBAL_CAP = 14;
@@ -91,6 +93,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   cash: { cat: 'ui', vol: 0.55, jitter: 0.02 },
   collapse_sting: { cat: 'sting', vol: 0.5, jitter: 0.01 },
   mend: { cat: 'aura', vol: 0.3, jitter: 0.05 },
+  haste: { cat: 'haste', vol: 0.3, jitter: 0.05 },
 };
 
 /** Voice bookkeeping shared by every AudioManager (the sound manager is global). */
@@ -203,6 +206,7 @@ export class AudioManager {
     on('partDeflected', this.onDeflected);
     on('shieldBomb', this.onShieldBomb);
     on('partHealed', this.onPartHealed);
+    on('creatureHasted', this.onCreatureHasted);
   }
 
   unbind(): void {
@@ -405,6 +409,14 @@ export class AudioManager {
   /** A mender's lamp mending: a faint falling shimmer (the aura category plays it at most about once a second). */
   private onPartHealed(e: SimEvents['partHealed']): void {
     this.start('mend', 0.45, 1, this.panFor(e.organ.x * PPM), false);
+  }
+
+  /**
+   * A hastener's beam at work: a rising whirr (haste category: at most about
+   * once a second); a creature reaching its cap gets a brighter one.
+   */
+  private onCreatureHasted(e: SimEvents['creatureHasted']): void {
+    this.start('haste', e.maxed ? 0.6 : 0.4, e.maxed ? 1.25 : 1, this.panFor(e.organ.x * PPM), false);
   }
 
   private onPartFallen(e: SimEvents['partFallen']): void {
