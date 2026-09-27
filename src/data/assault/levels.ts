@@ -87,6 +87,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'stickman', at: 12, params: { speed: 0.85 } },
       { creature: 'bird', at: 19, params: { speed: 2.6, height: 3.4 } },
       { creature: 'bird', at: 29, params: { speed: 2.5, height: 2.6 } },
+      { creature: 'wheel', at: 14, params: { phase: 110 }, hint: 'Only the wooden plank can be hurt: shoot it as it rolls round to face you.' },
     ],
   },
   {
@@ -121,6 +122,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 16, params: { speed: 3, height: 3.2 } },
       { creature: 'bomber', at: 31 },
       { creature: 'shifter', at: 40, params: { hp: 0.9 } },
+      { creature: 'hastener', at: 12, params: { cap: 1.4 }, hint: 'Its violet beam makes a creature faster for good: shoot its crystal first.' },
     ],
   },
   {
@@ -136,6 +138,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'hound', at: 28, params: { speed: 1.6 } },
       { creature: 'bird', at: 20, params: { speed: 3.2, height: 2.8 } },
       { creature: 'mender', at: 22, params: { heal: 2 } },
+      { creature: 'wheel', at: 34 },
     ],
   },
   {
@@ -173,6 +176,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 38, params: { speed: 3.2, height: 3 } },
       { creature: 'hound', at: 40, params: { speed: 1.7 } },
       { creature: 'bomber', at: 30 },
+      { creature: 'hastener', at: 20, params: { cap: 1.4 } },
     ],
   },
   {
@@ -191,6 +195,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 50, params: { speed: 3, height: 2.6 } },
       { creature: 'mender', at: 24, params: { heal: 2.5 } },
       { creature: 'shifter', at: 32, params: { hp: 1.2 } },
+      { creature: 'wheel', at: 56, params: { plankHp: 1.8 } },
     ],
   },
   {
@@ -219,6 +224,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
       { creature: 'bird', at: 54, params: { speed: 3.4, height: 2.6 } },
       { creature: 'bomber', at: 20 },
       { creature: 'mender', at: 34, params: { heal: 2.5 } },
+      { creature: 'hastener', at: 24 },
     ],
   },
 ];

@@ -75,9 +75,9 @@ hits near an edge chip pieces out of the silhouette.
 | 3 | The Thrower | walker with a sling arm that throws rubber shields; first Sapper | the sling arm (bullets bounce off rubber); shoot the Sapper's blinking bombs |
 | 4 | The Hound | fast quadruped with steel front shins; first Shifter | the thighs above the steel shins, or both back legs; chase the Shifter's glow |
 | 5 | Shell Game | armoured beetle, six steel legs; first Mender | legs under the shell; armour-piercing rounds; the Mender's lamp |
-| 6 | Flock | flapping birds | a wing: lose one and it can't stay up (the top turret helps) |
+| 6 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
 | 7 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 8 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 8 | Shield Wall | shield-bearers; first Hastener | the arm holding the plate, the head above, the shins below; the Hastener's crystal |
 | 9 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
 | 10 | Stampede | everything | triage |
 | 11 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
@@ -85,7 +85,7 @@ hits near an edge chip pieces out of the silhouette.
 | 13 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
 | 14 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
-From level 3 on, three more creatures join the existing levels:
+From level 3 on, five more creatures join the existing levels:
 
 - **Sapper** lobs big shield bombs ahead of itself. A bomb's light blinks faster
   and faster; hit it ten times before it runs out (any round counts), or it
@@ -98,16 +98,27 @@ From level 3 on, three more creatures join the existing levels:
   block), and the damage stays: a block goes on its third visit (a leg gives
   way a little before that), and the head or body kills it.
 - **Mender** hovers over the other creatures and heals them in a cone of green
-  light (joints get their strength back too). Shoot its lamp and the healing
-  stops; shoot a wing and it comes down. The top turret goes for it once it is
-  at work.
+  light: joints get their strength back and the craters and chips fade away,
+  until a fully healed part looks as if it was never hit. Shoot its lamp and
+  the healing stops; shoot a wing and it comes down. The top turret goes for
+  it once it is at work.
+- **Roller**, a big wheel of seven rubber segments and one wooden plank. Rounds
+  glance off the rubber; only the plank can be hurt, and it rolls round with
+  the wheel, so time your shots for when it faces you. Break the plank and the
+  whole ring bursts apart.
+- **Hastener**, a swift carrying a crystal. It hovers over one creature and
+  holds a violet beam on it, and that creature (just that one) gets faster for
+  good: up to about 1.6x, even after the Hastener is gone. Then it moves on to
+  the next. Shoot the crystal to stop it; hastened creatures trail speed
+  streaks.
 
-Every creature is 30% faster than its level's base speed; flyers (birds and
-the Mender) are twice as fast.
+Every creature is 30% faster than its level's base speed; flyers (birds, the
+Mender and the Hastener) are twice as fast.
 
 After level 14 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
-joins every fifth wave too, with shifters, menders and sappers mixed in). Between levels the
+joins every fifth wave too, with shifters, menders, sappers, rollers and
+hasteners mixed in). Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,
 armour-piercing rounds) and, once level 5 is cleared, the **top turret**: an
 automatic gun on a tall mast that picks the creature closest to the line and
@@ -155,6 +166,7 @@ npx tsx tools/assault-lab.ts a07 --tier 7 --aimError 0.3
 npx tsx tools/leg-trace.ts hound FL 3 4.2 2   # gait tuning trace for one leg
 npx tsx tools/fly-trace.ts bird --cut wingL1   # flight steadiness + glide after losing a wing
 npx tsx tools/heal-lab.ts                      # a Mender escorting and healing allies: rates, station, filmstrip
+npx tsx tools/haste-lab.ts walk hound --mul 1.6  # does a creature still walk at a Hastener's full boost?
 ```
 
 Upgrade builds per level (`--tier 1..14`) are defined in `tools/lib/loadouts.ts`.
