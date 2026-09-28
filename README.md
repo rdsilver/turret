@@ -57,9 +57,11 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. Impact damage in the parts' art is switched off for now
-(`IMPACT_DAMAGE` in `src/config/constants.ts`: 'edges' cuts sharp V-notches into
-a part's outline, 'full' adds pits and scorch inside it too). The main menu
+limb stops obeying it. Every part's art is a mesh of small triangles, and hits
+knock them out where they strike, from the outside in, each flying off as a
+shard: the more worn a part, the deeper it is chewed (purely visual: its
+collider keeps its shape; `IMPACT_DAMAGE` in `src/config/constants.ts` also has
+V-notches, round craters, or off). The main menu
 shows a live test range: a slideshow of campaign creatures, 20 seconds each,
 each standing in view and walking into an automatic gun.
 
@@ -80,7 +82,7 @@ each standing in view and walking into an automatic gun.
 | 6 | Geometry | hollow shapes tumbling in one after another: a triangle, square, pentagon, hexagon and heptagon, more of each one steel, then a stone octagon | a wooden side while it faces you; on the octagon, only the glowing side |
 | 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
 | 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 9 | Glass | the Glass Raptor: a glass sprinter that crosses the field in about eight seconds | lead it well ahead; one leg, and the fall shatters it |
+| 9 | Glass | the Glass Raptor, a glass sprinter that crosses the field in about eight seconds, and glass versions of the walker, bird, hound and thrower | lead the raptor well ahead; a leg (or a wing), and the fall shatters it |
 | 10 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
 | 11 | Colossus | a Smoker, a Blob, then the Colossus | the smokestack, anything on a blob; the Colossus's bolts, then its core |
 | 12 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
@@ -113,12 +115,17 @@ shins like any walker.
 
 **Glass Raptor** (level 9): the fastest thing on the field, a lean two-legged
 sprinter made of glass that crosses the field in about eight seconds, near
-9 m/s by the time it reaches the line. Its glass is tough to shoot through
-(a leg part takes over three times the rounds of a wooden walker's shin) and
-shatters when it breaks. It is tempered, so its own footfalls
-don't crack it, but a fall at full tilt does: break either leg and it goes
-down at a sprint and smashes itself on the ground. The thin legs are the hard
-part to hit at that speed: lead it well ahead.
+9 m/s by the time it reaches the line. Glass takes one and a half times the
+rounds wood does, but the raptor is built light: a leg part takes about what a
+wooden walker's shin does. A part that breaks shatters. The glass is tempered,
+so its own footfalls don't crack it, but a fall at full tilt does: break either
+leg and it goes down at a sprint and smashes itself on the ground. The thin
+legs are the hard part to hit at that speed: lead it well ahead.
+
+The same level brings **glass versions** of the Stick Walker, Bird, Hound and
+Thrower (spawn param `glass`): all their wood is tempered glass, tougher than
+the wood was, and any of them that comes down hard (a leg or a wing gone)
+shatters on the ground.
 
 **Colossus** (level 11) brings three new creatures:
 

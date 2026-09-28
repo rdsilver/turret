@@ -128,6 +128,34 @@ export function steelInWood(p: PartDef): void {
 }
 
 /**
+ * A glass variant: every wooden part becomes tempered glass that weighs what
+ * the wood did (the gait doesn't notice), its joints keep the wood's
+ * strength (glass-to-glass bonds would snap at the first stride), and each
+ * part gets a threshold for knocks (PartDef.shatterDv): a foot never shatters
+ * that way (it hits the ground at every step), a limb at `limbDv`, anything
+ * else at `bodyDv`, so a hard fall smashes the body. Metal parts stay metal.
+ */
+export function glassInWood(d: StructureDraft, spec: CreatureSpec, o: { bodyDv: number; limbDv: number }): void {
+  const glass = new Set<PartDef>();
+  for (const p of d.parts) {
+    if (p.material !== 'wood') continue;
+    p.densityScale = ((p.densityScale ?? 1) * MATERIALS.wood.density) / MATERIALS.glass.density;
+    p.material = 'glass';
+    const tags = p.tags ?? [];
+    p.shatterDv = tags.includes('foot') ? Infinity : tags.includes('limb') ? o.limbDv : o.bodyDv;
+    glass.add(p);
+  }
+  if (!glass.size) return;
+  const part = (ref: unknown) => (typeof ref === 'number' ? d.parts[ref] : d.parts.find((p) => p.id === ref));
+  for (const j of d.joints) {
+    const a = part(j.a);
+    const b = part(j.b);
+    if (!j.bond && ((a && glass.has(a)) || (b && glass.has(b)))) j.bond = 'wood';
+  }
+  spec.name = `Glass ${spec.name}`;
+}
+
+/**
  * Swap a random `share` of a creature's wooden parts (at least one) for steel
  * that weighs what they did. Weak points still of wood move ahead of the
  * swapped ones, so gunners go for the wood first.

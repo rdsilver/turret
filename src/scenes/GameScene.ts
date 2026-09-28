@@ -135,6 +135,7 @@ export class GameScene extends Phaser.Scene implements DebugApi {
     this.world = new WorldRenderer(this, this.sim, this.textureFactory);
     this.turret = new TurretView(this, this.sim.weapon);
     this.effects = new EffectsManager(this, this.sim, this.cam);
+    this.world.onChip = (x, y, size, color, angle) => this.effects.chip(x, y, size, color, angle);
     this.audio = new AudioManager(this);
     this.audio.bind(this.sim);
     this.grabber = new MouseGrabber(this.sim);

@@ -132,6 +132,7 @@ export class AssaultScene extends Phaser.Scene implements DebugApi {
       this.topTurret = new TopTurretView(this, this.sim.topWeapon!);
     }
     this.effects = new EffectsManager(this, this.sim, this.cam);
+    this.world.onChip = (x, y, size, color, angle) => this.effects.chip(x, y, size, color, angle);
     this.cosmetics = new TurretCosmetics(this, this.sim, this.turret, this.world, this.effects);
     this.defense = new DefenseLineView(this, DEFENSE_LINE_X);
     this.audio = new AudioManager(this);

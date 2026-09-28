@@ -133,6 +133,8 @@ export class WorldRenderer {
   private readonly smoke: SmokeView;
   /** Rainbow tracers (a cosmetic): each round's trail in its own colour. */
   rainbowTracers = false;
+  /** A triangle knocked out of a part's art (IMPACT_DAMAGE 'chips'): world px, size px, colour, flight direction (rad). */
+  onChip: ((x: number, y: number, size: number, color: number, angle: number) => void) | null = null;
   private readonly trailGfx: Phaser.GameObjects.Graphics;
   private readonly cableGfx: Phaser.GameObjects.Graphics;
   private debugGfx: Phaser.GameObjects.Graphics | null = null;
@@ -149,7 +151,8 @@ export class WorldRenderer {
     readonly sim: Simulation,
     readonly textures: TextureFactory,
   ) {
-    this.craters = new PartCraters(scene, textures, IMPACT_DAMAGE === 'edges');
+    this.craters = new PartCraters(scene, textures, IMPACT_DAMAGE);
+    this.craters.onChip = (x, y, size, color, angle) => this.onChip?.(x * PPM, y * PPM, size * PPM, color, angle);
     this.weakSpots = new WeakSpotView(scene, sim, textures, (p) => {
       const v = p.view as Vis | null;
       return v && v.kind === 0 ? v.img : null;

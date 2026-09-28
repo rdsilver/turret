@@ -1207,6 +1207,33 @@ export class EffectsManager {
     this.emit(this.glints, x, y, count);
   }
 
+  /**
+   * A triangle knocked out of a part's art by a round (IMPACT_DAMAGE 'chips'):
+   * one shard of that size and colour (px), flung out of the surface along
+   * `angle` (rad), tumbling down.
+   */
+  chip(x: number, y: number, size: number, color: number, angle: number): void {
+    const b = resetBurst();
+    b.tint = color;
+    b.tintVar = 0.08;
+    b.angle = angle;
+    b.spread = 1.1;
+    b.speedMin = 50;
+    b.speedMax = 170;
+    b.lifeMin = 650;
+    b.lifeMax = 1100;
+    // (The shard texture is a 10 px triangle.)
+    b.scaleMin = (size / 10) * 0.75;
+    b.scaleMax = (size / 10) * 1.05;
+    b.alpha = 0.95;
+    b.gravity = G;
+    b.drag = 0.3;
+    b.spin = 10;
+    b.bounce = 0.3;
+    b.fadePow = 3;
+    this.emit(this.chips, x, y, 1);
+  }
+
   private shards(x: number, y: number, count: number, color: number, speed: number): void {
     const b = resetBurst();
     b.tint = color;

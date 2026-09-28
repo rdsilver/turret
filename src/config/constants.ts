@@ -56,13 +56,14 @@ export const TOP_TURRET = {
 };
 
 /**
- * Impact damage in the parts' art (view/PartCraters.ts): 'edges' = small
- * triangular notches cut into the silhouette only, eating in from the
- * outside as a part wears down (no bullet holes); 'full' = round chips, pits
- * and scorch inside it too;
- * 'off' = none.
+ * Impact damage in the parts' art (view/PartCraters.ts): 'chips' = each part
+ * is a mesh of triangles and hits knock them out where they strike, from the
+ * outside in, each flying off as a shard (view/render/ChipMesh.ts); 'edges' =
+ * sharp V-notches cut into the silhouette only (no bullet holes); 'full' =
+ * round chips, pits and scorch inside it too; 'off' = none. Visual only:
+ * colliders keep their shape.
  */
-export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' = 'off';
+export const IMPACT_DAMAGE: 'off' | 'edges' | 'full' | 'chips' = 'chips';
 
 /** Every creature is built at this multiple of its blueprint size. */
 export const CREATURE_SCALE = 3.6;

@@ -114,7 +114,7 @@ registerCreature('raptor', (d, _rng, params) => {
   const hx = draftComX(d);
   const kneeY = 1.2;
   const ankleY = 0.5;
-  const legHp = P('legHp', 1.5);
+  const legHp = P('legHp', 0.8);
   for (const side of ['L', 'R']) {
     const back = side === 'R' ? (['back'] as const) : [];
     polyAt(

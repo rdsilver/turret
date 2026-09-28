@@ -15,7 +15,10 @@
  *   With `edgesOnly` every crater sits on the edge and is cut as a clean,
  *   sharp V-notch, bigger than a crater so it reads as a V at play distance
  *   (no pits, no scorch, nothing round): damage eats into the part from
- *   outside.
+ *   outside. In 'chips' mode the part is a mesh of triangles instead
+ *   (render/ChipMesh.ts): hits knock triangles out where they strike, from
+ *   the outside in, as many as its wear calls for, each flying off as a
+ *   shard (onChip).
  * - Craters grow as the part's integrity drops (GROW_STEPS steps): a part
  *   about to break looks chewed, and growing craters near the edge turn into
  *   chips.
@@ -45,6 +48,10 @@ import { neutralMaterial, type TextureFactory } from './TextureFactory';
 import { TEXELS_PER_M } from './render/res';
 import { measurePart } from './render/PartPainter';
 import { craterStyle, paintCraters, type Crater, type CraterGeom, type CraterStyle } from './render/CraterPainter';
+import { buildChipMesh, chipAt, paintChips, type ChipMesh } from './render/ChipMesh';
+
+/** How weapon hits mark a part's art (config IMPACT_DAMAGE). */
+export type ImpactMode = 'off' | 'edges' | 'full' | 'chips';
 
 type Image = Phaser.GameObjects.Image;
 type Ctx = CanvasRenderingContext2D;
@@ -92,6 +99,8 @@ export interface CraterSet {
   /** Private CPU canvas of the region's size: painted, then uploaded. */
   scratch: Ctx | null;
   list: Crater[];
+  /** 'chips' mode: the triangles the art is cut into (craters stay empty). */
+  chips: ChipMesh | null;
   /** Indices of craters added or merged since the last paint. */
   fresh: number[];
   /** Growth step the art was painted at. */
@@ -142,6 +151,8 @@ const MERGE = 0.6;
 const NOTCH_SIZE = 1.6;
 /** The deepest a notch may cut, as a share of the part's thinner dimension (craters: 0.42). */
 const NOTCH_MAX = 0.5;
+/** 'chips' mode: share of a part's triangles gone by the time it breaks. */
+const CHIP_SHARE = 0.55;
 /** Crater radius multiplier at zero integrity is 1 + GROW. */
 const GROW = 0.8;
 /** Growth is quantised: each step repaints the part once. */
@@ -191,13 +202,24 @@ export class PartCraters {
   private readonly arts = new Map<string, Ctx>();
   private seed = 0x2f6b1c3d;
   private readonly counters = { paints: 0, fullPaints: 0, uploads: 0, skipped: 0, paintMs: 0 };
+  /** Chips out of the silhouette only (no pits, no scorch): damage eats in from the outside. */
+  private readonly edgesOnly: boolean;
+  /** Parts are triangle meshes that hits knock pieces out of. */
+  private readonly chipMode: boolean;
+  /**
+   * A triangle was knocked out ('chips' mode): world point (sim m), its size
+   * (m), the part's colour, and the direction it flies (rad, out of the surface).
+   */
+  onChip: ((x: number, y: number, size: number, color: number, angle: number) => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly textures: TextureFactory,
-    /** Chips out of the silhouette only (no pits, no scorch): damage eats in from the outside. */
-    private readonly edgesOnly = false,
-  ) {}
+    mode: ImpactMode = 'full',
+  ) {
+    this.edgesOnly = mode === 'edges';
+    this.chipMode = mode === 'chips';
+  }
 
   /** Any part waiting for a repaint this frame. */
   get pending(): boolean {
@@ -206,7 +228,7 @@ export class PartCraters {
 
   get stats(): CraterStats {
     let craters = 0;
-    for (const s of this.live) craters += s.list.length;
+    for (const s of this.live) craters += s.chips ? s.chips.chipped : s.list.length;
     return {
       live: this.live.size,
       craters,
@@ -236,6 +258,10 @@ export class PartCraters {
     const lx = c * dx + s * dy;
     const ly = -s * dx + c * dy;
     surface(p.shape, lx, ly, SF);
+    if (set.chips) {
+      this.chip(set, lx + SF.nx * SF.d, ly + SF.ny * SF.d, SF.nx, SF.ny);
+      return;
+    }
     // Bigger rounds leave bigger craters (the event carries damage after armour).
     const raw = armor < 0.98 ? amount / (1 - armor) : amount;
     const round = Math.max(0.6, Math.min(1.5, 0.55 + 0.45 * Math.sqrt(Math.max(0, raw))));
@@ -389,6 +415,7 @@ export class PartCraters {
       region: null,
       scratch: null,
       list: [],
+      chips: this.chipMode ? buildChipMesh(p.shape, (x, y) => (surface(p.shape, x, y, SF), SF.d), lay.ox, lay.oy, S, () => this.rand()) : null,
       fresh: [],
       step: 0,
       full: true,
@@ -440,6 +467,36 @@ export class PartCraters {
     k.clear = across(shape, ux, uy, SF.nx, SF.ny) * S;
   }
 
+  /**
+   * 'chips' mode: knock triangles out around the struck edge point (lx, ly:
+   * part-local m; inward normal nx, ny) until as many are gone as the part's
+   * wear calls for; each one flies off.
+   */
+  private chip(set: CraterSet, lx: number, ly: number, nx: number, ny: number): void {
+    const m = set.chips!;
+    const p = set.host.entity;
+    const want = Math.round(m.inside * CHIP_SHARE * (1 - Math.max(0, p.integrity)));
+    if (m.chipped >= want) return;
+    const S = TEXELS_PER_M;
+    const px = set.ox + lx * S;
+    const py = set.oy + ly * S;
+    const c = Math.cos(p.angle);
+    const s = Math.sin(p.angle);
+    // Out of the surface, in the world.
+    const angle = Math.atan2(-(s * nx + c * ny), -(c * nx - s * ny));
+    const color = p.material.color;
+    while (m.chipped < want) {
+      const i = chipAt(m, px, py);
+      if (i < 0) break;
+      if (this.onChip) {
+        const tx = (m.cx[i]! - set.ox) / S;
+        const ty = (m.cy[i]! - set.oy) / S;
+        this.onChip(p.x + c * tx - s * ty, p.y + s * tx + c * ty, m.size / S, color, angle);
+      }
+    }
+    this.markDirty(set);
+  }
+
   private markDirty(set: CraterSet): void {
     if (set.dirty) return;
     set.dirty = true;
@@ -450,7 +507,7 @@ export class PartCraters {
     const host = set.host;
     const p = host.entity;
     const step = Math.min(GROW_STEPS, Math.round((1 - Math.max(0, p.integrity)) * GROW_STEPS));
-    if (step !== set.step) {
+    if (!set.chips && step !== set.step) {
       set.step = step;
       set.full = true;
     }
@@ -471,16 +528,21 @@ export class PartCraters {
     const r = set.region;
     const ctx = set.scratch!;
     const grow = 1 + (GROW * set.step) / GROW_STEPS;
+    const chips = set.chips;
     if (set.full) {
       ctx.clearRect(0, 0, r.w, r.h);
       ctx.drawImage(this.baseArt(p, host.neutral, set.w, set.h).canvas, 0, 0);
-      paintCraters(ctx, set.list, null, grow, set.maxR, set.style, set.geom, this.edgesOnly);
+      if (chips) paintChips(ctx, chips, null, set.style, set.geom);
+      else paintCraters(ctx, set.list, null, grow, set.maxR, set.style, set.geom, this.edgesOnly);
       set.full = false;
       this.counters.fullPaints++;
+    } else if (chips) {
+      paintChips(ctx, chips, chips.fresh, set.style, set.geom);
     } else {
       paintCraters(ctx, set.list, set.fresh, grow, set.maxR, set.style, set.geom, this.edgesOnly);
     }
     set.fresh.length = 0;
+    if (chips) chips.fresh.length = 0;
     this.counters.paints++;
     this.upload(r, ctx.canvas);
     if (attach) {

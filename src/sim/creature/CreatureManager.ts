@@ -16,7 +16,7 @@ import { getCreatureBlueprint, type CreatureParams, type CreatureSpec } from './
 import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
 import { CREATURE_SCALE, CREATURE_SPEED, FLYER_SPEED, GROUP, interactionGroups } from '../../config/constants';
-import { scaleCreature, swapWoodForSteel } from './blueprints/kit';
+import { glassInWood, scaleCreature, swapWoodForSteel } from './blueprints/kit';
 import { clearSmoke } from './smoke';
 import type { BreakableJoint } from '../BreakableJoint';
 
@@ -30,6 +30,10 @@ const WRECK_FADE_AFTER = 3;
 const WRECK_FADE_TIME = 3;
 /** Torn-off limbs of creatures still fighting fade after this long. */
 const PIECE_FADE_AFTER = 4;
+
+/** Glass variants: the knock (velocity change in one step, m/s) that shatters a body part / a limb (feet never). */
+const GLASS_BODY_DV = 3.5;
+const GLASS_LIMB_DV = 9;
 
 export class CreatureManager {
   readonly list: Creature[] = [];
@@ -87,6 +91,8 @@ export class CreatureManager {
     if (typeof params.hpMul === 'number') for (const p of draft.parts) p.hpScale = (p.hpScale ?? 1) * (params.hpMul as number);
     // Later levels swap some wooden parts for steel (param `steel`: the share of them), each build its own.
     if (typeof params.steel === 'number') swapWoodForSteel(draft, spec, params.steel, new Random(hashString(`steel:${seed}`)));
+    // A glass variant (param `glass`): its wood turns to tempered glass (`glassDv` / `glassLimbDv`: what shatters it).
+    if (params.glass) glassInWood(draft, spec, { bodyDv: typeof params.glassDv === 'number' ? params.glassDv : GLASS_BODY_DV, limbDv: typeof params.glassLimbDv === 'number' ? params.glassLimbDv : GLASS_LIMB_DV });
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
     spec.gait.speed *= spec.fly ? FLYER_SPEED : CREATURE_SPEED;
     if (spec.crawl) spec.crawl.speed *= CREATURE_SPEED;
