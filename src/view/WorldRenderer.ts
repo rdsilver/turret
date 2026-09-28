@@ -174,6 +174,10 @@ export class WorldRenderer {
       }),
       ev.on('structureLoaded', () => this.onStructureLoaded()),
       ev.on('partDamaged', ({ part, amount, armor, x, y }) => this.onPartDamaged(part, x, y, amount, armor)),
+      ev.on('partChipped', ({ part, chips }) => {
+        const v = part.view as PartVis | null;
+        if (v && v.kind === 0 && IMPACT_DAMAGE === 'chips') this.craters.chipped(v, chips);
+      }),
     );
     // Adopt anything that already exists (renderer created after the sim filled up).
     this.needsResync = sim.physics.entities.size > 0;

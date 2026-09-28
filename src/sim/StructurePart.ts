@@ -3,6 +3,7 @@
  * Gameplay data lives here; the Rapier body is owned via Entity.
  */
 import { Entity } from './Entity';
+import type { ChipMesh } from './Chips';
 import { partMaxHp, type MaterialDef } from './Materials';
 import type { PartDef } from './StructureDefinition';
 import type { BreakableJoint } from './BreakableJoint';
@@ -44,6 +45,8 @@ export class StructurePart extends Entity {
 
   /** Created by fracture (shards) — not counted in structural metrics. */
   isFragment = false;
+  /** Chipped geometry once rounds have taken triangles out of it (IMPACT_DAMAGE 'chips'; Chips.ts). */
+  chips: ChipMesh | null = null;
   /** Shattered/removed parts count as fully destroyed. */
   destroyed = false;
   /** Has dropped past its fallen threshold (latched). */

@@ -10,6 +10,7 @@
  * (creature/smoke.ts): a creature hidden in it is left until it comes out.
  */
 import type { SimContext } from '../SimContext';
+import { aimPoint } from '../Chips';
 import type { Weapon } from './Weapon';
 import type { Creature } from '../creature/Creature';
 import type { StructurePart } from '../StructurePart';
@@ -32,6 +33,7 @@ export class AutoGunner {
   private time = 0;
   /** Seconds of fire at `part` since it last took damage. */
   private dry = 0;
+  private readonly at = { x: 0, y: 0 };
   /** Flight time to the target at the last aim (s). */
   private tof = 0;
   /** Parts found shielded, skipped until the given time. */
@@ -80,13 +82,13 @@ export class AutoGunner {
       return;
     }
     const m = w.muzzle();
-    // Shins: aim low, under armour lips and shells that hang over the knees.
-    const ty = p.name?.startsWith('shin') ? p.y + p.halfHeightNow * 0.6 : p.y;
-    const tof = Math.hypot(p.x - m.x, ty - m.y) / Math.max(1, w.speed);
+    // Shins: aim low, under armour lips and shells that hang over the knees. (Chipped away there: what is left nearest.)
+    const at = aimPoint(p, p.x, p.name?.startsWith('shin') ? p.y + p.halfHeightNow * 0.6 : p.y, this.at);
+    const tof = Math.hypot(at.x - m.x, at.y - m.y) / Math.max(1, w.speed);
     this.tof = tof;
     // A beating wing's own velocity swings with every stroke: lead it by the flight.
     const v = p.hasTag('wing') && this.creature ? this.creature.core : p;
-    const sol = solveAim(m.x, m.y, p.x + v.vx * tof, ty + v.vy * tof, w.speed, this.ctx.physics.gravity);
+    const sol = solveAim(m.x, m.y, at.x + v.vx * tof, at.y + v.vy * tof, w.speed, this.ctx.physics.gravity);
     if (!sol.length) {
       w.triggerHeld = false;
       return;

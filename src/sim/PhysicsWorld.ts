@@ -31,6 +31,12 @@ import {
 
 export type StepHook = (dt: number) => void;
 export type CollisionHandler = (a: Entity | null, b: Entity | null, colliderA: number, colliderB: number, started: boolean) => void;
+/**
+ * Asked for each potential contact between two colliders when at least one
+ * of them has ActiveHooks.FILTER_CONTACT_PAIRS set: false = they pass through
+ * each other this step (no contact, no collision event).
+ */
+export type ContactFilter = (a: Entity | null, b: Entity | null) => boolean;
 
 export interface PhysicsStats {
   /** Smoothed wall time of world.step (ms). */
@@ -117,6 +123,8 @@ export class PhysicsWorld {
   private readonly scratch = { x: 0, y: 0 };
   private readonly scratchV = { x: 0, y: 0 };
   private readonly onCollisionEvent: (h1: number, h2: number, started: boolean) => void;
+  private readonly contactFilters: ContactFilter[] = [];
+  private readonly hooks: RapierNS.PhysicsHooks;
   private destroyed = false;
 
   constructor(events: EventBus<SimEvents>, gravity = DEFAULT_GRAVITY) {
@@ -148,6 +156,22 @@ export class PhysicsWorld {
       const b = this.colliderOwner.get(h2) ?? null;
       for (let i = 0; i < this.collisionHandlers.length; i++) this.collisionHandlers[i]!(a, b, h1, h2, started);
     };
+    const compute = RAP.SolverFlags.COMPUTE_IMPULSE;
+    this.hooks = {
+      filterContactPair: (c1, c2) => {
+        // (Pure JS only: Rapier can't be called back from inside its step. A throw would read as
+        // "no contact" and let everything through, so a failing filter lets the contact happen.)
+        try {
+          const a = this.colliderOwner.get(c1) ?? null;
+          const b = this.colliderOwner.get(c2) ?? null;
+          for (let i = 0; i < this.contactFilters.length; i++) if (!this.contactFilters[i]!(a, b)) return null;
+        } catch {
+          /* contact as usual */
+        }
+        return compute;
+      },
+      filterIntersectionPair: () => true,
+    };
   }
 
   // ------------------------------------------------------------------ hooks
@@ -165,6 +189,12 @@ export class PhysicsWorld {
   addCollisionHandler(fn: CollisionHandler): () => void {
     this.collisionHandlers.push(fn);
     return () => removeFrom(this.collisionHandlers, fn);
+  }
+
+  /** Veto contacts between pairs (only asked for colliders with ActiveHooks.FILTER_CONTACT_PAIRS). */
+  addContactFilter(fn: ContactFilter): () => void {
+    this.contactFilters.push(fn);
+    return () => removeFrom(this.contactFilters, fn);
   }
 
   // --------------------------------------------------------------- stepping
@@ -210,7 +240,7 @@ export class PhysicsWorld {
     for (let i = 0; i < this.preHooks.length; i++) this.preHooks[i]!(PHYSICS_DT);
 
     const t0 = now();
-    this.world.step(this.eventQueue);
+    this.world.step(this.eventQueue, this.hooks);
     const t1 = now();
 
     this.stepIndex++;

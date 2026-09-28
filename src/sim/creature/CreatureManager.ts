@@ -16,7 +16,7 @@ import { getCreatureBlueprint, type CreatureParams, type CreatureSpec } from './
 import { getAbility } from './abilities';
 import { StructurePart } from '../StructurePart';
 import { CREATURE_SCALE, CREATURE_SPEED, FLYER_SPEED, GROUP, interactionGroups } from '../../config/constants';
-import { glassInWood, scaleCreature, swapWoodForSteel } from './blueprints/kit';
+import { GLASS_SPEED, glassInWood, scaleCreature, swapWoodForSteel } from './blueprints/kit';
 import { clearSmoke } from './smoke';
 import type { BreakableJoint } from '../BreakableJoint';
 
@@ -92,7 +92,12 @@ export class CreatureManager {
     // Later levels swap some wooden parts for steel (param `steel`: the share of them), each build its own.
     if (typeof params.steel === 'number') swapWoodForSteel(draft, spec, params.steel, new Random(hashString(`steel:${seed}`)));
     // A glass variant (param `glass`): its wood turns to tempered glass (`glassDv` / `glassLimbDv`: what shatters it).
-    if (params.glass) glassInWood(draft, spec, { bodyDv: typeof params.glassDv === 'number' ? params.glassDv : GLASS_BODY_DV, limbDv: typeof params.glassLimbDv === 'number' ? params.glassLimbDv : GLASS_LIMB_DV });
+    if (params.glass) {
+      glassInWood(draft, spec, { bodyDv: typeof params.glassDv === 'number' ? params.glassDv : GLASS_BODY_DV, limbDv: typeof params.glassLimbDv === 'number' ? params.glassLimbDv : GLASS_LIMB_DV });
+      // Glass runs faster than wood.
+      spec.gait.speed *= GLASS_SPEED;
+      if (spec.crawl) spec.crawl.speed *= GLASS_SPEED;
+    }
     scaleCreature(draft, spec, CREATURE_SCALE * (typeof params.sizeMul === 'number' ? params.sizeMul : 1));
     spec.gait.speed *= spec.fly ? FLYER_SPEED : CREATURE_SPEED;
     if (spec.crawl) spec.crawl.speed *= CREATURE_SPEED;

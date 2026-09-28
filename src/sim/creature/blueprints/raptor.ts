@@ -1,8 +1,8 @@
 /**
  * GLASS RAPTOR — the fastest thing on the field: a lean biped sprinter made
  * of glass (a long neck and skull out front, a stiff tail behind for
- * balance, two long digitigrade legs). It crosses the field in about eight
- * seconds, near 9 m/s by the end.
+ * balance, two long digitigrade legs). It crosses the field in about six
+ * seconds, near 11 m/s by the end.
  *
  * Its glass is tough to shoot through (a part takes a long stream of rounds,
  * over three times a wooden walker's shin), and a wrecked part shatters. The
@@ -16,11 +16,12 @@
  * velocity change, m/s in one step, that shatters its body / its legs).
  */
 import { registerCreature, type CreatureSpec, type MuscleGait } from '../CreatureTypes';
-import { G, bodyMass, draftComX, polyAt } from './kit';
+import { G, GLASS_SPEED, bodyMass, draftComX, polyAt } from './kit';
 
 registerCreature('raptor', (d, _rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);
-  const speed = P('speed', 3.2);
+  // (Glass creatures run faster: its 3.2 is a wooden creature's pace.)
+  const speed = P('speed', 3.2 * GLASS_SPEED);
   const hipY = 2.0;
   const bodyDensity = 0.12;
   const legDensity = 0.1;

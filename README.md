@@ -57,11 +57,14 @@ creature's front crosses it while it is still on the move, the level is lost
 (retry with R). Nothing has a health bar: bullets wear a part down (it turns
 redder as it weakens) and weaken the joints around it until the physics does
 the rest — a weak knee buckles under the creature's own weight, a severed
-limb stops obeying it. Every part's art is a mesh of small triangles, and hits
-knock them out where they strike, from the outside in, each flying off as a
-shard: the more worn a part, the deeper it is chewed (purely visual: its
-collider keeps its shape; `IMPACT_DAMAGE` in `src/config/constants.ts` also has
-V-notches, round craters, or off). The main menu
+limb stops obeying it. Every part is a mesh of small triangles, and hits knock
+them out where they strike, from the outside in (never cutting a part in two),
+each flying off as a shard: the more worn a part, the deeper it is chewed. It
+is real geometry for your rounds: they pass through the gaps (and hit whatever
+is behind) and strike what is left of a part at its actual surface, while
+walking and the ground still use the part's full shape (`IMPACT_DAMAGE` in
+`src/config/constants.ts` also has purely visual V-notches, round craters, or
+off). The main menu
 shows a live test range: a slideshow of campaign creatures, 20 seconds each,
 each standing in view and walking into an automatic gun.
 
@@ -82,7 +85,7 @@ each standing in view and walking into an automatic gun.
 | 6 | Geometry | hollow shapes tumbling in one after another: a triangle, square, pentagon, hexagon and heptagon, more of each one steel, then a stone octagon | a wooden side while it faces you; on the octagon, only the glowing side |
 | 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
 | 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 9 | Glass | the Glass Raptor, a glass sprinter that crosses the field in about eight seconds, and glass versions of the walker, bird, hound and thrower | lead the raptor well ahead; a leg (or a wing), and the fall shatters it |
+| 9 | Glass | the Glass Raptor, a glass sprinter that crosses the field in about six seconds, and glass versions of the walker, bird, hound and thrower | lead the raptor well ahead; a leg (or a wing), and the fall shatters it |
 | 10 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
 | 11 | Colossus | a Smoker, a Blob, then the Colossus | the smokestack, anything on a blob; the Colossus's bolts, then its core |
 | 12 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
@@ -114,8 +117,8 @@ keep coming until you burst the sac; she herself goes down at the knees and
 shins like any walker.
 
 **Glass Raptor** (level 9): the fastest thing on the field, a lean two-legged
-sprinter made of glass that crosses the field in about eight seconds, near
-9 m/s by the time it reaches the line. Glass takes one and a half times the
+sprinter made of glass that crosses the field in about six seconds, near
+11 m/s by the time it reaches the line. Glass takes one and a half times the
 rounds wood does, but the raptor is built light: a leg part takes about what a
 wooden walker's shin does. A part that breaks shatters. The glass is tempered,
 so its own footfalls don't crack it, but a fall at full tilt does: break either
@@ -124,15 +127,16 @@ legs are the hard part to hit at that speed: lead it well ahead.
 
 The same level brings **glass versions** of the Stick Walker, Bird, Hound and
 Thrower (spawn param `glass`): all their wood is tempered glass, tougher than
-the wood was, and any of them that comes down hard (a leg or a wing gone)
-shatters on the ground.
+the wood was, they move a quarter faster than their wooden kin (the raptor
+too), and any of them that comes down hard (a leg or a wing gone) shatters on
+the ground.
 
 **Colossus** (level 11) brings three new creatures:
 
 - **Smoker**: a walker with a boiler and a tall smokestack, trailing a wall
   of thick smoke that hides whatever walks behind it, from you and from the
   top turret (rounds still go through). Shoot the stack and the smoke stops.
-  Half its wooden parts (picked at random) are steel.
+  It is all steel, so the stack is the way in.
 - **Blob**: a rolling lump of green jelly. Shoot it anywhere and it bursts
   into two smaller, faster blobs, and those into two more, which just pop:
   seven blobs from one.

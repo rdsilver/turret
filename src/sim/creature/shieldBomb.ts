@@ -434,7 +434,7 @@ registerAbility('throwShieldBomb', {
     const part = spawnPart(
       ctx.physics,
       // (Hit points only as a backstop: it pops on its Nth hit, see fieldOf.)
-      { id: 'shieldBomb', shape: { kind: 'box', w, h: size }, x: 0, y: 0, material: 'core', tags: ['shieldBomb'], hpScale: 1000, friction: 1.4, restitution: 0.05, densityScale: 0.5 },
+      { id: 'shieldBomb', shape: { kind: 'box', w, h: size }, x: 0, y: 0, material: 'core', tags: ['shieldBomb', 'noChips'], hpScale: 1000, friction: 1.4, restitution: 0.05, densityScale: 0.5 },
       { x: x0, y: y0, angle: (ctx.rng.next() - 0.5) * 0.3, vx, vy, av: (ctx.rng.next() - 0.5) * 0.8 },
     );
     part.collider.setCollisionGroups(BOMB_GROUPS);

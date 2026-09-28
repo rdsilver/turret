@@ -127,6 +127,9 @@ export function steelInWood(p: PartDef): void {
   p.densityScale = ((p.densityScale ?? 1) * MATERIALS.wood.density) / MATERIALS.steel.density;
 }
 
+/** Glass creatures (glass variants and the raptor) run this much faster than their wooden kin. */
+export const GLASS_SPEED = 1.25;
+
 /**
  * A glass variant: every wooden part becomes tempered glass that weighs what
  * the wood did (the gait doesn't notice), its joints keep the wood's

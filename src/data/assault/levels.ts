@@ -128,7 +128,7 @@ export const ASSAULT_LEVELS: AssaultLevelDef[] = [
     name: 'Glass',
     subtitle: 'Everything here is made of glass, and one of them is very fast.',
     lesson: 'Glass that falls shatters: take out a leg (or a wing) and let the ground finish it.',
-    hint: 'Lead the raptor well ahead: it crosses the field in about eight seconds.',
+    hint: 'Lead the raptor well ahead: it crosses the field in about six seconds.',
     seed: 116,
     reward: 230,
     waves: [

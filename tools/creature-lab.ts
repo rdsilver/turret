@@ -22,6 +22,9 @@ import { DEFENSE_LINE_X } from '../src/game/AssaultLevel';
 import { loadout } from './lib/loadouts';
 import { Random } from '../src/core/Random';
 import type { StructurePart } from '../src/sim/StructurePart';
+import { aimPoint } from '../src/sim/Chips';
+
+const aimAt = { x: 0, y: 0 };
 
 await initRapier();
 await import('../src/sim/creature');
@@ -115,9 +118,10 @@ run(sim, seconds, (t) => {
   if (target && t >= start && sim.creatures.activeCount > 0) {
     const w = sim.weapon;
     const m = w.muzzle();
-    // Lead the target by the flight time (a competent gunner does).
-    const tof = Math.hypot(target.x - m.x, target.y - m.y) / w.speed;
-    const sol = solveAim(m.x, m.y, target.x + target.vx * tof, target.y + target.vy * tof, w.speed, sim.physics.gravity);
+    // Lead the target by the flight time (a competent gunner does), at what is left of it.
+    const at = aimPoint(target, target.x, target.y, aimAt);
+    const tof = Math.hypot(at.x - m.x, at.y - m.y) / w.speed;
+    const sol = solveAim(m.x, m.y, at.x + target.vx * tof, at.y + target.vy * tof, w.speed, sim.physics.gravity);
     if (sol.length) w.setAngle(sol[0]!);
     // (On a wheel, it holds fire while the part is turned away: the ring in front would soak it up.)
     w.triggerHeld = !(w.heat > 0.9) && !(c.wheel && !c.wheel.faces(target, m.x, m.y));

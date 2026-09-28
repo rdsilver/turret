@@ -127,6 +127,8 @@ export interface SimEvents {
   collapseSettled: Record<string, never>;
   /** Weapon damage hit a part that can't be hurt right now (StructurePart.invulnerable): nothing changed. */
   partDeflected: { part: StructurePart; x: number; y: number };
+  /** Rounds knocked triangles out of a part's chip mesh (`chips`: their indices, in order). */
+  partChipped: { part: StructurePart; chips: number[]; x: number; y: number };
   /**
    * A thrown shield bomb (creature/shieldBomb.ts): it landed, its fuse light
    * blinked (urgency 0..1 = how far the fuse has burned), it was shot apart,

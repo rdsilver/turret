@@ -33,6 +33,9 @@ import type { StructurePart } from '../src/sim/StructurePart';
 import { bombFuseLeft, liveShieldBombs, standingShieldWalls } from '../src/sim/creature/shieldBomb';
 import { exposedWeakPoints } from '../src/sim/creature/rolling';
 import { smokeBetween } from '../src/sim/creature/smoke';
+import { aimPoint } from '../src/sim/Chips';
+
+const aimAt = { x: 0, y: 0 };
 
 await initRapier();
 const args = process.argv.slice(2);
@@ -149,7 +152,9 @@ run(sim, Number(opt('seconds', '150')), () => {
     }
     // Lead a beating wing by the bird's flight, as a player would, not by its stroke.
     const v = p.hasTag('wing') ? c.core : p;
-    target = { x: p.x, y: p.y, vx: v.vx, vy: v.vy };
+    // (At what is left of it: a chipped-away spot lets rounds through.)
+    const at = aimPoint(p, p.x, p.y, aimAt);
+    target = { x: at.x, y: at.y, vx: v.vx, vy: v.vy };
     hold = waiting.includes(c);
   }
   // A brood sac comes first (it is where the hatchlings come from), unless something is near the line.

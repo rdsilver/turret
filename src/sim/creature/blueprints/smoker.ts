@@ -6,8 +6,8 @@
  * if you can guess where to put them). The smoker itself walks in front of
  * its smoke, in plain sight: shoot the stack off and the smoke stops coming
  * (what is out already thins away in a few seconds), or take its legs.
- * Half its wooden parts, picked at random, are steel (of the same weight):
- * look for the wood.
+ * All of it is steel (of the same weight as the wood it was drafted in):
+ * slow to wear down anywhere, so the stack is the way in.
  *
  * Params: speed, stackHp, legHp, interval, radius, life, steelShare.
  */
@@ -63,7 +63,8 @@ registerCreature('smoker', (d, rng, params) => {
     abilities: [{ id: 'smoke', part: 'stack', interval: P('interval', 0.3), radius: P('radius', 6), life: P('life', 8), height: 6.5, behind: 1.2, delay: 1 }],
     bounty: 110,
   };
-  // Half its wood in steel (its own stream: builds from nearby seeds would draw alike from the shared one).
-  swapWoodForSteel(d, spec, P('steelShare', 0.5), new Random(hashString(`smoker:${rng.seed}`)));
+  // All its wood in steel (`steelShare` below 1 leaves some, picked on its own stream: builds from
+  // nearby seeds would draw alike from the shared one).
+  swapWoodForSteel(d, spec, P('steelShare', 1), new Random(hashString(`smoker:${rng.seed}`)));
   return spec;
 });
