@@ -23,3 +23,4 @@ import './blueprints/brood';
 import './blueprints/smoker';
 import './blueprints/blob';
 import './blueprints/colossus';
+import './blueprints/raptor';

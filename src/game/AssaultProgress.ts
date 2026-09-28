@@ -30,7 +30,8 @@ const STEEL_SWAPPED = new Set(['stickman', 'thrower', 'hound', 'shield', 'bomber
  * fifth wave: the strider and the tyrant take turns; the triceratops every
  * fifth from the eighth; a sapper every third from the fourth; a shifter every
  * third from the second, tougher as the waves go on; a roller every third
- * from the third; and a broodmother every fourth from the fourth). The new
+ * from the third; a broodmother every fourth from the fourth; and a glass
+ * raptor every fourth from the second, at its campaign speed). The new
  * creatures are extra entries, so the base
  * waves are the same as before they existed. The easier creatures carry
  * steel in place of some of their wood (a third of it, more as the waves go
@@ -55,6 +56,8 @@ export function endlessAssault(k: number): AssaultLevelDef {
   if (k >= 1 && k % 3 === 1) waves.push({ creature: 'shifter', at: 6, params: { speed: 0.65 * faster, hp: Math.min(1.4, 1 + k * 0.03) } });
   if (k >= 2 && k % 3 === 2) waves.push({ creature: 'wheel', at: 10, params: { speed: 0.85 * faster, plankHp: Math.min(2, 1.3 + k * 0.05) } });
   if (k >= 3 && k % 4 === 3) waves.push({ creature: 'brood', at: 8, params: { speed: 0.55 * faster } });
+  // (Already the fastest thing on the field: it doesn't hurry with the waves.)
+  if (k >= 1 && k % 4 === 1) waves.push({ creature: 'raptor', at: 12 });
   return {
     id: `assault-endless-${k}`,
     name: `Endless Wave ${String(k + 1).padStart(2, '0')}`,

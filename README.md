@@ -80,15 +80,16 @@ each standing in view and walking into an automatic gun.
 | 6 | Geometry | hollow shapes tumbling in one after another: a triangle, square, pentagon, hexagon and heptagon, more of each one steel, then a stone octagon | a wooden side while it faces you; on the octagon, only the glowing side |
 | 7 | Brood | the Broodmother: a slow walker with a glowing sac that hatches small, fast walkers in front of her | burst the sac; a short burst for each hatchling |
 | 8 | Flock | flapping birds; first Roller | a wing: lose one and it can't stay up (the top turret helps); the Roller's wooden plank |
-| 9 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
-| 10 | Colossus | a Smoker, a Blob, then the Colossus | the smokestack, anything on a blob; the Colossus's bolts, then its core |
-| 11 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
-| 12 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
-| 13 | Stampede | everything | triage |
-| 14 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
-| 15 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
-| 16 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
-| 17 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
+| 9 | Glass | the Glass Raptor: a glass sprinter that crosses the field in about eight seconds | lead it well ahead; one leg, and the fall shatters it |
+| 10 | Overheat | engine walker | the engine: it stalls when hot, explodes when destroyed |
+| 11 | Colossus | a Smoker, a Blob, then the Colossus | the smokestack, anything on a blob; the Colossus's bolts, then its core |
+| 12 | Shield Wall | shield-bearers | the arm holding the plate, the head above, the shins below |
+| 13 | Centipede | segmented centipede: two wooden segments, then steel, then an armoured tail | chew through from the front; every cut makes two, and pieces of one segment are harmless |
+| 14 | Stampede | everything | triage |
+| 15 | Horns | triceratops: steel skull, horns and an armour frill facing you | under it (the front shins) or over it (the hump behind the frill, open from above) |
+| 16 | The Strider | walking fortress | slings, the engine behind the shell, or a leg pair |
+| 17 | Thread the Needle | the Orrery: solid nested walls of armour (square → octagon) turning around a floating triangle | one round on the triangle — but first wear a way through: plates break away and the holes turn with their ring |
+| 18 | Tyrant | all-metal T-rex whose stubby arms throw rubber blocks | cut the arms so rounds stop bouncing, then either leg |
 
 **Geometry** (level 6): each shape is hollow, like the Roller: a ring of
 straight sides joined at the corners, rolling by tipping over its leading
@@ -110,7 +111,15 @@ of her: a small stick walker that runs at the line at twice a walker's pace
 keep coming until you burst the sac; she herself goes down at the knees and
 shins like any walker.
 
-**Colossus** (level 10) brings three new creatures:
+**Glass Raptor** (level 9): the fastest thing on the field, a lean two-legged
+sprinter made of glass that crosses the field in about eight seconds, near
+9 m/s by the time it reaches the line. Every part takes only a short burst
+and shatters when it breaks. Its glass is tempered, so its own footfalls
+don't crack it, but a fall at full tilt does: break either leg and it goes
+down at a sprint and smashes itself on the ground. The thin legs are the hard
+part to hit at that speed: lead it well ahead.
+
+**Colossus** (level 11) brings three new creatures:
 
 - **Smoker**: a walker with a boiler and a tall smokestack, trailing a wall
   of thick smoke that hides whatever walks behind it, from you and from the
@@ -153,10 +162,10 @@ From level 3 on, three more creatures join the existing levels:
 Every creature is 30% faster than its level's base speed; birds are twice as
 fast.
 
-After level 17 the game continues with endless mixed waves (the strider and
+After level 18 the game continues with endless mixed waves (the strider and
 the tyrant take turns as the boss every fifth wave; from wave 8 a triceratops
-joins every fifth wave too, with shifters, sappers, rollers and broodmothers
-mixed in, and
+joins every fifth wave too, with shifters, sappers, rollers, broodmothers
+and glass raptors mixed in, and
 the easier walkers carry steel swaps: a third of their wood, up to half).
 Between levels the
 workshop sells machine-gun upgrades (fire rate, accuracy, damage, cooling,

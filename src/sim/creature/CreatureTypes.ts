@@ -134,6 +134,12 @@ export interface CreatureSpec {
   lean?: number;
   /** Balance assist strength (multiplier; 1 = default). */
   balance?: number;
+  /**
+   * A sprinter can't stand still on what it has left: once it can't walk (a
+   * leg group lost), its legs stop holding it up and balancing it, and it
+   * goes down at whatever speed it was running.
+   */
+  sprinter?: boolean;
   /** Propulsion strength (multiplier; 1 = default). */
   drive?: number;
   /** Lift assist on swinging feet, as a multiple of the leg's weight (0 = off). Helps short-legged walkers clear the ground. */

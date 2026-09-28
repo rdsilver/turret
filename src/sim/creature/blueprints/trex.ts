@@ -13,57 +13,7 @@
  * long, risky stream of rounds.
  */
 import { registerCreature, type CreatureSpec, type MuscleGait } from '../CreatureTypes';
-import type { StructureDraft, PartOpts } from '../../generator/StructureDraft';
-import { material, type MaterialId } from '../../Materials';
-import { G } from './kit';
-
-/** Convex polygon from absolute (definition-space) points, counter-clockwise; placed at their centroid. */
-function polyAt(d: StructureDraft, pts: Array<[number, number]>, mat: MaterialId, o: PartOpts): number {
-  let cx = 0;
-  let cy = 0;
-  for (const [x, y] of pts) {
-    cx += x / pts.length;
-    cy += y / pts.length;
-  }
-  return d.poly(cx, cy, pts.map(([x, y]) => [x - cx, y - cy] as [number, number]), mat, o);
-}
-
-/** Mass of one drafted part (kg; kit's draftMass counts every polygon as 0.1 m², too rough for this body). */
-function partMass(d: StructureDraft, i: number): number {
-  const p = d.parts[i]!;
-  const s = p.shape;
-  let area = 0;
-  if (s.kind === 'box') area = s.w * s.h;
-  else if (s.kind === 'circle') area = Math.PI * s.r * s.r;
-  else {
-    for (let k = 0; k < s.points.length; k++) {
-      const [x0, y0] = s.points[k]!;
-      const [x1, y1] = s.points[(k + 1) % s.points.length]!;
-      area += (x0 * y1 - x1 * y0) / 2;
-    }
-    area = Math.abs(area);
-  }
-  return area * material(p.material).density * (p.densityScale ?? 1);
-}
-
-/** Mass of everything drafted so far (kg). */
-function bodyMass(d: StructureDraft): number {
-  let m = 0;
-  for (let i = 0; i < d.parts.length; i++) m += partMass(d, i);
-  return m;
-}
-
-/** Centre of mass (x) of everything drafted so far. */
-function draftComX(d: StructureDraft): number {
-  let m = 0;
-  let mx = 0;
-  for (let i = 0; i < d.parts.length; i++) {
-    const pm = partMass(d, i);
-    m += pm;
-    mx += pm * d.parts[i]!.x;
-  }
-  return m > 0 ? mx / m : 0;
-}
+import { G, bodyMass, draftComX, partMass, polyAt } from './kit';
 
 registerCreature('trex', (d, _rng, params) => {
   const P = (k: string, v: number) => (typeof params[k] === 'number' ? (params[k] as number) : v);

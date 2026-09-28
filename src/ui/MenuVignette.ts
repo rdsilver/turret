@@ -41,12 +41,13 @@ const SPECIMENS: Array<{ kind: string; params?: Record<string, number> }> = [
   { kind: 'shifter', params: { hp: 0.6 } },
   { kind: 'bomber' },
   { kind: 'brood', params: { count: 3 } },
+  { kind: 'raptor' },
 ];
 
-/** Middle of the range (sim m), metres shown across the cell, and where specimens appear (in view, room to walk; the widest reaches 7 m to the right). */
+/** Middle of the range (sim m), metres shown across the cell, and where specimens appear (in view, room to walk; the raptor's tail reaches 11 m to the right). */
 const CENTER_X = 27;
 const VIEW_W_M = 38;
-const SPAWN_X = CENTER_X + VIEW_W_M / 2 - 10;
+const SPAWN_X = CENTER_X + VIEW_W_M / 2 - 12;
 /** Seconds each specimen is on; the gun holds fire this long after one appears. */
 const SLOT = 20;
 const HOLD_FIRE = 1.5;

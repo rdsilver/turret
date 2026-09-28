@@ -62,6 +62,12 @@ export class CreatureManager {
     ctx.events.on('partWrecked', dirty);
     ctx.events.on('partShattered', dirty);
     ctx.events.on('partWrecked', ({ part }) => this.creatureOf(part)?.onPartWrecked(part));
+    // A creature's shards are debris: they neither stop rounds nor trip the creatures behind.
+    ctx.events.on('partShattered', ({ part, fragments }) => {
+      if (!this.byStructure.has(part.structure as Structure)) return;
+      const groups = interactionGroups(GROUP.DEBRIS, 0xffff & ~(GROUP.CREATURE | GROUP.PROJECTILE | GROUP.DEBRIS));
+      for (const f of fragments) f.collider.setCollisionGroups(groups);
+    });
     // A stopped creature's wreck stops soaking up bullets after a moment, then
     // fades away, so a big carcass doesn't shield (or clutter) what comes next.
     ctx.events.on('creatureNeutralized', ({ creature }) => {

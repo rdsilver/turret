@@ -29,7 +29,7 @@ export class FractureSystem {
     for (let i = 0; i < n; i++) {
       const h = physics.hardImpacts[i]!;
       const e = h.entity;
-      if (e instanceof StructurePart && !e.isFragment && !e.destroyed && e.material.shatter && h.dv > e.material.shatter.dv) {
+      if (e instanceof StructurePart && !e.isFragment && !e.destroyed && e.material.shatter && h.dv > (e.def.shatterDv ?? e.material.shatter.dv)) {
         if (!this.queue.some((q) => q.part === e)) this.queue.push({ part: e, dv: h.dv });
       }
     }
@@ -64,6 +64,26 @@ export class FractureSystem {
 
     const frags: StructurePart[] = [];
     const shape = part.shape;
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    const burst = dv * 0.25;
+    /** One triangle shard: its centre (sim-space, relative to the part) and its points (definition space, y up, about that centre). */
+    const shard = (clx: number, cly: number, pts: [number, number][]): void => {
+      const wx = x + c * clx - s * cly;
+      const wy = y + s * clx + c * cly;
+      const def: PartDef = { shape: { kind: 'poly', points: pts }, x: 0, y: 0, material: mat.id, tags: ['fragment'] };
+      frags.push(
+        spawnPart(physics, def, {
+          x: wx,
+          y: wy,
+          angle,
+          vx: vx + (rng.next() - 0.5) * burst + (wx - x) * 2,
+          vy: vy + (rng.next() - 0.5) * burst + (wy - y) * 2,
+          av: av + (rng.next() - 0.5) * 6,
+          fragment: true,
+        }),
+      );
+    };
     if (shape.kind === 'box') {
       const w = shape.hw * 2;
       const h = shape.hh * 2;
@@ -74,8 +94,6 @@ export class FractureSystem {
       rows = Math.max(1, Math.min(rows, Math.floor(h / MIN_FRAGMENT)));
       const cw = w / cols;
       const ch = h / rows;
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
       for (let cx = 0; cx < cols; cx++) {
         for (let cy = 0; cy < rows; cy++) {
           const lx = -shape.hw + cw * (cx + 0.5);
@@ -95,29 +113,66 @@ export class FractureSystem {
                 : [[-hw, -hh], [hw, hh], [-hw, hh]];
             const cxm = (tri[0]![0] + tri[1]![0] + tri[2]![0]) / 3;
             const cym = (tri[0]![1] + tri[1]![1] + tri[2]![1]) / 3;
-            const pts = tri.map(([px, py]) => [px - cxm, py - cym] as [number, number]);
             // Cell center in sim space (y down): definition y flips sign.
-            const clx = lx + cxm;
-            const cly = ly - cym;
-            const wx = x + c * clx - s * cly;
-            const wy = y + s * clx + c * cly;
-            const def: PartDef = { shape: { kind: 'poly', points: pts }, x: 0, y: 0, material: mat.id, tags: ['fragment'] };
-            const burst = dv * 0.25;
-            const f = spawnPart(physics, def, {
-              x: wx,
-              y: wy,
-              angle,
-              vx: vx + (rng.next() - 0.5) * burst + (wx - x) * 2,
-              vy: vy + (rng.next() - 0.5) * burst + (wy - y) * 2,
-              av: av + (rng.next() - 0.5) * 6,
-              fragment: true,
-            });
-            frags.push(f);
+            shard(
+              lx + cxm,
+              ly - cym,
+              tri.map(([px, py]) => [px - cxm, py - cym] as [number, number]),
+            );
           }
         }
       }
+    } else if (shape.kind === 'poly') {
+      // A convex polygon: a fan of triangles from its centre, the biggest
+      // split across its longest side until there are enough shards.
+      const p = shape.points;
+      const n = p.length / 2;
+      let ox = 0;
+      let oy = 0;
+      for (let i = 0; i < n; i++) {
+        ox += p[i * 2]! / n;
+        oy += p[i * 2 + 1]! / n;
+      }
+      // Sim-space local triangles.
+      const tris: Array<[number, number][]> = [];
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        tris.push([[ox, oy], [p[i * 2]!, p[i * 2 + 1]!], [p[j * 2]!, p[j * 2 + 1]!]]);
+      }
+      const area = (t: [number, number][]) => Math.abs((t[1]![0] - t[0]![0]) * (t[2]![1] - t[0]![1]) - (t[2]![0] - t[0]![0]) * (t[1]![1] - t[0]![1])) / 2;
+      while (tris.length < pieces * 2) {
+        let k = 0;
+        for (let i = 1; i < tris.length; i++) if (area(tris[i]!) > area(tris[k]!)) k = i;
+        const t = tris[k]!;
+        // Its longest side (a, b), opposite corner o.
+        let e = 0;
+        let best = -1;
+        for (let i = 0; i < 3; i++) {
+          const a = t[i]!;
+          const b = t[(i + 1) % 3]!;
+          const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (l > best) {
+            best = l;
+            e = i;
+          }
+        }
+        if (best < MIN_FRAGMENT * 2) break;
+        const a = t[e]!;
+        const b = t[(e + 1) % 3]!;
+        const o = t[(e + 2) % 3]!;
+        // (Not quite at the middle: shards come out uneven.)
+        const f = 0.35 + rng.next() * 0.3;
+        const m: [number, number] = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+        tris.splice(k, 1, [a, m, o], [m, b, o]);
+      }
+      for (const t of tris) {
+        const gx = (t[0]![0] + t[1]![0] + t[2]![0]) / 3;
+        const gy = (t[0]![1] + t[1]![1] + t[2]![1]) / 3;
+        // Definition space flips y (and so the winding: reverse to keep it counter-clockwise).
+        shard(gx, gy, [t[2]!, t[1]!, t[0]!].map(([px, py]) => [px - gx, -(py - gy)] as [number, number]));
+      }
     } else {
-      // Non-box shapes: fall back to a few chunky squares.
+      // Circles: fall back to a few chunky squares.
       const size = Math.max(MIN_FRAGMENT, part.extent * 0.6);
       for (let i = 0; i < Math.min(pieces, 4); i++) {
         const def: PartDef = { shape: { kind: 'box', w: size, h: size }, x: 0, y: 0, material: mat.id, tags: ['fragment'] };

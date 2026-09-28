@@ -42,6 +42,12 @@ export interface PartDef {
   restitution?: number;
   /** Multiplier on weapon-damage hit points (armoured organs, fragile weak spots). */
   hpScale?: number;
+  /**
+   * Brittle materials only: the velocity change (m/s, in one step) that
+   * shatters this part, instead of the material's own (tempered glass that
+   * shrugs off its own footfalls but not a fall).
+   */
+  shatterDv?: number;
 }
 
 export type JointKind = 'weld' | 'hinge' | 'cable' | 'muscle';

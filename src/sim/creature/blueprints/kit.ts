@@ -4,10 +4,10 @@
  * forward (toward the turret).
  */
 import type { CreatureSpec, MuscleGait } from '../CreatureTypes';
-import type { StructureDraft } from '../../generator/StructureDraft';
+import type { StructureDraft, PartOpts } from '../../generator/StructureDraft';
 import type { MaterialId } from '../../Materials';
 import type { PartDef, PartShapeDef } from '../../StructureDefinition';
-import { MATERIALS } from '../../Materials';
+import { MATERIALS, material } from '../../Materials';
 import type { Random } from '../../../core/Random';
 
 export const G = 12;
@@ -71,6 +71,54 @@ export function draftMass(d: StructureDraft): number {
     m += area * dens * (p.densityScale ?? 1);
   }
   return m;
+}
+
+/** Convex polygon from absolute (definition-space) points, counter-clockwise; placed at their centroid. */
+export function polyAt(d: StructureDraft, pts: Array<[number, number]>, mat: MaterialId, o: PartOpts): number {
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of pts) {
+    cx += x / pts.length;
+    cy += y / pts.length;
+  }
+  return d.poly(cx, cy, pts.map(([x, y]) => [x - cx, y - cy] as [number, number]), mat, o);
+}
+
+/** Mass of one drafted part (kg; kit's draftMass counts every polygon as 0.1 m², too rough for this body). */
+export function partMass(d: StructureDraft, i: number): number {
+  const p = d.parts[i]!;
+  const s = p.shape;
+  let area = 0;
+  if (s.kind === 'box') area = s.w * s.h;
+  else if (s.kind === 'circle') area = Math.PI * s.r * s.r;
+  else {
+    for (let k = 0; k < s.points.length; k++) {
+      const [x0, y0] = s.points[k]!;
+      const [x1, y1] = s.points[(k + 1) % s.points.length]!;
+      area += (x0 * y1 - x1 * y0) / 2;
+    }
+    area = Math.abs(area);
+  }
+  return area * material(p.material).density * (p.densityScale ?? 1);
+}
+
+/** Mass of everything drafted so far (kg). */
+export function bodyMass(d: StructureDraft): number {
+  let m = 0;
+  for (let i = 0; i < d.parts.length; i++) m += partMass(d, i);
+  return m;
+}
+
+/** Centre of mass (x) of everything drafted so far. */
+export function draftComX(d: StructureDraft): number {
+  let m = 0;
+  let mx = 0;
+  for (let i = 0; i < d.parts.length; i++) {
+    const pm = partMass(d, i);
+    m += pm;
+    mx += pm * d.parts[i]!.x;
+  }
+  return m > 0 ? mx / m : 0;
 }
 
 /** Make a wooden draft part steel that weighs what the wood did (a gait doesn't notice). */

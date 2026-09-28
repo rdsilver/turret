@@ -477,7 +477,7 @@ export class Creature {
     // leg really does stop carrying weight — the body sags onto the weakened
     // knee, which then buckles; lose the front legs and it pitches onto its nose.
     const body = this.core.body;
-    const assist = this.state !== 'neutralized' && power > 0.05 && !downed;
+    const assist = this.state !== 'neutralized' && power > 0.05 && !downed && !(this.spec.sprinter && this.capacity <= 0);
     if (assist) {
       const balance = this.spec.balance ?? 1;
       for (const sg of this.supports) {

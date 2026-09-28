@@ -21,6 +21,8 @@ export interface PartOpts {
   restitution?: number;
   /** Weapon-damage hit point multiplier. */
   hpScale?: number;
+  /** Brittle parts: velocity change (m/s) that shatters it (default: the material's). */
+  shatterDv?: number;
 }
 
 export interface JointOpts {
