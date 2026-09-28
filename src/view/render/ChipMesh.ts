@@ -2,9 +2,11 @@
  * Triangle-chip impact damage (IMPACT_DAMAGE 'chips'). A part's art is cut
  * into a mesh of jittered triangles, in the texels of its frame; hits knock
  * triangles out of it where the round struck, from the outside in: only a
- * triangle on the silhouette (or next to one already gone) can go. How many
- * are gone follows the part's wear, so a part about to break is chewed well
- * into, and each lost triangle flies off as a shard (PartCraters.onChip).
+ * triangle on the silhouette (or next to one already gone) can go, and never
+ * one whose loss would cut the art in two (a part still in one piece in the
+ * physics is drawn in one piece). How many are gone follows the part's wear,
+ * so a part about to break is chewed well into, and each lost triangle flies
+ * off as a shard (PartCraters.onChip).
  * Purely visual: the part's collider keeps its shape.
  *
  * Painting: the chipped triangles are cut out of the art (destination-out),
@@ -123,18 +125,28 @@ export function buildChipMesh(shape: PartShape, dist: (x: number, y: number) => 
   return { pts, cx, cy, nb, state, inside, chipped: 0, fresh: [], size: Math.min(cw, ch) * S };
 }
 
-/** Knock out the intact triangle nearest (px, py) that is open to the outside; its index, or -1 if none is left. */
+/**
+ * Knock out the intact triangle nearest (px, py) that is open to the outside
+ * and whose loss leaves the rest in one piece; its index, or -1 if none is.
+ */
 export function chipAt(m: ChipMesh, px: number, py: number): number {
   let best = -1;
-  let bestD = Infinity;
-  for (let i = 0; i < m.state.length; i++) {
-    if (m.state[i] !== 0) continue;
-    const d = (m.cx[i]! - px) ** 2 + (m.cy[i]! - py) ** 2;
-    if (d >= bestD || !open(m, i)) continue;
-    best = i;
-    bestD = d;
+  for (let tries = 0; tries < m.state.length; tries++) {
+    best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < m.state.length; i++) {
+      if (m.state[i] !== 0) continue;
+      const d = (m.cx[i]! - px) ** 2 + (m.cy[i]! - py) ** 2;
+      if (d >= bestD || !open(m, i)) continue;
+      best = i;
+      bestD = d;
+    }
+    if (best < 0 || !splits(m, best)) break;
+    // Holding the two sides together: passed over for this chip (marked so the search skips it).
+    m.state[best] = 3;
   }
-  if (best < 0) return -1;
+  for (let i = 0; i < m.state.length; i++) if (m.state[i] === 3) m.state[i] = 0;
+  if (best < 0 || splits(m, best)) return -1;
   m.state[best] = 1;
   m.chipped++;
   m.fresh.push(best);
@@ -187,11 +199,48 @@ export function paintChips(ctx: CanvasRenderingContext2D, m: ChipMesh, which: re
   ctx.restore();
 }
 
+let queue = new Int32Array(256);
+
+/** Would losing intact triangle i leave the intact ones in more than one piece? */
+function splits(m: ChipMesh, i: number): boolean {
+  let start = -1;
+  let links = 0;
+  for (let k = 0; k < 3; k++) {
+    const o = m.nb[i * 3 + k]!;
+    if (o >= 0 && m.state[o] !== 1 && m.state[o] !== 2) {
+      links++;
+      start = o;
+    }
+  }
+  // An end of the art (one intact neighbour, or none) can always go.
+  if (links < 2) return false;
+  if (queue.length < m.state.length) queue = new Int32Array(m.state.length);
+  const seen = new Uint8Array(m.state.length);
+  seen[i] = 1;
+  seen[start] = 1;
+  queue[0] = start;
+  let head = 0;
+  let tail = 1;
+  let reached = 1;
+  while (head < tail) {
+    const t = queue[head++]!;
+    for (let k = 0; k < 3; k++) {
+      const o = m.nb[t * 3 + k]!;
+      if (o < 0 || seen[o] || m.state[o] === 1 || m.state[o] === 2) continue;
+      seen[o] = 1;
+      queue[tail++] = o;
+      reached++;
+    }
+  }
+  // Every other intact triangle (passed-over ones included) must still be reachable.
+  return reached < m.inside - m.chipped - 1;
+}
+
 /** On the silhouette, or next to a triangle already gone. */
 function open(m: ChipMesh, i: number): boolean {
   for (let k = 0; k < 3; k++) {
     const o = m.nb[i * 3 + k]!;
-    if (o < 0 || m.state[o] !== 0) return true;
+    if (o < 0 || m.state[o] === 1 || m.state[o] === 2) return true;
   }
   return false;
 }

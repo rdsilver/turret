@@ -152,7 +152,7 @@ const NOTCH_SIZE = 1.6;
 /** The deepest a notch may cut, as a share of the part's thinner dimension (craters: 0.42). */
 const NOTCH_MAX = 0.5;
 /** 'chips' mode: share of a part's triangles gone by the time it breaks. */
-const CHIP_SHARE = 0.55;
+const CHIP_SHARE = 0.44;
 /** Crater radius multiplier at zero integrity is 1 + GROW. */
 const GROW = 0.8;
 /** Growth is quantised: each step repaints the part once. */
