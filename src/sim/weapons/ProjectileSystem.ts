@@ -222,6 +222,8 @@ export class ProjectileSystem {
       let nx = 0;
       let ny = 0;
       for (const part of this.chipped) {
+        // (A strike earlier in this loop can shatter or blow a part away: never touch a removed one.)
+        if (part.removed || !part.chips) continue;
         // The round's path relative to the part this step.
         const dx = (p.vx - part.vx) * dt;
         const dy = (p.vy - part.vy) * dt;
@@ -235,8 +237,11 @@ export class ProjectileSystem {
         const ay = p.y - part.y;
         const lax = c * ax + s * ay;
         const lay = -s * ax + c * ay;
-        const hit = sweepChips(part.chips!, part.shape, lax, lay, lax + c * dx + s * dy, lay - s * dx + c * dy, this.chipHit);
+        const hit = sweepChips(part.chips, part.shape, lax, lay, lax + c * dx + s * dy, lay - s * dx + c * dy, this.chipHit);
         if (!hit || hit.t >= bestT) continue;
+        // Already inside what is left (it moved onto the round): a round that has hit something
+        // before just goes on (bouncing it here every step would pin it in place).
+        if (hit.t === 0 && hit.nx === 0 && hit.ny === 0 && p.state !== 'flying') continue;
         best = part;
         bestT = hit.t;
         nx = c * hit.nx - s * hit.ny;
