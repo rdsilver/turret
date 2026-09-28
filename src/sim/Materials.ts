@@ -147,7 +147,7 @@ export const MATERIALS: Record<MaterialId, MaterialDef> = {
     bond: { tension: 30 * kN, bend: 70 * kN, stretchLimit: 0.01, bendLimit: 0.01, stiffness: 1 },
     shatter: { dv: 2.6, pieces: 5 },
     salvage: 0.03,
-    hp: 3,
+    hp: 30,
   },
   rubber: {
     id: 'rubber',

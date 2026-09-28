@@ -1,11 +1,13 @@
 /**
- * Runs one assault level: spawns waves on schedule, watches the defense line
+ * Runs one assault level: spawns waves on schedule (pulled forward when the
+ * field empties early: no lull with nothing to shoot), watches the defense line
  * (any active creature crossing it = level failed), declares victory when
  * every creature is stopped, and keeps the stats scoring needs.
  * Engine-agnostic: used by GameScene and headless tools.
  */
 import type { Simulation } from '../sim/Simulation';
 import type { Creature } from '../sim/creature/Creature';
+import { StructurePart } from '../sim/StructurePart';
 import { DEFENSE_LINE_X, SPAWN_X, type AssaultLevelDef, type WaveEntry } from './AssaultLevel';
 
 export type AssaultState = 'running' | 'won' | 'lost';
@@ -45,6 +47,8 @@ export class AssaultSession {
   /** Creatures that came from splits (a cut centipede's back half) or were hatched by a broodmother. */
   private extra = 0;
   endedAt = -1;
+  /** Seconds the schedule has been pulled forward (the field emptied before the next creature was due). */
+  private skipped = 0;
   private offs: Array<() => void> = [];
 
   /**
@@ -85,6 +89,11 @@ export class AssaultSession {
     return this.sim.physics.simTime - this.startedAt;
   }
 
+  /** Where the wave schedule is (its `at` times): elapsed time plus any lulls skipped. */
+  get scheduleTime(): number {
+    return this.elapsed + this.skipped;
+  }
+
   get total(): number {
     return this.level.waves.length + this.extra;
   }
@@ -96,13 +105,19 @@ export class AssaultSession {
   /** Seconds until the next creature enters (or -1 when all have spawned). */
   get nextSpawnIn(): number {
     const next = this.queue[0];
-    return next ? Math.max(0, next.at - this.elapsed) : -1;
+    return next ? Math.max(0, next.at - this.scheduleTime) : -1;
   }
 
   /** Call once per rendered frame (or physics step in tools). */
   update(): void {
     if (this.state !== 'running') return;
-    const t = this.elapsed;
+    let t = this.scheduleTime;
+    // Nothing left on the field (every creature stopped and every last piece
+    // of it gone): the next one comes now, and the rest keep their spacing.
+    if (this.spawned > 0 && this.queue.length && this.queue[0]!.at > t && this.fieldEmpty()) {
+      this.skipped += this.queue[0]!.at - t;
+      t = this.queue[0]!.at;
+    }
     while (this.queue.length && this.queue[0]!.at <= t) {
       const w = this.queue.shift()!;
       const c = this.sim.creatures.spawn(w.creature, w.x ?? SPAWN_X, w.params ?? {}, this.level.seed + this.spawned * 101 + this.variant * 7919);
@@ -129,6 +144,13 @@ export class AssaultSession {
       this.state = 'won';
       this.endedAt = this.sim.physics.simTime;
     }
+  }
+
+  /** No creature on the move and nothing left of any (wrecks, severed limbs, shards, thrown blocks). */
+  private fieldEmpty(): boolean {
+    for (const c of this.sim.creatures.list) if (c.active) return false;
+    for (const e of this.sim.physics.entities.values()) if (e instanceof StructurePart && !e.fixed) return false;
+    return true;
   }
 
   outcome(): AssaultOutcome {

@@ -4,8 +4,9 @@
  * balance, two long digitigrade legs). It crosses the field in about eight
  * seconds, near 9 m/s by the end.
  *
- * Glass is fragile: every part takes only a short burst, and a wrecked part
- * shatters. The glass is tempered, so its own footfalls don't crack it, but
+ * Its glass is tough to shoot through (a part takes a long stream of rounds,
+ * over three times a wooden walker's shin), and a wrecked part shatters. The
+ * glass is tempered, so its own footfalls don't crack it, but
  * a fall at full tilt does: take out a leg and it goes down at a sprint and
  * smashes itself to pieces on the ground. A biped has no spare leg, so either
  * one will do; the thin legs are the hard part to hit at that speed. The

@@ -113,8 +113,9 @@ shins like any walker.
 
 **Glass Raptor** (level 9): the fastest thing on the field, a lean two-legged
 sprinter made of glass that crosses the field in about eight seconds, near
-9 m/s by the time it reaches the line. Every part takes only a short burst
-and shatters when it breaks. Its glass is tempered, so its own footfalls
+9 m/s by the time it reaches the line. Its glass is tough to shoot through
+(a leg part takes over three times the rounds of a wooden walker's shin) and
+shatters when it breaks. It is tempered, so its own footfalls
 don't crack it, but a fall at full tilt does: break either leg and it goes
 down at a sprint and smashes itself on the ground. The thin legs are the hard
 part to hit at that speed: lead it well ahead.
@@ -174,7 +175,9 @@ automatic gun on a tall mast that picks the creature closest to the line and
 goes for its weak points. It never overheats and keeps firing whatever your
 own gun is doing, until something breaches the line (then it stands down until
 the level restarts). Creatures pick up speed as they near the line; stopped
-ones fade away after a few seconds.
+ones fade away after a few seconds. Once the field is completely clear
+(everything stopped and its remains faded), the next creature comes at once
+instead of waiting for its turn.
 
 Once every upgrade is maxed out, the workshop's **FUN STUFF** column opens:
 purely visual extras for the turret (nothing about the gun changes). Hats for
