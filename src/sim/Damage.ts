@@ -69,6 +69,8 @@ export class DamageSystem {
       if (Math.round((1 - part.integrity) * 20) === 0) return;
       m = part.chips = buildChipMesh(part.shape, hashString(`chips:${part.body.handle}`));
     }
+    // (A strip one triangle thick could only lose its far ends: it keeps its shape.)
+    if (m.chain) return;
     const want = chipTarget(m, part.integrity);
     if (m.chipped >= want) return;
     const dx = x - part.x;

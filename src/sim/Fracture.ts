@@ -7,6 +7,7 @@ import type { SimContext } from './SimContext';
 import { StructurePart } from './StructurePart';
 import { spawnPart } from './StructureBuilder';
 import type { PartDef } from './StructureDefinition';
+import { stateAt } from './Chips';
 
 const MAX_SHATTERS_PER_STEP = 4;
 const MIN_FRAGMENT = 0.12;
@@ -68,7 +69,10 @@ export class FractureSystem {
     const s = Math.sin(angle);
     const burst = dv * 0.25;
     /** One triangle shard: its centre (sim-space, relative to the part) and its points (definition space, y up, about that centre). */
+    const chips = part.chips && part.chips.chipped > 0 ? part.chips : null;
     const shard = (clx: number, cly: number, pts: [number, number][]): void => {
+      // (Nothing comes off where rounds already chipped it away.)
+      if (chips && stateAt(chips, clx, cly) === 1) return;
       const wx = x + c * clx - s * cly;
       const wy = y + s * clx + c * cly;
       const def: PartDef = { shape: { kind: 'poly', points: pts }, x: 0, y: 0, material: mat.id, tags: ['fragment'] };

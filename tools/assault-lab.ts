@@ -166,7 +166,8 @@ run(sim, Number(opt('seconds', '150')), () => {
       if (q && !q.removed && !q.wrecked && c.owns(q) && (!sac || q.x < sac.x)) sac = q;
     }
     if (sac) {
-      target = { x: sac.x, y: sac.y, vx: sac.vx, vy: sac.vy };
+      const at = aimPoint(sac, sac.x, sac.y, aimAt);
+      target = { x: at.x, y: at.y, vx: sac.vx, vy: sac.vy };
       hold = false;
     }
   }

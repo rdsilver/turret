@@ -37,10 +37,11 @@ registerCreature('colossus', (d, _rng, params) => {
   d.box(0, hipY + torsoH / 2 - 0.05, torsoW, torsoH, 'steel', { id: 'torso', densityScale: asWood, hpScale: 6 });
   d.box(-0.05 * S, top + 0.22 * S, 0.5 * S, 0.44 * S, 'steel', { id: 'head', densityScale: asWood, hpScale: 3 });
   d.weld('head', 'torso', { at: [-0.05 * S, top - 0.02], seam: 0.4 * S, strength: 4 });
-  // The reactor core, standing half out of the chest (the only vital).
+  // The reactor core, standing half out of the chest (the only vital). It and the bolts keep their
+  // shape (noChips): chipped, what was left would sit inside the chest, behind its steel.
   const coreR = 0.3 * S;
   const coreY = hipY + torsoH * 0.6;
-  d.circle(-torsoW / 2, coreY, coreR, 'core', { id: 'reactor', densityScale: 0.05, tags: ['organ'], hpScale: P('coreHp', 3.2) });
+  d.circle(-torsoW / 2, coreY, coreR, 'core', { id: 'reactor', densityScale: 0.05, tags: ['organ', 'noChips'], hpScale: P('coreHp', 3.2) });
   d.weld('reactor', 'torso', { at: [-torsoW / 2 + coreR * 0.3, coreY], seam: coreR * 1.6, strength: 6, bond: 'steel' });
   // The chest plate over it, held by two bolts (studs on its face, top and bottom): both must go.
   const T = 0.16 * S;
@@ -52,7 +53,7 @@ registerCreature('colossus', (d, _rng, params) => {
     ['boltTop', plateH * 0.36],
     ['boltBottom', -plateH * 0.36],
   ] as const) {
-    d.circle(plateX - T / 2, coreY + dy, boltR, 'steel', { id, densityScale: 0.05, tags: ['organ'], hpScale: P('boltHp', 0.45) });
+    d.circle(plateX - T / 2, coreY + dy, boltR, 'steel', { id, densityScale: 0.05, tags: ['organ', 'noChips'], hpScale: P('boltHp', 0.45) });
     d.weld(id, 'plate', { at: [plateX - T / 2, coreY + dy], seam: boltR * 1.6, strength: 4 });
     d.weld(id, 'torso', { at: [plateX - T / 2, coreY + dy], seam: boltR * 1.6, strength: 4 });
   }

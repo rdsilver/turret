@@ -32,6 +32,12 @@ export interface ChipMesh {
   chipped: number;
   /** Typical triangle size (m). */
   size: number;
+  /**
+   * Only one triangle thick somewhere (no intact triangle has three intact
+   * neighbours): such a strip could only ever lose its two ends, far from
+   * where rounds strike, so it is never chipped.
+   */
+  chain: boolean;
 }
 
 /** Share of a part's triangles gone by the time it breaks. */
@@ -109,22 +115,96 @@ export function buildChipMesh(shape: PartShape, seed: number): ChipMesh {
   for (let i = 0; i < n; i++) {
     let sx = 0;
     let sy = 0;
-    let any = false;
     for (let k = 0; k < 3; k++) {
       const v = corner[i * 3 + k]!;
       sx += vx[v]! / 3;
       sy += vy[v]! / 3;
-      if (dist(vx[v]!, vy[v]!) < 0) any = true;
       pts[i * 6 + k * 2] = vx[v]!;
       pts[i * 6 + k * 2 + 1] = vy[v]!;
     }
-    // Any of it inside the part counts (no slivers left behind at a slanted edge).
-    if (any || dist(sx, sy) < 0) inside++;
+    // Any of it inside the part counts (no slivers left out at a slanted or round side:
+    // rounds would pass through art still drawn there).
+    if (overlaps(shape, pts, i)) inside++;
     else state[i] = 2;
     cx[i] = sx;
     cy[i] = sy;
   }
-  return { pts, cx, cy, nb, state, inside, chipped: 0, size: Math.min(cw, ch) };
+  let chain = inside > 0;
+  for (let i = 0; i < n && chain; i++) {
+    if (state[i] !== 0) continue;
+    let links = 0;
+    for (let k = 0; k < 3; k++) {
+      const o = nb[i * 3 + k]!;
+      if (o >= 0 && state[o] === 0) links++;
+    }
+    if (links === 3) chain = false;
+  }
+  void dist;
+  return { pts, cx, cy, nb, state, inside, chipped: 0, size: Math.min(cw, ch), chain };
+}
+
+/** Does triangle i of `pts` overlap the shape (a separating-axis test; touching doesn't count)? */
+function overlaps(shape: PartShape, pts: Float32Array, i: number): boolean {
+  const o = i * 6;
+  if (shape.kind === 'circle') {
+    const r2 = shape.r * shape.r;
+    for (let k = 0; k < 3; k++) {
+      const ax = pts[o + k * 2]!;
+      const ay = pts[o + k * 2 + 1]!;
+      const bx = pts[o + ((k + 1) % 3) * 2]!;
+      const by = pts[o + ((k + 1) % 3) * 2 + 1]!;
+      // Nearest point of the side to the centre.
+      const ex = bx - ax;
+      const ey = by - ay;
+      const l2 = ex * ex + ey * ey;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, -(ax * ex + ay * ey) / l2)) : 0;
+      const qx = ax + ex * t;
+      const qy = ay + ey * t;
+      if (qx * qx + qy * qy < r2 - 1e-9) return true;
+    }
+    // The centre inside the triangle (a disc bigger than it).
+    let sign = 0;
+    for (let k = 0; k < 3; k++) {
+      const ax = pts[o + k * 2]!;
+      const ay = pts[o + k * 2 + 1]!;
+      const bx = pts[o + ((k + 1) % 3) * 2]!;
+      const by = pts[o + ((k + 1) % 3) * 2 + 1]!;
+      const c = (bx - ax) * -ay - (by - ay) * -ax;
+      if (c === 0) continue;
+      if (sign === 0) sign = Math.sign(c);
+      else if (Math.sign(c) !== sign) return false;
+    }
+    return true;
+  }
+  const poly = shape.kind === 'box' ? [-shape.hw, -shape.hh, shape.hw, -shape.hh, shape.hw, shape.hh, -shape.hw, shape.hh] : shape.points;
+  const tri = [pts[o]!, pts[o + 1]!, pts[o + 2]!, pts[o + 3]!, pts[o + 4]!, pts[o + 5]!];
+  for (const src of [poly, tri]) {
+    const n = src.length / 2;
+    for (let k = 0; k < n; k++) {
+      const ex = src[((k + 1) % n) * 2]! - src[k * 2]!;
+      const ey = src[((k + 1) % n) * 2 + 1]! - src[k * 2 + 1]!;
+      // Axis: the side's normal; project both shapes on it.
+      const ax = -ey;
+      const ay = ex;
+      let pMin = Infinity;
+      let pMax = -Infinity;
+      for (let j = 0; j < poly.length; j += 2) {
+        const d = poly[j]! * ax + poly[j + 1]! * ay;
+        pMin = Math.min(pMin, d);
+        pMax = Math.max(pMax, d);
+      }
+      let tMin = Infinity;
+      let tMax = -Infinity;
+      for (let j = 0; j < 6; j += 2) {
+        const d = tri[j]! * ax + tri[j + 1]! * ay;
+        tMin = Math.min(tMin, d);
+        tMax = Math.max(tMax, d);
+      }
+      const eps = 1e-6 * Math.hypot(ax, ay);
+      if (tMax <= pMin + eps || pMax <= tMin + eps) return false;
+    }
+  }
+  return true;
 }
 
 /** How many triangles should be gone at this integrity. */
@@ -170,14 +250,17 @@ export interface ChipHit {
 }
 
 /**
- * First point where the local segment (ax, ay) -> (bx, by) enters an intact
- * triangle, or null if it only crosses what is gone (and the outside).
+ * First moment a disc of radius `radius` moving along the local segment
+ * (ax, ay) -> (bx, by) touches an intact triangle (its centre within
+ * `radius` of one, within the part's outline grown by `radius`), or null if
+ * it only crosses what is gone (and the outside). Every side is pushed out
+ * by the radius, which slightly overreaches at corners.
  */
-export function sweepChips(m: ChipMesh, shape: PartShape, ax: number, ay: number, bx: number, by: number, out: ChipHit): ChipHit | null {
+export function sweepChips(m: ChipMesh, shape: PartShape, ax: number, ay: number, bx: number, by: number, radius: number, out: ChipHit): ChipHit | null {
   const dx = bx - ax;
   const dy = by - ay;
   // Only within the part's own outline (edge triangles stick out past a slanted or round side).
-  if (!clipShape(shape, ax, ay, dx, dy, CLIP)) return null;
+  if (!clipShape(shape, ax, ay, dx, dy, CLIP, radius)) return null;
   const s0 = CLIP.t0;
   const s1 = CLIP.t1;
   let bestT = Infinity;
@@ -203,8 +286,8 @@ export function sweepChips(m: ChipMesh, shape: PartShape, ax: number, ay: number
         ox = -ox;
         oy = -oy;
       }
-      // Outside this side where (q - v0) . o > 0.
-      const num = ox * (ax - x0) + oy * (ay - y0);
+      // Outside this side (grown by the radius) where (q - v0) . o > radius * |o|.
+      const num = ox * (ax - x0) + oy * (ay - y0) - radius * Math.hypot(ox, oy);
       const den = ox * dx + oy * dy;
       if (den === 0) {
         if (num > 0) ok = false;
@@ -238,9 +321,9 @@ export function sweepChips(m: ChipMesh, shape: PartShape, ax: number, ay: number
 
 /**
  * Where to aim at a part so the round meets something (gunners: the top
- * turret, the lab bots): world point `(x, y)` on the part, unless that spot
- * is chipped away, in which case the middle of the nearest triangle still
- * there. Returns `out`.
+ * turret, the lab bots): world point `(x, y)` if the part is solid there
+ * (inside its outline and an intact triangle), else the middle of the
+ * nearest intact triangle that lies inside the outline. Returns `out`.
  */
 export function aimPoint(part: StructurePart, x: number, y: number, out: { x: number; y: number }): { x: number; y: number } {
   out.x = x;
@@ -253,21 +336,49 @@ export function aimPoint(part: StructurePart, x: number, y: number, out: { x: nu
   const dy = y - part.y;
   const lx = c * dx + s * dy;
   const ly = -s * dx + c * dy;
+  if (signedDistance(part.shape, lx, ly) < 0 && stateAt(m, lx, ly) === 0) return out;
   let best = -1;
   let bestD = Infinity;
+  let any = -1;
+  let anyD = Infinity;
   for (let i = 0; i < m.state.length; i++) {
     if (m.state[i] !== 0) continue;
     const d = (m.cx[i]! - lx) ** 2 + (m.cy[i]! - ly) ** 2;
-    if (d < bestD) {
+    if (d < anyD) {
+      anyD = d;
+      any = i;
+    }
+    if (d < bestD && signedDistance(part.shape, m.cx[i]!, m.cy[i]!) < 0) {
       bestD = d;
       best = i;
     }
   }
-  // Still solid there (inside an intact triangle's reach): aim where asked.
-  if (best < 0 || bestD < (m.size * 0.35) ** 2) return out;
-  out.x = part.x + c * m.cx[best]! - s * m.cy[best]!;
-  out.y = part.y + s * m.cx[best]! + c * m.cy[best]!;
+  const i = best >= 0 ? best : any;
+  if (i < 0) return out;
+  out.x = part.x + c * m.cx[i]! - s * m.cy[i]!;
+  out.y = part.y + s * m.cx[i]! + c * m.cy[i]!;
   return out;
+}
+
+/** State of the triangle containing local point (lx, ly) (0 intact, 1 chipped, 2 outside), or -1 if none does. */
+export function stateAt(m: ChipMesh, lx: number, ly: number): number {
+  const p = m.pts;
+  for (let i = 0; i < m.state.length; i++) {
+    let sign = 0;
+    let inTri = true;
+    for (let k = 0; k < 3 && inTri; k++) {
+      const ax = p[i * 6 + k * 2]!;
+      const ay = p[i * 6 + k * 2 + 1]!;
+      const bx = p[i * 6 + ((k + 1) % 3) * 2]!;
+      const by = p[i * 6 + ((k + 1) % 3) * 2 + 1]!;
+      const cr = (bx - ax) * (ly - ay) - (by - ay) * (lx - ax);
+      if (cr === 0) continue;
+      if (sign === 0) sign = Math.sign(cr);
+      else if (Math.sign(cr) !== sign) inTri = false;
+    }
+    if (inTri) return m.state[i]!;
+  }
+  return -1;
 }
 
 /** Signed distance (m, < 0 inside) from a local point to the shape's outline. */
@@ -301,7 +412,7 @@ const CLIP = { t0: 0, t1: 1, nx: 0, ny: 0 };
  * gets the span inside it and the outward normal where it enters. False if
  * it misses.
  */
-function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: number, out: { t0: number; t1: number; nx: number; ny: number }): boolean {
+function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: number, out: { t0: number; t1: number; nx: number; ny: number }, pad = 0): boolean {
   out.t0 = 0;
   out.t1 = 1;
   out.nx = 0;
@@ -309,7 +420,8 @@ function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: num
   if (shape.kind === 'circle') {
     const a = dx * dx + dy * dy;
     const b = ax * dx + ay * dy;
-    const c = ax * ax + ay * ay - shape.r * shape.r;
+    const R = shape.r + pad;
+    const c = ax * ax + ay * ay - R * R;
     const disc = b * b - a * c;
     if (a === 0 || disc < 0) return c <= 0;
     const r = Math.sqrt(disc);
@@ -318,7 +430,7 @@ function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: num
     if (x < 0 || e > 1) return false;
     if (e > 0) {
       out.t0 = e;
-      const l = shape.r || 1;
+      const l = R || 1;
       out.nx = (ax + dx * e) / l;
       out.ny = (ay + dy * e) / l;
     }
@@ -342,7 +454,7 @@ function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: num
     if (sides) {
       ox = sides[k * 2]!;
       oy = sides[k * 2 + 1]!;
-      d = ox !== 0 ? (shape as { hw: number }).hw : (shape as { hh: number }).hh;
+      d = (ox !== 0 ? (shape as { hw: number }).hw : (shape as { hh: number }).hh) + pad;
     } else {
       const p = (shape as { points: number[] }).points;
       const x0 = p[k * 2]!;
@@ -352,7 +464,7 @@ function clipShape(shape: PartShape, ax: number, ay: number, dx: number, dy: num
       const l = Math.hypot(ex, ey) || 1;
       ox = (wind * ey) / l;
       oy = (-wind * ex) / l;
-      d = ox * x0 + oy * y0;
+      d = ox * x0 + oy * y0 + pad;
     }
     // Inside where q . o <= d.
     const num = ox * ax + oy * ay - d;
@@ -389,18 +501,25 @@ let queue = new Int32Array(256);
 let seen = new Int32Array(256);
 let stamp = 0;
 
-/** Would losing intact triangle i leave the intact ones in more than one piece? */
+/**
+ * Would losing intact triangle i cut the intact triangles around it apart?
+ * (Its intact neighbours must still reach each other without it: counted
+ * locally, so a mesh that starts in more than one piece is judged right.)
+ */
 function splits(m: ChipMesh, i: number): boolean {
-  let start = -1;
+  let n0 = -1;
+  let n1 = -1;
+  let n2 = -1;
   let links = 0;
   for (let k = 0; k < 3; k++) {
     const o = m.nb[i * 3 + k]!;
-    if (o >= 0 && m.state[o] !== 1 && m.state[o] !== 2) {
-      links++;
-      start = o;
-    }
+    if (o < 0 || m.state[o] === 1 || m.state[o] === 2) continue;
+    if (links === 0) n0 = o;
+    else if (links === 1) n1 = o;
+    else n2 = o;
+    links++;
   }
-  // An end of the mesh (one intact neighbour, or none) can always go.
+  // An end (one intact neighbour, or none) can always go.
   if (links < 2) return false;
   if (queue.length < m.state.length) queue = new Int32Array(m.state.length);
   if (seen.length < m.state.length) {
@@ -409,23 +528,24 @@ function splits(m: ChipMesh, i: number): boolean {
   }
   const mark = ++stamp;
   seen[i] = mark;
-  seen[start] = mark;
-  queue[0] = start;
+  seen[n0] = mark;
+  queue[0] = n0;
   let head = 0;
   let tail = 1;
-  let reached = 1;
+  let missing = links - 1;
   while (head < tail) {
     const t = queue[head++]!;
     for (let k = 0; k < 3; k++) {
       const o = m.nb[t * 3 + k]!;
       if (o < 0 || seen[o] === mark || m.state[o] === 1 || m.state[o] === 2) continue;
       seen[o] = mark;
+      if (o === n1 || o === n2) {
+        if (--missing === 0) return false;
+      }
       queue[tail++] = o;
-      reached++;
     }
   }
-  // Every other intact triangle (passed-over ones included) must still be reachable.
-  return reached < m.inside - m.chipped - 1;
+  return true;
 }
 
 /** The shape's bounding box in its local frame (m). */

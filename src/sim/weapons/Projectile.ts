@@ -27,6 +27,8 @@ export class Projectile extends Entity {
   damage = 1;
   /** Fraction of armour ignored (armour-piercing rounds). */
   pierce = 0;
+  /** Step the chip sweep last took care of this round (its contacts with chipped parts are vetoed then). */
+  sweptStep = -1;
 
   get speed(): number {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
@@ -34,6 +36,7 @@ export class Projectile extends Entity {
 
   resetState(): void {
     this.state = 'flying';
+    this.sweptStep = -1;
     this.impactAt = -1;
     this.hits = 0;
     this.firstTarget = null;

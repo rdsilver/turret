@@ -5,6 +5,7 @@
 import { R, type RapierNS } from '../RapierModule';
 import type { SimContext } from '../SimContext';
 import type { Projectile } from './Projectile';
+import { StructurePart } from '../StructurePart';
 import type { AmmoDef } from './Ammo';
 import { GROUP, interactionGroups, TURRET } from '../../config/constants';
 import { clamp, DEG } from '../../core/math';
@@ -128,6 +129,11 @@ export class Weapon {
   triggerHeld = false;
 
   private ray: RapierNS.Ray | null = null;
+  /** Ray-cast filter: chipped parts are met through their triangles instead (ProjectileSystem.firstChipHit). */
+  private readonly notChipped = (col: RapierNS.Collider): boolean => {
+    const e = this.ctx.physics.colliderOwner.get(col.handle);
+    return !(e instanceof StructurePart && e.chips !== null && e.chips.chipped > 0);
+  };
   private readonly m = { x: 0, y: 0 };
   private readonly offStep: () => void;
 
@@ -240,7 +246,9 @@ export class Weapon {
 
   /**
    * Predict the ballistic path from the muzzle (no spread) and stop at the
-   * first collider hit. Allocation-free after the first call.
+   * first thing a round would meet: a collider, or what is left of a chipped
+   * part (its holes let rounds through, as ProjectileSystem sweeps them).
+   * Allocation-free after the first call.
    */
   predict(out: TrajectoryPrediction, maxTime = this.stats.previewTime, sampleDt = 1 / 30): TrajectoryPrediction {
     const RAP = R();
@@ -278,9 +286,11 @@ export class Weapon {
         ray.dir.x = dx / len;
         ray.dir.y = dy / len;
         const rad = this.stats.projectileRadius * this.ammo.radiusScale;
-        const hit = world.castRay(ray, len + rad, true, undefined, groups);
-        if (hit) {
-          const toi = Math.max(0, hit.timeOfImpact - rad * 0.5);
+        const hit = world.castRay(ray, len + rad, true, undefined, groups, undefined, undefined, this.notChipped);
+        const chip = this.ctx.projectiles.firstChipHit(px, py, dx, dy, rad, groups);
+        let toi = hit ? Math.max(0, hit.timeOfImpact - rad * 0.5) : Infinity;
+        if (chip) toi = Math.min(toi, chip.t * len);
+        if (toi !== Infinity) {
           out.hitX = px + ray.dir.x * toi;
           out.hitY = py + ray.dir.y * toi;
           out.hit = true;

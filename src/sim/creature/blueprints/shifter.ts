@@ -40,13 +40,14 @@ registerCreature('shifter', (d, _rng, params) => {
   // A squat block of a head, set a little forward.
   d.box(-0.1, top + 0.2, 0.52, 0.44, 'stone', { id: 'head', densityScale: density, hpScale: P('headHp', 0.9) * hp });
   d.weld('head', 'torso', { at: [-0.1, top - 0.02], seam: 0.44, strength: 3 });
-  // Stubby arms, kept inside the body's outline so they never shield anything (always dead stone).
+  // Stubby arms, kept inside the body's outline so they never shield anything (always dead stone;
+  // rounds pass them: through a chipped hole in the body they would soak up what the body should take).
   const shoulderY = top - 0.14;
   const shoulderX = -0.1;
   const armLen = 0.85;
   for (const side of ['L', 'R']) {
     const far = side === 'R' ? ['back'] : [];
-    d.box(shoulderX, shoulderY - armLen / 2 + 0.08, 0.26, armLen, 'stone', { id: `arm${side}`, densityScale: density, tags: ['limb', ...far] });
+    d.box(shoulderX, shoulderY - armLen / 2 + 0.08, 0.26, armLen, 'stone', { id: `arm${side}`, densityScale: density, tags: ['limb', 'passRounds', ...far] });
   }
   const legMass = 2 * (2 * legW * legLen * 2500 * density + 0.56 * 0.12 * 2500 * density);
   const tref = (draftMass(d) + legMass) * G * 0.5;

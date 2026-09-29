@@ -105,7 +105,9 @@ export class CreatureManager {
     const structure = buildStructure(this.ctx.physics, def);
     // Limbs overlap in a 2D side view: creature parts never collide with each other.
     const groups = interactionGroups(GROUP.CREATURE, 0xffff & ~GROUP.CREATURE);
-    for (const p of structure.parts) p.collider.setCollisionGroups(groups);
+    // (A part tagged 'passRounds' is never meant to be hit: it lets rounds through, like a wreck.)
+    const passRounds = interactionGroups(GROUP.CREATURE, 0xffff & ~(GROUP.CREATURE | GROUP.PROJECTILE));
+    for (const p of structure.parts) p.collider.setCollisionGroups(p.hasTag('passRounds') ? passRounds : groups);
     return this.adopt(structure, spec, blueprintId);
   }
 

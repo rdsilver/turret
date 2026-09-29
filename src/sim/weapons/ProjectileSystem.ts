@@ -50,7 +50,7 @@ export class ProjectileSystem {
   /** Parts with triangles chipped out: rounds meet their intact triangles, not their colliders. */
   private readonly chipped = new Set<StructurePart>();
   private readonly chipHit: ChipHit = { t: 0, nx: 0, ny: 0 };
-  private ray: InstanceType<ReturnType<typeof R>['Ray']> | null = null;
+  private ball: InstanceType<ReturnType<typeof R>['Ball']> | null = null;
 
   constructor(private readonly ctx: SimContext) {
     ctx.physics.addPreStepHook((dt) => this.sweepChipped(dt));
@@ -60,7 +60,12 @@ export class ProjectileSystem {
       if (a instanceof Projectile) this.onContact(a, b, hb);
       if (b instanceof Projectile) this.onContact(b, a, ha);
     });
-    ctx.physics.addContactFilter((a, b) => !((a instanceof Projectile && isChipped(b)) || (b instanceof Projectile && isChipped(a))));
+    // Only rounds the sweep took care of this step pass chipped parts' colliders (a slow round it
+    // skips still lands on the collider rather than falling through the part).
+    ctx.physics.addContactFilter((a, b) => {
+      const step = this.ctx.physics.stepIndex;
+      return !((a instanceof Projectile && a.sweptStep === step && isChipped(b)) || (b instanceof Projectile && b.sweptStep === step && isChipped(a)));
+    });
     ctx.events.on('partChipped', ({ part }) => this.chipped.add(part));
   }
 
@@ -213,10 +218,13 @@ export class ProjectileSystem {
   private sweepChipped(dt: number): void {
     if (this.chipped.size === 0) return;
     for (const part of this.chipped) if (part.removed || !part.chips) this.chipped.delete(part);
+    const stepIndex = this.ctx.physics.stepIndex;
     for (let i = 0; i < this.live.length; i++) {
       const p = this.live[i]!;
-      // (Spent and slow rounds too, down to a crawl: they bounce off what is left as they would off a collider.)
+      // (Rounds that have hit something too, down to a crawl: they bounce off what is left as they
+      // would off a collider. Slower ones meet the colliders: resting on a part, they would jitter.)
       if (p.state === 'spent' || p.removed || p.fading > 0 || p.vx * p.vx + p.vy * p.vy < MIN_SWEEP_SPEED * MIN_SWEEP_SPEED) continue;
+      p.sweptStep = stepIndex;
       let best: StructurePart | null = null;
       let bestT = Infinity;
       let nx = 0;
@@ -237,7 +245,7 @@ export class ProjectileSystem {
         const ay = p.y - part.y;
         const lax = c * ax + s * ay;
         const lay = -s * ax + c * ay;
-        const hit = sweepChips(part.chips, part.shape, lax, lay, lax + c * dx + s * dy, lay - s * dx + c * dy, this.chipHit);
+        const hit = sweepChips(part.chips, part.shape, lax, lay, lax + c * dx + s * dy, lay - s * dx + c * dy, p.radius, this.chipHit);
         if (!hit || hit.t >= bestT) continue;
         // Already inside what is left (it moved onto the round): a round that has hit something
         // before just goes on (bouncing it here every step would pin it in place).
@@ -251,38 +259,70 @@ export class ProjectileSystem {
     }
   }
 
-  /** Something solid and unchipped that the round would meet within `time` s (Rapier's to handle, first). */
+  /**
+   * Something solid and unchipped that the round (its ball, as Rapier sees
+   * it) would meet within `time` s: Rapier's to handle, first.
+   */
   private blocked(p: Projectile, time: number): boolean {
-    const speed = Math.hypot(p.vx, p.vy);
-    if (speed <= 0) return false;
+    if (p.vx === 0 && p.vy === 0) return false;
     const RAP = R();
-    const ray = (this.ray ??= new RAP.Ray({ x: 0, y: 0 }, { x: 1, y: 0 }));
-    ray.origin.x = p.x;
-    ray.origin.y = p.y;
-    ray.dir.x = p.vx / speed;
-    ray.dir.y = p.vy / speed;
+    if (!this.ball || this.ball.radius !== p.radius) this.ball = new RAP.Ball(p.radius);
     const owner = this.ctx.physics.colliderOwner;
-    const hit = this.ctx.physics.world.castRay(ray, speed * time + p.radius, true, undefined, p.collider.collisionGroups(), p.collider, p.body, (col) => !isChipped(owner.get(col.handle) ?? null));
+    const hit = this.ctx.physics.world.castShape({ x: p.x, y: p.y }, 0, { x: p.vx, y: p.vy }, this.ball, 0, time, true, undefined, p.collider.collisionGroups(), p.collider, p.body, (col) => !isChipped(owner.get(col.handle) ?? null));
     return hit !== null;
   }
 
   /**
-   * The round meets an intact triangle of `part` after `time` s, through a
-   * side with outward normal (nx, ny) (0, 0: it starts inside one): put it
-   * there, bounce it off like a contact would (restitution and friction
-   * averaged as Rapier combines them; relative to the part's surface there,
-   * spin included), push the part, and run the impact.
+   * First chipped part (among those whose collision groups `groups` would
+   * meet) that a disc of `radius` moving from (x, y) by (dx, dy) touches, as
+   * rounds see it (static poses): `{ t, part }` or null. The aim preview.
+   */
+  firstChipHit(x: number, y: number, dx: number, dy: number, radius: number, groups: number): { t: number; part: StructurePart } | null {
+    let best: StructurePart | null = null;
+    let bestT = Infinity;
+    for (const part of this.chipped) {
+      if (part.removed || !part.chips) continue;
+      const reach = part.extent * 1.5 + radius;
+      if (segmentDist2(part.x - x, part.y - y, dx, dy) > reach * reach) continue;
+      // The two sides' groups must allow the pair (membership against filter, both ways).
+      const g = part.collider.collisionGroups();
+      if (((g >>> 16) & groups & 0xffff) === 0 || ((groups >>> 16) & g & 0xffff) === 0) continue;
+      const c = Math.cos(part.angle);
+      const s = Math.sin(part.angle);
+      const ax = x - part.x;
+      const ay = y - part.y;
+      const lax = c * ax + s * ay;
+      const lay = -s * ax + c * ay;
+      const hit = sweepChips(part.chips, part.shape, lax, lay, lax + c * dx + s * dy, lay - s * dx + c * dy, radius, this.chipHit);
+      if (hit && hit.t < bestT) {
+        bestT = hit.t;
+        best = part;
+      }
+    }
+    return best ? { t: bestT, part: best } : null;
+  }
+
+  /**
+   * The round's ball touches an intact triangle of `part` after `time` s,
+   * across a side with outward normal (nx, ny) (0, 0: it starts touching):
+   * put it there, bounce it off like a contact would (restitution and
+   * friction averaged as Rapier combines them; relative to the part's
+   * surface there, spin included), push the part, and run the impact at the
+   * point of contact.
    */
   private strike(p: Projectile, part: StructurePart, time: number, nx: number, ny: number): void {
     const vx = p.vx;
     const vy = p.vy;
     const speed = Math.hypot(vx, vy);
-    const hx = p.x + vx * time;
-    const hy = p.y + vy * time;
+    // The ball's centre when it touches, and the point it touches (a radius in along the normal).
+    const bx = p.x + vx * time;
+    const by = p.y + vy * time;
     if (nx === 0 && ny === 0) {
       nx = -vx / speed;
       ny = -vy / speed;
     }
+    const hx = bx - nx * p.radius;
+    const hy = by - ny * p.radius;
     // The part's surface velocity at the hit point (v + w x r).
     const svx = part.vx - part.av * (hy - part.y);
     const svy = part.vy + part.av * (hx - part.x);
@@ -305,12 +345,10 @@ export class ProjectileSystem {
     const jx = p.mass * (vx - ovx);
     const jy = p.mass * (vy - ovy);
     part.body.applyImpulseAtPoint({ x: jx, y: jy }, { x: hx, y: hy }, true);
-    const px = hx + nx * p.radius;
-    const py = hy + ny * p.radius;
-    p.body.setTranslation({ x: px, y: py }, true);
+    p.body.setTranslation({ x: bx, y: by }, true);
     p.body.setLinvel({ x: ovx, y: ovy }, true);
-    p.x = px;
-    p.y = py;
+    p.x = bx;
+    p.y = by;
     p.vx = ovx;
     p.vy = ovy;
     this.impact(p, part, false, hx, hy, speed, Math.hypot(jx, jy));
